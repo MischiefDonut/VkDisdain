@@ -30,6 +30,9 @@ public:
 	int TimeToStartDecay;
 	int TimeToEndDecay;
 	double StartTrans;
+
+	// [Disdain]
+	bool DeathmatchOnly;
 };
 
 class DDecalColorer : public DDecalThinker
