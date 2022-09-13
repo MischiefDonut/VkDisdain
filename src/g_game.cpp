@@ -345,6 +345,7 @@ CCMD (land)
 
 CCMD (pause)
 {
+	if (deathmatch) return; // [Disdain]
 	sendpause = true;
 }
 
