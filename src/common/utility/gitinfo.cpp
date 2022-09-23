@@ -36,6 +36,7 @@
 
 #include "gitinfo.h"
 #include "version.h"
+#include "vm.h"
 
 const char *GetGitDescription()
 {
@@ -62,4 +63,10 @@ const char *GetVersionString()
 	{
 		return GIT_DESCRIPTION;
 	}
+}
+
+DEFINE_ACTION_FUNCTION(DObject, GetVersionString)
+{
+	PARAM_PROLOGUE;
+	ACTION_RETURN_STRING(GetVersionString());
 }
