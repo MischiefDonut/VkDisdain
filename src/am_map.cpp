@@ -2198,6 +2198,10 @@ void DAutomap::drawSubsectors()
 				fadelevel = 1. - clamp(floorlight, 0, 255) / 255.f;
 			}
 
+			// [Disdain] quick hack. we don't want any kind of colorization due to how most parts of the map will be dark as a result of
+			// the game's baked lighting level design paradigm. just show the texture clearly.
+			fadelevel = 0.;
+
 			twod->AddPoly(TexMan.GetGameTexture(maptex, true),
 				&points[0], points.Size(),
 				originx, originy,
