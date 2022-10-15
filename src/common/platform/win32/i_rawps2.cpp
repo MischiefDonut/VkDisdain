@@ -352,8 +352,8 @@ FRawPS2Controller::DefaultAxisConfig FRawPS2Controller::DefaultAxes[NUM_AXES] =
 	// Game axis, multiplier
 	{ JOYAXIS_Side, 1 },		// ThumbLX
 	{ JOYAXIS_Forward, 1 },		// ThumbLY
-	{ JOYAXIS_Yaw, 1 },			// ThumbRX
-	{ JOYAXIS_Pitch, 0.75 },	// ThumbRY
+	{ JOYAXIS_Yaw, 0.7 },		// ThumbRX
+	{ JOYAXIS_Pitch, 0.35 },	// ThumbRY
 };
 
 // CODE --------------------------------------------------------------------
