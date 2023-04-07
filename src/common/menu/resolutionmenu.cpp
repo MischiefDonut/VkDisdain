@@ -49,29 +49,13 @@ EXTERN_CVAR(Int, vid_scale_customheight)
 EXTERN_CVAR(Int, vid_scalemode)
 EXTERN_CVAR(Float, vid_scalefactor)
 
-CCMD (menu_resolution_set_custom)
-{
-	if (argv.argc() > 2)
-	{
-		menu_resolution_custom_width = atoi(argv[1]);
-		menu_resolution_custom_height = atoi(argv[2]);
-	}
-	else
-	{
-		Printf("This command is not meant to be used outside the menu! But if you want to use it, please specify <x> and <y>.\n");
-	}
-	M_PreviousMenu();
-}
-
-CCMD (menu_resolution_commit_changes)
+// [Disdain]
+void ResolutionMenu_Commit(void)
 {
 	int do_fullscreen = vid_fullscreen;
-	if (argv.argc() > 1)
-	{
-		do_fullscreen = atoi(argv[1]);
-	}
+	do_fullscreen = clamp(do_fullscreen, 0, 1);
 
-	if (do_fullscreen == false)
+	if (do_fullscreen == 0)
 	{
 		vid_scalemode = 0;
 		vid_scalefactor = 1.;
@@ -89,4 +73,24 @@ CCMD (menu_resolution_commit_changes)
 	}
 }
 
+CCMD (menu_resolution_set_custom)
+{
+	if (argv.argc() > 2)
+	{
+		menu_resolution_custom_width = atoi(argv[1]);
+		menu_resolution_custom_height = atoi(argv[2]);
+	}
+	else
+	{
+		Printf("This command is not meant to be used outside the menu! But if you want to use it, please specify <x> and <y>.\n");
+	}
+	ResolutionMenu_Commit();
+	M_PreviousMenu();
+}
+
+// [Disdain]
+CCMD(menu_resolution_commit_changes)
+{
+	ResolutionMenu_Commit();
+}
 
