@@ -3,7 +3,7 @@ project(VkDisdain)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) 
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 
 if( COMMAND cmake_policy )
@@ -414,10 +414,10 @@ add_subdirectory( libraries/lzma )
 add_subdirectory( tools )
 add_subdirectory( libraries/gdtoa )
 add_subdirectory( wadsrc )
-add_subdirectory( wadsrc_bm )
-add_subdirectory( wadsrc_lights )
-add_subdirectory( wadsrc_extra )
-add_subdirectory( wadsrc_widepix )
+#add_subdirectory( wadsrc_bm )
+#add_subdirectory( wadsrc_lights )
+#add_subdirectory( wadsrc_extra )
+#add_subdirectory( wadsrc_widepix )
 add_subdirectory( src )
 
 if( NOT CMAKE_CROSSCOMPILING )
