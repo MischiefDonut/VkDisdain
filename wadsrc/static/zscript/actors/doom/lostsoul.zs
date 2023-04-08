@@ -22,6 +22,7 @@ class LostSoul : Actor
 		ActiveSound "skull/active";
 		Obituary "$OB_SKULL";
 		Tag "$FN_LOST";
+		+AimAssistTarget
 	}
 	States
 	{

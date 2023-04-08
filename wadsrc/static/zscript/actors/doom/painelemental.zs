@@ -21,6 +21,7 @@ class PainElemental : Actor
 		DeathSound "pain/death";
 		ActiveSound "pain/active";
 		Tag "$FN_PAIN";
+		+AimAssistTarget
 	}
 	States
 	{

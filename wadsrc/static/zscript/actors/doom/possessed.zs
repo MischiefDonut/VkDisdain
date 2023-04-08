@@ -23,6 +23,7 @@ class ZombieMan : Actor
 		Obituary "$OB_ZOMBIE";
 		Tag "$FN_ZOMBIE";
 		DropItem "Clip";
+		+AimAssistTarget
 	}
 	States
 	{
@@ -87,6 +88,7 @@ class ShotgunGuy : Actor
 		Obituary "$OB_SHOTGUY";
 		Tag "$FN_SHOTGUN";
 		DropItem "Shotgun";
+		+AimAssistTarget
 	}
 	States
 	{
@@ -151,6 +153,7 @@ class ChaingunGuy : Actor
 		Obituary "$OB_CHAINGUY";
 		Tag "$FN_HEAVY";
 		Dropitem "Chaingun";
+		+AimAssistTarget
 	}
 	States
 	{
@@ -214,6 +217,7 @@ class WolfensteinSS : Actor
 		Obituary "$OB_WOLFSS";
 		Tag "$FN_WOLFSS";
 		Dropitem "Clip";
+		+AimAssistTarget
 	}
 	States
 	{

@@ -29,6 +29,7 @@ class SpiderMastermind : Actor
 		ActiveSound "spider/active";
 		Obituary "$OB_SPIDER";
 		Tag "$FN_SPIDER";
+		+AimAssistTarget
 	}
 	States
 	{

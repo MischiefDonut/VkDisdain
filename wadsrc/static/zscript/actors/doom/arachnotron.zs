@@ -23,6 +23,7 @@ class Arachnotron : Actor
 		ActiveSound "baby/active";
 		Obituary "$OB_BABY";
 		Tag "$FN_ARACH";
+		+AimAssistTarget
 	}
 	States
 	{

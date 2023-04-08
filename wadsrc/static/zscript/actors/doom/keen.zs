@@ -21,6 +21,7 @@ class CommanderKeen : Actor
 		+ISMONSTER
 		PainSound "keen/pain";
 		DeathSound "keen/death";
+		+AimAssistTarget
 	}
 	States
 	{

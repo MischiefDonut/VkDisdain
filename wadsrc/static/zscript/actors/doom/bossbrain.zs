@@ -18,6 +18,7 @@ class BossBrain : Actor
 		+OLDRADIUSDMG
 		PainSound "brain/pain";
 		DeathSound "brain/death";
+		+AimAssistTarget
 	}
 	States
 	{

@@ -22,6 +22,7 @@ class DoomImp : Actor
 		HitObituary "$OB_IMPHIT";
 		Obituary "$OB_IMP";
 		Tag "$FN_IMP";
+		+AimAssistTarget
 	}
 	States
 	{

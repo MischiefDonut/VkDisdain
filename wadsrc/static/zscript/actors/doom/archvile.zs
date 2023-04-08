@@ -26,6 +26,7 @@ class Archvile : Actor
 		MeleeSound "vile/stop";
 		Obituary "$OB_VILE";
 		Tag "$FN_ARCH";
+		+AimAssistTarget
 	}
 	States
 	{

@@ -25,6 +25,7 @@ class Revenant : Actor
 		HitObituary "$OB_UNDEADHIT";
 		Obituary "$OB_UNDEAD";
 		Tag "$FN_REVEN";
+		+AimAssistTarget
 	}
 	States
 	{

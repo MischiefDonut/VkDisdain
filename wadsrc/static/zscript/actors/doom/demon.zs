@@ -22,6 +22,7 @@ class Demon : Actor
 		ActiveSound "demon/active";
 		Obituary "$OB_DEMONHIT";
 		Tag "$FN_DEMON";
+		+AimAssistTarget
 	}
 	States
 	{

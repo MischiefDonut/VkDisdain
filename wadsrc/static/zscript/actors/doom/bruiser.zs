@@ -24,6 +24,7 @@ class BaronOfHell : Actor
 		Obituary "$OB_BARON";
 		HitObituary "$OB_BARONHIT";
 		Tag "$FN_BARON";
+		+AimAssistTarget
 	}
 	States
 	{

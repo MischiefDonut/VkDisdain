@@ -23,6 +23,7 @@ class Fatso : Actor
 		ActiveSound "fatso/active";
 		Obituary "$OB_FATSO";
 		Tag "$FN_MANCU";
+		+AimAssistTarget
 	}
 	States
 	{

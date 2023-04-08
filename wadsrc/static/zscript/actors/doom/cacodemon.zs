@@ -22,6 +22,7 @@ class Cacodemon : Actor
 		Obituary "$OB_CACO";
 		HitObituary "$OB_CACOHIT";
 		Tag "$FN_CACO";
+		+AimAssistTarget
 	}
 	States
 	{
