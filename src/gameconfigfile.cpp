@@ -592,6 +592,18 @@ void FGameConfigFile::DoGlobalSetup ()
 				// ooooh boy did i open a can of worms with this one.
 				i_pauseinbackground = !(i_soundinbackground);
 			}
+
+			// [Disdain]
+			const char *disdainVersion = GetValueForKey("DisdainVersion");
+			if (disdainVersion)
+			{
+				double ldv = atof(disdainVersion);
+				int v = atoi(DISDAINVERSION);
+				if (ldv < v)
+				{
+					forceResetConfig = true;
+				}
+			}
 		}
 	}
 }
@@ -847,6 +859,9 @@ void FGameConfigFile::ArchiveGlobalData ()
 	SetSection ("LastRun", true);
 	ClearCurrentSection ();
 	SetValueForKey ("Version", LASTRUNVERSION);
+
+	// [Disdain]
+	SetValueForKey ("DisdainVersion", DISDAINVERSION);
 
 	SetSection ("GlobalSettings", true);
 	ClearCurrentSection ();
