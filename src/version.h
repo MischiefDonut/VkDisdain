@@ -97,16 +97,16 @@ const char *GetVersionString();
 #define SAVEVER 4560
 
 // This is so that derivates can use the same savegame versions without worrying about engine compatibility
-#define GAMESIG "VKDOOM"
-#define BASEWAD "vkdoom.pk3"
+#define GAMESIG "DISDAIN"
+#define BASEWAD "engine.pk3"
 #define OPTIONALWAD "game_support.pk3"
 #define GZDOOM 1
 #define VR3D_ENABLED
 
 // More stuff that needs to be different for derivatives.
-#define GAMENAME "VKDoom"
-#define WGAMENAME L"VKDoom"
-#define GAMENAMELOWERCASE "vkdoom"
+#define GAMENAME "Disdain"
+#define WGAMENAME L"Disdain"
+#define GAMENAMELOWERCASE "disdain"
 //#define FORUM_URL "http://forum.zdoom.org/"
 //#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
 
