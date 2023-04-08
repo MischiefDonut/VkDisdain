@@ -79,6 +79,9 @@ EXTERN_CVAR(Bool, i_soundinbackground)
 EXTERN_CVAR(Int, in_mouse)
 #endif
 
+// [Disdain]
+extern bool forceResetConfig;
+
 FGameConfigFile::FGameConfigFile ()
 {
 #ifdef __APPLE__

@@ -118,6 +118,9 @@
 #include "startscreen.h"
 #include "shiftstate.h"
 
+// [Disdain]
+#include "c_bind.h"
+
 #ifdef __unix__
 #include "i_system.h"  // for SHARE_DIR
 #endif // __unix__
@@ -342,6 +345,8 @@ cycle_t FrameCycles;
 // [SP] Store the capabilities of the renderer in a global variable, to prevent excessive per-frame processing
 uint32_t r_renderercaps = 0;
 
+// [Disdain] force a config reset when needed
+bool forceResetConfig = false;
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
 
@@ -3381,6 +3386,16 @@ static int D_InitGame(const FIWADInfo* iwad_info, TArray<FString>& allwads, TArr
 				Printf("%s\n", str);
 			}
 		}
+	}
+
+	// [Disdain]
+	if (forceResetConfig)
+	{
+		C_SetDefaultBindings();
+		C_SetCVarsToDefaults();
+		R_SetViewSize(screenblocks);
+		forceResetConfig = false;
+		I_FatalError("A major version update has been detected. Your config file will be reset. Please relaunch the game. Sorry for the inconvenience!");
 	}
 
 	if (!restart)
