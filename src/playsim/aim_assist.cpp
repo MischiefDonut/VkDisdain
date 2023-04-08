@@ -21,6 +21,9 @@ constexpr bool debug_traces = true;
 DVector3 LevelVec3Diff(FLevelLocals *Level, DVector3 x, DVector3 y);
 
 
+int AimAssistTrace(AActor *t1, DAngle angle, double distance,
+    DAngle pitch, int flags, double sz, FLineTraceData *outdata);
+
 static void AimAssistDoTrace(AActor *self,DAngle i_angle, DAngle i_rotation,AActor * &closest,double &closest_distance, DVector3 &hitloc){
     FLineTraceData t;
     //do a linetrace around i_a and i_r in a circle
@@ -28,18 +31,18 @@ static void AimAssistDoTrace(AActor *self,DAngle i_angle, DAngle i_rotation,AAct
     DAngle yaw = self->Angles.Yaw + DAngle::fromDeg(i_rotation.Sin()) * i_angle;
     DAngle pitch = self->Angles.Pitch + DAngle::fromDeg(i_rotation.Cos()) * i_angle;
 
-    if(P_LineTrace(self, // TODO: port this to regular Trace
+    if(AimAssistTrace(self,
         yaw,                        //trace angle
         MAX_DISTANCE,               //trace max distance
         pitch,                      //trace pitch
         TRF_NOSKY,                  //trace flags
         self->player->viewheight,   //trace height
-        0,0,&t                      //output struct
+        &t                          //output struct
        ))
     {
         if(t.HitType == TRACE_HitActor)
         { //if hit is an actor
-            if((t.HitActor->flags3 & MF3_ISMONSTER) && !(t.HitActor->flags & (MF_FRIENDLY | MF_CORPSE)))
+            if(!(t.HitActor->flags & (MF_FRIENDLY | MF_CORPSE)))
             { // if hit is a live monster and not friendly
                 double dist = self->Distance3D(t.HitActor);
                 if(!closest || dist > closest_distance)
@@ -148,19 +151,19 @@ static void RunAimAssist(AActor * self)
 
         FLineTraceData t;
 
-        P_LineTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,0,0,&t);
+        AimAssistTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,&t);
         if(t.HitType != TRACE_HitActor || t.HitActor != closest)
         { //try to aim at correct z
 
             target_angle = lookAt(view,DVector3(hitloc.X,hitloc.Y,target.Z));
 
-            P_LineTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,0,0,&t);
+            AimAssistTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,&t);
             if(t.HitType != TRACE_HitActor || t.HitActor != closest)
             { //try to aim at correct xy
 
                 target_angle = lookAt(view,DVector3(target.X,target.Y,hitloc.Z));
 
-                P_LineTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,0,0,&t);
+                AimAssistTrace(self,target_angle.X,MAX_DISTANCE,target_angle.Y,TRF_NOSKY,self->player->viewheight,&t);
                 if(t.HitType != TRACE_HitActor || t.HitActor != closest)
                 { // aim at trace location
                     target_angle = lookAt(view,hitloc);
