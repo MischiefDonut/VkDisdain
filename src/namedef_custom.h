@@ -870,3 +870,9 @@ xx(lm_sampledistance)
 xx(lm_gridsize)
 
 xx(Corona)
+
+// Aim assist cvar names
+
+xx(AimAssistEnabled)
+xx(AimAssistStrength)
+xx(AimAssistPrecision)

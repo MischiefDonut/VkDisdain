@@ -135,6 +135,8 @@ class PlayerPawn : Actor
 	//
 	//===========================================================================
 
+	native void RunAimAssist();
+
 	override void Tick()
 	{
 		if (player != NULL && player.mo == self && CanCrouch() && player.playerstate != PST_DEAD)
@@ -160,7 +162,12 @@ class PlayerPawn : Actor
 				player.PendingWeapon = player.PendingWeapon.SisterWeapon;
 			}
 		}
+
 		Super.Tick();
+		if(player != NULL && player.mo == self)
+		{
+			RunAimAssist();
+		}
 	}
 
 	//===========================================================================
