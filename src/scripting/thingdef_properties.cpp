@@ -576,6 +576,26 @@ DEFINE_PROPERTY(painchance, ZI, Actor)
 //==========================================================================
 //
 //==========================================================================
+DEFINE_PROPERTY(maxpain, ZI, Actor)
+{
+	PROP_STRING_PARM(str, 0);
+	PROP_INT_PARM(id, 1);
+	if (str == NULL)
+	{
+		defaults->MaxPain = id;
+	}
+	else
+	{
+		FName painType = NAME_None;
+		if (stricmp(str, "Normal")) painType = str;
+
+		info->SetMaxPain(painType, id);
+	}
+}
+
+//==========================================================================
+//
+//==========================================================================
 DEFINE_PROPERTY(defthreshold, I, Actor)
 {
 	PROP_INT_PARM(id, 0);

@@ -203,6 +203,7 @@ struct DmgFactors : public TArray<std::pair<FName, double>>
 	int Apply(FName type, int damage);
 };
 typedef TArray<std::pair<FName, int>> PainChanceList;
+typedef TArray<std::pair<FName, int>> MaxPainList;
 
 struct DamageTypeDefinition
 {
@@ -253,6 +254,7 @@ struct FActorInfo
 	FStateLabels *StateList = nullptr;
 	DmgFactors DamageFactors;
 	PainChanceList PainChances;
+	MaxPainList MaxPainThresholds;
 
 	TArray<PClassActor *> VisibleToPlayerClass;
 
@@ -271,6 +273,7 @@ struct FActorInfo
 		DefaultStateUsage = other.DefaultStateUsage;
 		DamageFactors = other.DamageFactors;
 		PainChances = other.PainChances;
+		MaxPainThresholds = other.MaxPainThresholds;
 		VisibleToPlayerClass = other.VisibleToPlayerClass;
 		DropItems = other.DropItems;
 		distancecheck = other.distancecheck;
@@ -302,6 +305,7 @@ public:
 	void RegisterIDs();
 	void SetDamageFactor(FName type, double factor);
 	void SetPainChance(FName type, int chance);
+	void SetMaxPain(FName type, int threshold);
 	bool SetReplacement(FName replaceName);
 	void InitializeDefaults();
 

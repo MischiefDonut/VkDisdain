@@ -764,6 +764,29 @@ void PClassActor::SetPainChance(FName type, int chance)
 
 //==========================================================================
 //
+// PClassActor :: SetMaxPain
+//
+//==========================================================================
+
+void PClassActor::SetMaxPain(FName type, int threshold)
+{
+	for (auto& p : ActorInfo()->MaxPainThresholds)
+	{
+		if (p.first == type)
+		{
+			p.second = threshold;
+			return;
+		}
+	}
+
+	if (threshold >= 0)
+	{
+		ActorInfo()->MaxPainThresholds.Push({ type, threshold });
+	}
+}
+
+//==========================================================================
+//
 // DmgFactors :: CheckFactor
 //
 // Checks for the existance of a certain damage type. If that type does not

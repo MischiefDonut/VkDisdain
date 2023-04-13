@@ -284,6 +284,9 @@ void AActor::Serialize(FSerializer &arc)
 		A("floatspeed", FloatSpeed)
 		A("mass", Mass)
 		A("painchance", PainChance)
+		A("maxpain", MaxPain)
+		A("painamount", PainAmount)
+		A("painaccumulation", PainAccumulation)
 		A("spawnstate", SpawnState)
 		A("seestate", SeeState)
 		A("meleestate", MeleeState)
@@ -374,7 +377,6 @@ void AActor::Serialize(FSerializer &arc)
 
 		SerializeTerrain(arc, "floorterrain", floorterrain, &def->floorterrain);
 		SerializeArgs(arc, "args", args, def->args, special);
-
 }
 
 #undef A
