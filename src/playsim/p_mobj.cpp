@@ -233,6 +233,7 @@ void AActor::Serialize(FSerializer &arc)
 		A("flags6", flags6)
 		A("flags7", flags7)
 		A("flags8", flags8)
+		A("flags9", flags9)
 		A("weaponspecial", weaponspecial)
 		A("special1", special1)
 		A("special2", special2)
@@ -261,6 +262,8 @@ void AActor::Serialize(FSerializer &arc)
 		A("stamina", stamina)
 		("goal", goal)
 		A("waterlevel", waterlevel)
+		A("watertop", watertop)
+		A("waterbottom", waterbottom)
 		A("boomwaterlevel", boomwaterlevel)
 		A("minmissilechance", MinMissileChance)
 		A("spawnflags", SpawnFlags)
@@ -2402,7 +2405,7 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 //
 // adjust height
 //
-	if ((mo->flags & MF_FLOAT) && !(mo->flags2 & MF2_DORMANT) && mo->target)
+	if ((mo->flags & MF_FLOAT) && !(mo->flags2 & MF2_DORMANT) && mo->target && (!(mo->flags9 & MF9_SWIM) || mo->waterlevel > 1))
 	{	// float down towards target if too close
 		if (!(mo->flags & (MF_SKULLFLY | MF_INFLOAT)))
 		{
@@ -2427,6 +2430,24 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 		if (!(mo->flags8 & MF8_NOFRICTION))
 		{
 			mo->Vel.Z *= FRICTION_FLY;
+		}
+	}
+	if ((mo->flags9 & MF9_SWIM) && (mo->flags3 & MF3_ISMONSTER) && !(mo->flags6 & MF6_KILLED)
+		&& mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed)
+	{
+		double newz = clamp(mo->Z(), mo->floorz, mo->ceilingz - mo->Height);
+
+		FWaterResults res;
+		P_UpdateWaterDepth(DVector3(mo->Pos().XY(), newz), mo->Height, mo->Sector, mo->Height, false, res);
+		if (res.level < 2)
+		{
+			double center = mo->Height * 0.5;
+			if (newz + center >= mo->watertop)
+				mo->SetZ((res.level == 1 ? res.top : mo->watertop) - center);
+			else
+				mo->SetZ(mo->waterbottom - center);
+
+			mo->Vel.Z = 0.0;
 		}
 	}
 	if (mo->waterlevel && !(mo->flags & MF_NOGRAVITY) && !(mo->flags8 & MF8_NOFRICTION))
@@ -4366,97 +4387,64 @@ void AActor::CheckSectorTransition(sector_t *oldsec)
 
 //==========================================================================
 //
-// UpdateWaterDepth
+// P_UpdateWaterDepth
 //
-// Updates the actor's current waterlevel and waterdepth.
+// Gets the waterlevel, waterdepth, watertop, and waterbottom at a position given
+// a height of the hypothetical Actor.
 // Consolidates common code in UpdateWaterLevel and SplashCheck.
-//
-// Returns the floor height used for the depth check, or -FLT_MAX
-// if the actor wasn't in a sector.
 //
 //==========================================================================
 
-static double UpdateWaterDepth(AActor* actor, bool splash)
+void P_UpdateWaterDepth(const DVector3 &pos, double height, const sector_t *sec, double viewHeight, bool splash, FWaterResults &res)
 {
-	double fh = -FLT_MAX;
-	bool reset = false;
+	res = { 0, 0.0, -DBL_MAX, DBL_MAX };
+	if (sec == nullptr)
+		return;
 
-	actor->waterlevel = 0;
-	actor->waterdepth = 0;
-
-	if (actor->Sector == NULL)
+	if (sec->MoreFlags & SECMF_UNDERWATER)	// Intentionally not SECMF_UNDERWATERMASK
 	{
-		return fh;
+		res.top = sec->ceilingplane.ZatPoint(pos.XY());
+		res.bot = sec->floorplane.ZatPoint(pos.XY());
+		res.depth = height;
 	}
-
-	if (actor->Sector->MoreFlags & SECMF_UNDERWATER)	// intentionally not SECMF_UNDERWATERMASK
+	else if (const sector_t *hsec = sec->GetHeightSec(); hsec != nullptr)
 	{
-		actor->waterdepth = actor->Height;
+		// Splash checks also check Boom-style non-swimmable sectors
+		// as well as non-solid, visible 3D floors (below)
+		if ((hsec->MoreFlags & SECMF_UNDERWATERMASK) || splash)
+		{
+			res.top = hsec->floorplane.ZatPoint(pos.XY());
+			res.bot = hsec->ceilingplane.ZatPoint(pos.XY());
+			res.depth = res.top - pos.Z;
+			if (res.depth <= 0.0 && !(hsec->MoreFlags & SECMF_FAKEFLOORONLY) && pos.Z + height > res.bot)
+				res.depth = height;
+		}
 	}
 	else
 	{
-		const sector_t *hsec = actor->Sector->GetHeightSec();
-		if (hsec != NULL)
+		// Check 3D floors as well!
+		double center = pos.Z + height * 0.5;
+		for (auto rover : sec->e->XFloor.ffloors)
 		{
-			fh = hsec->floorplane.ZatPoint(actor);
-
-			// splash checks also check Boom-style non-swimmable sectors
-			//  as well as non-solid, visible 3D floors (below)
-			if (splash || hsec->MoreFlags & SECMF_UNDERWATERMASK)
+			if (double ff_top = 0.0, ff_bot = 0.0;
+				!(rover->flags & FF_SOLID) && (rover->flags & FF_EXISTS)
+				&& ((rover->flags & FF_SWIMMABLE) || (splash && rover->alpha != 0))
+				&& (ff_top = rover->top.plane->ZatPoint(pos.XY())) > pos.Z
+				&& (ff_bot = rover->bottom.plane->ZatPoint(pos.XY())) <= center)
 			{
-				actor->waterdepth = fh - actor->Z();
-
-				if (actor->waterdepth <= 0 && !(hsec->MoreFlags & SECMF_FAKEFLOORONLY) && (actor->Top() > hsec->ceilingplane.ZatPoint(actor)))
-				{
-					actor->waterdepth = actor->Height;
-				}
-			}
-		}
-		else
-		{
-			// Check 3D floors as well!
-			for (auto rover : actor->Sector->e->XFloor.ffloors)
-			{
-				if (!(rover->flags & FF_EXISTS)) continue;
-				if (rover->flags & FF_SOLID) continue;
-
-				bool reset = !(rover->flags & FF_SWIMMABLE);
-				if (splash) { reset &= rover->alpha == 0; }
-				if (reset) continue;
-
-				double ff_bottom = rover->bottom.plane->ZatPoint(actor);
-				double ff_top = rover->top.plane->ZatPoint(actor);
-
-				if (ff_top <= actor->Z() || ff_bottom > actor->Center()) continue;
-
-				fh = ff_top;
-				actor->waterdepth = ff_top - actor->Z();
+				res.top = ff_top;
+				res.bot = ff_bot;
+				res.depth = res.top - pos.Z;
 				break;
 			}
 		}
 	}
 
-	if (actor->waterdepth < 0) { actor->waterdepth = 0; }
-
-	if (actor->waterdepth > (actor->Height / 2))
-	{
-		// When noclipping around and going from low to high sector, your view height
-		//  can go negative, which is why this is nested inside here
-		if ((actor->player && (actor->waterdepth >= actor->player->viewheight)) || (actor->waterdepth >= actor->Height))
-		{
-			actor->waterlevel = 3;
-		}
-		else
-		{
-			actor->waterlevel = 2;
-		}
-	}
-	else if (actor->waterdepth > 0)
-	{
-		actor->waterlevel = 1;
-	}
-
-	return fh;
+	res.depth = max(0.0, res.depth);
+	if (res.depth >= height*0.5)
+		res.level = 2 + (res.depth >= viewHeight); // When noclipping around and going from low to high sector, your view height can go negative, which is why this is nested inside here
+	else if (res.depth > 0.0)
+		res.level = 1;
 }
 
 //==========================================================================
@@ -4469,13 +4457,18 @@ static double UpdateWaterDepth(AActor* actor, bool splash)
 
 void AActor::SplashCheck()
 {
-	double fh = UpdateWaterDepth(this, true);
+	FWaterResults res;
+	P_UpdateWaterDepth(Pos(), Height, Sector, player ? player->viewheight : Height, true, res);
+	waterlevel = res.level;
+	waterdepth = res.depth;
+	watertop = res.top;
+	waterbottom = res.bot;
 
 	// some additional checks to make deep sectors like Boom's splash without setting
 	// the water flags. 
 	if (boomwaterlevel == 0 && waterlevel != 0)
 	{
-		P_HitWater(this, Sector, PosAtZ(fh), true);
+		P_HitWater(this, Sector, PosAtZ(watertop), true);
 	}
 	boomwaterlevel = waterlevel;
 	return;
@@ -4494,7 +4487,13 @@ bool AActor::UpdateWaterLevel(bool dosplash)
 	int oldlevel = waterlevel;
 
 	if (dosplash) SplashCheck();
-	UpdateWaterDepth(this, false);
+
+	FWaterResults res;
+	P_UpdateWaterDepth(Pos(), Height, Sector, player ? player->viewheight : Height, false, res);
+	waterlevel = res.level;
+	waterdepth = res.depth;
+	watertop = res.top;
+	waterbottom = res.bot;
 
 	// Play surfacing and diving sounds, as appropriate.
 	//
@@ -7434,6 +7433,7 @@ void AActor::Revive()
 	flags6 = info->flags6;
 	flags7 = info->flags7;
 	flags8 = info->flags8; 
+	flags9 = info->flags9;
 	if (SpawnFlags & MTF_FRIENDLY) flags |= MF_FRIENDLY;
 	DamageType = info->DamageType;
 	health = SpawnHealth();
@@ -7696,6 +7696,9 @@ void PrintMiscActorInfo(AActor *query)
 		Printf("\n   flags8: %x", query->flags8.GetValue());
 		for (flagi = 0; flagi <= 31; flagi++)
 			if (query->flags8 & ActorFlags8::FromInt(1<<flagi)) Printf(" %s", FLAG_NAME(1<<flagi, flags8));
+		Printf("\n   flags9: %x", query->flags9.GetValue());
+		for (flagi = 0; flagi <= 31; flagi++)
+			if (query->flags9 & ActorFlags9::FromInt(1 << flagi)) Printf(" %s", FLAG_NAME(1 << flagi, flags9));
 		Printf("\nBounce flags: %x\nBounce factors: f:%f, w:%f", 
 			query->BounceFlags.GetValue(), query->bouncefactor,
 			query->wallbouncefactor);

@@ -1686,6 +1686,8 @@ int FLevelLocals::FinishTravel ()
 			pawn->Floorclip = pawndup->Floorclip;
 			pawn->waterlevel = pawndup->waterlevel;
 			pawn->waterdepth = pawndup->waterdepth;
+			pawn->watertop = pawndup->watertop;
+			pawn->waterbottom = pawndup->waterbottom;
 		}
 		else if (failnum == 0)	// In the failure case this may run into some undefined data.
 		{
