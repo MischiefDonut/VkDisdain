@@ -1165,6 +1165,7 @@ public:
 	TObjPtr<AActor*>	LastLookActor;	// Actor last looked for (if TIDtoHate != 0)
 	DVector3		SpawnPoint; 	// For nightmare respawn
 	int				StartHealth;
+	int				PrevSpawnHealth; // For tracking health scaling in co-op
 	uint8_t			WeaveIndexXY;	// Separated from special2 because it's used by globally accessible functions.
 	uint8_t			WeaveIndexZ;
 	uint16_t		skillrespawncount;
