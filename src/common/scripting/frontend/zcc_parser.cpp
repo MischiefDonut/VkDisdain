@@ -466,7 +466,7 @@ PNamespace *ParseOneScript(const int baselump, ZCCParseState &state)
 		}
 		else
 		{
-			state.ParseVersion = MakeVersion(2, 3);	// 2.3 is the first version of ZScript.
+			state.ParseVersion = MakeVersion(4, 11); // 2.3 is the first version of ZScript, but Disdain uses 4.11 as the default
 			sc.RestorePos(saved);
 		}
 	}
