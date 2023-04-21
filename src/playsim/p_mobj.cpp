@@ -1367,6 +1367,15 @@ void DActorModelData::Serialize(FSerializer& arc)
 		("hasModel", hasModel);
 }
 
+void DActorModelData::OnDestroy()
+{
+	modelIDs.Reset();
+	modelFrameGenerators.Reset();
+	skinIDs.Reset();
+	surfaceSkinIDs.Reset();
+	animationIDs.Reset();
+}
+
 //----------------------------------------------------------------------------
 //
 // PROC P_ExplodeMissile
