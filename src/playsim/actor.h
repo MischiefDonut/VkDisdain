@@ -700,6 +700,7 @@ public:
 
 	DActorModelData() = default;
 	virtual void Serialize(FSerializer& arc) override;
+	virtual void OnDestroy() override;
 };
 
 class DViewPosition : public DObject
