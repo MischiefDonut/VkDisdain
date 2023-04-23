@@ -1,10 +1,10 @@
 
 #pragma once
 
-#include "vulkan/system/vk_hwbuffer.h"
+#include "vulkan/buffers/vk_hwbuffer.h"
+#include "vulkan/buffers/vk_streambuffer.h"
 #include "vulkan/shaders/vk_shader.h"
-#include "vulkan/renderer/vk_renderpass.h"
-#include "vulkan/renderer/vk_streambuffer.h"
+#include "vulkan/pipelines/vk_renderpass.h"
 
 #include "name.h"
 
@@ -43,10 +43,10 @@ public:
 	void EnableMultisampling(bool on) override;
 	void EnableLineSmooth(bool on) override;
 	void EnableDrawBuffers(int count, bool apply) override;
+	void SetViewpointOffset(uint32_t offset) override;
 
 	void BeginFrame();
 	void SetRenderTarget(VkTextureImage *image, VulkanImageView *depthStencilView, int width, int height, VkFormat Format, VkSampleCountFlagBits samples);
-	void Bind(int bindingpoint, uint32_t offset);
 	void EndRenderPass();
 	void EndFrame();
 
@@ -104,8 +104,8 @@ protected:
 	VkMatrixBufferWriter mMatrixBufferWriter;
 
 	int mLastVertexOffsets[2] = { 0, 0 };
-	IVertexBuffer *mLastVertexBuffer = nullptr;
-	IIndexBuffer *mLastIndexBuffer = nullptr;
+	IBuffer* mLastVertexBuffer = nullptr;
+	IBuffer* mLastIndexBuffer = nullptr;
 
 	bool mLastModelMatrixEnabled = true;
 	bool mLastTextureMatrixEnabled = true;

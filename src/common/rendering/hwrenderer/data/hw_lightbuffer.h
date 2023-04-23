@@ -7,12 +7,14 @@
 #include <atomic>
 #include <mutex>
 
+class DFrameBuffer;
 class FRenderState;
 
 class FLightBuffer
 {
-	IDataBuffer *mBuffer;
-	IDataBuffer* mBufferPipeline[HW_MAX_PIPELINE_BUFFERS];
+	DFrameBuffer* fb = nullptr;
+	IBuffer* mBuffer;
+	IBuffer* mBufferPipeline[HW_MAX_PIPELINE_BUFFERS];
 	int mPipelineNbr;
 	int mPipelinePos = 0;
 
@@ -28,7 +30,7 @@ class FLightBuffer
 
 public:
 
-	FLightBuffer(int pipelineNbr = 1);
+	FLightBuffer(DFrameBuffer* fb, int pipelineNbr = 1);
 	~FLightBuffer();
 	void Clear();
 	int UploadLights(FDynLightData &data);
@@ -39,7 +41,7 @@ public:
 	int GetBinding(unsigned int index, size_t* pOffset, size_t* pSize);
 
 	// OpenGL needs the buffer to mess around with the binding.
-	IDataBuffer* GetBuffer() const
+	IBuffer* GetBuffer() const
 	{
 		return mBuffer;
 	}

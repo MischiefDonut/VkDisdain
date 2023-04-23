@@ -20,11 +20,11 @@
 **
 */
 
-#include "vk_renderstate.h"
-#include "vulkan/system/vk_renderdevice.h"
-#include "zvulkan/vulkanbuilders.h"
-#include "vulkan/system/vk_buffer.h"
-#include "vulkan/renderer/vk_streambuffer.h"
+#include "vk_streambuffer.h"
+#include "vulkan/vk_renderstate.h"
+#include "vulkan/vk_renderdevice.h"
+#include "vulkan/buffers/vk_buffer.h"
+#include <zvulkan/vulkanbuilders.h>
 
 VkStreamBufferWriter::VkStreamBufferWriter(VulkanRenderDevice* fb)
 {

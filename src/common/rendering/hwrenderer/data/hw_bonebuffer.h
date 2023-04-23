@@ -6,12 +6,14 @@
 #include <atomic>
 #include <mutex>
 
+class DFrameBuffer;
 class FRenderState;
 
 class BoneBuffer
 {
-	IDataBuffer *mBuffer;
-	IDataBuffer* mBufferPipeline[HW_MAX_PIPELINE_BUFFERS];
+	DFrameBuffer* fb = nullptr;
+	IBuffer *mBuffer;
+	IBuffer* mBufferPipeline[HW_MAX_PIPELINE_BUFFERS];
 	int mPipelineNbr;
 	int mPipelinePos = 0;
 
@@ -24,7 +26,7 @@ class BoneBuffer
     unsigned int mMaxUploadSize;
 
 public:
-	BoneBuffer(int pipelineNbr = 1);
+	BoneBuffer(DFrameBuffer* fb, int pipelineNbr = 1);
 	~BoneBuffer();
 
 	void Clear();
@@ -39,7 +41,7 @@ public:
 	int GetCurrentIndex() { return mIndex; };
 
 	// OpenGL needs the buffer to mess around with the binding.
-	IDataBuffer* GetBuffer() const
+	IBuffer* GetBuffer() const
 	{
 		return mBuffer;
 	}

@@ -24,8 +24,8 @@
 #include <zvulkan/vulkandevice.h>
 #include <zvulkan/vulkanbuilders.h>
 #include <zvulkan/vulkanswapchain.h>
-#include "vulkan/system/vk_renderdevice.h"
-#include "vulkan/renderer/vk_postprocess.h"
+#include "vulkan/vk_renderdevice.h"
+#include "vulkan/vk_postprocess.h"
 #include "vk_framebuffer.h"
 
 CVAR(Bool, vk_hdr, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
@@ -34,15 +34,15 @@ CVAR(Bool, vk_exclusivefullscreen, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 VkFramebufferManager::VkFramebufferManager(VulkanRenderDevice* fb) : fb(fb)
 {
 	SwapChain = VulkanSwapChainBuilder()
-		.Create(fb->device.get());
+		.Create(fb->GetDevice());
 
 	SwapChainImageAvailableSemaphore = SemaphoreBuilder()
 		.DebugName("SwapChainImageAvailableSemaphore")
-		.Create(fb->device.get());
+		.Create(fb->GetDevice());
 
 	RenderFinishedSemaphore = SemaphoreBuilder()
 		.DebugName("RenderFinishedSemaphore")
-		.Create(fb->device.get());
+		.Create(fb->GetDevice());
 }
 
 VkFramebufferManager::~VkFramebufferManager()

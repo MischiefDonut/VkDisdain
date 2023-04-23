@@ -49,9 +49,7 @@
 
 struct FPortalSceneState;
 class FSkyVertexBuffer;
-class IIndexBuffer;
-class IVertexBuffer;
-class IDataBuffer;
+class IBuffer;
 class FFlatVertexBuffer;
 class HWViewpointBuffer;
 class FLightBuffer;
@@ -94,6 +92,7 @@ class FileWriter;
 enum FTextureFormat : uint32_t;
 class FModelRenderer;
 struct SamplerUniform;
+struct FVertexBufferAttribute;
 
 //
 // VIDEO
@@ -145,7 +144,7 @@ public:
 	HWViewpointBuffer *mViewpoints = nullptr;	// Viewpoint render data.
 	FLightBuffer *mLights = nullptr;			// Dynamic lights
 	BoneBuffer* mBones = nullptr;				// Model bones
-	IShadowMap mShadowMap;
+	ShadowMap* mShadowMap = nullptr;
 
 	int mGameScreenWidth = 0;
 	int mGameScreenHeight = 0;
@@ -166,7 +165,7 @@ public:
 	virtual bool CompileNextShader() { return true; }
 	void SetAABBTree(hwrenderer::LevelAABBTree * tree)
 	{
-		mShadowMap.SetAABBTree(tree);
+		mShadowMap->SetAABBTree(tree);
 	}
 	virtual void SetLevelMesh(hwrenderer::LevelMesh *mesh) { }
 	bool allowSSBO() const
@@ -178,12 +177,10 @@ public:
 #endif
 	}
 
-	// Hack alert: On Intel's GL driver SSBO's perform quite worse than UBOs.
-	// We only want to disable using SSBOs for lights but not disable the feature entirely.
-	// Note that using an uniform buffer here will limit the number of lights per surface so it isn't done for NVidia and AMD.
+	// SSBOs have quite worse performance for read only data, so keep this around only as long as Vulkan has not been adapted yet.
 	bool useSSBO() 
 	{
-		return IsVulkan();// || ((hwcaps & RFL_SHADER_STORAGE_BUFFER) && allowSSBO() && !strstr(vendorstring, "Intel"));
+		return IsVulkan();
 	}
 
 	virtual DCanvas* GetCanvas() { return nullptr; }
@@ -238,10 +235,17 @@ public:
 	virtual void InitLightmap(int LMTextureSize, int LMTextureCount, TArray<uint16_t>& LMTextureData) {}
 
     // Interface to hardware rendering resources
-	virtual IVertexBuffer *CreateVertexBuffer() { return nullptr; }
-	virtual IIndexBuffer *CreateIndexBuffer() { return nullptr; }
-	virtual IDataBuffer *CreateDataBuffer(int bindingpoint, bool ssbo, bool needsresize) { return nullptr; }
+	virtual IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs) { return nullptr; }
+	virtual IBuffer* CreateIndexBuffer() { return nullptr; }
 	bool BuffersArePersistent() { return !!(hwcaps & RFL_BUFFER_STORAGE); }
+
+	// To do: these buffers shouldn't be created by the hwrenderer layer - it will be simpler if the backend manages them completely
+	virtual IBuffer* CreateLightBuffer() { return nullptr; }
+	virtual IBuffer* CreateBoneBuffer() { return nullptr; }
+	virtual IBuffer* CreateViewpointBuffer() { return nullptr; }
+	virtual IBuffer* CreateShadowmapNodesBuffer() { return nullptr; }
+	virtual IBuffer* CreateShadowmapLinesBuffer() { return nullptr; }
+	virtual IBuffer* CreateShadowmapLightsBuffer() { return nullptr; }
 
 	// This is overridable in case Vulkan does it differently.
 	virtual bool RenderTextureIsFlipped() const

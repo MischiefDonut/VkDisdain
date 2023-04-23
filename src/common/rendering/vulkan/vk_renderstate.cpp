@@ -21,14 +21,14 @@
 */
 
 #include "vk_renderstate.h"
-#include "vulkan/system/vk_renderdevice.h"
-#include "zvulkan/vulkanbuilders.h"
-#include "vulkan/system/vk_commandbuffer.h"
-#include "vulkan/system/vk_buffer.h"
-#include "vulkan/renderer/vk_renderpass.h"
-#include "vulkan/renderer/vk_descriptorset.h"
+#include "vulkan/vk_renderdevice.h"
+#include "vulkan/commands/vk_commandbuffer.h"
+#include "vulkan/buffers/vk_buffer.h"
+#include "vulkan/pipelines/vk_renderpass.h"
+#include "vulkan/descriptorsets/vk_descriptorset.h"
 #include "vulkan/textures/vk_renderbuffers.h"
 #include "vulkan/textures/vk_hwtexture.h"
+#include <zvulkan/vulkanbuilders.h>
 
 #include "hw_skydome.h"
 #include "hw_viewpointuniforms.h"
@@ -37,7 +37,6 @@
 #include "hw_clock.h"
 #include "flatvertices.h"
 #include "hwrenderer/data/hw_viewpointbuffer.h"
-#include "hwrenderer/data/shaderuniforms.h"
 
 CVAR(Int, vk_submit_size, 1000, 0);
 EXTERN_CVAR(Bool, r_skipmats)
@@ -254,7 +253,46 @@ void VkRenderState::ApplyRenderPass(int dt)
 	pipelineKey.ShaderKey.Brightmap = (uTextureMode & TEXF_Brightmap) != 0;
 	pipelineKey.ShaderKey.Detailmap = (uTextureMode & TEXF_Detailmap) != 0;
 	pipelineKey.ShaderKey.Glowmap = (uTextureMode & TEXF_Glowmap) != 0;
-	pipelineKey.ShaderKey.Simple2D = (mFogEnabled == 2);
+
+	// The way GZDoom handles state is just plain insanity!
+	int fogset = 0;
+	if (mFogEnabled)
+	{
+		if (mFogEnabled == 2)
+		{
+			fogset = -3;	// 2D rendering with 'foggy' overlay.
+		}
+		else if ((mFogColor & 0xffffff) == 0)
+		{
+			fogset = gl_fogmode;
+		}
+		else
+		{
+			fogset = -gl_fogmode;
+		}
+	}
+	pipelineKey.ShaderKey.Simple2D = (fogset == -3);
+	pipelineKey.ShaderKey.FogBeforeLights = (fogset > 0);
+	pipelineKey.ShaderKey.FogAfterLights = (fogset < 0);
+	pipelineKey.ShaderKey.FogRadial = (fogset < -1 || fogset > 1);
+	pipelineKey.ShaderKey.SWLightRadial = (gl_fogmode == 2);
+	pipelineKey.ShaderKey.SWLightBanded = false; // gl_bandedswlight;
+
+	float lightlevel = mLightParms[3];
+	if (lightlevel < 0.0)
+	{
+		pipelineKey.ShaderKey.LightMode = 0; // Default
+	}
+	else
+	{
+		if (mLightMode == 5)
+			pipelineKey.ShaderKey.LightMode = 3; // Build
+		else if (mLightMode == 16)
+			pipelineKey.ShaderKey.LightMode = 2; // Vanilla
+		else
+			pipelineKey.ShaderKey.LightMode = 1; // Software
+	}
+
 	pipelineKey.ShaderKey.UseShadowmap = gl_light_shadowmap;
 	pipelineKey.ShaderKey.UseRaytrace = gl_light_raytrace;
 
@@ -477,13 +515,10 @@ void VkRenderState::WaitForStreamBuffers()
 	mMatrixBufferWriter.Reset();
 }
 
-void VkRenderState::Bind(int bindingpoint, uint32_t offset)
+void VkRenderState::SetViewpointOffset(uint32_t offset)
 {
-	if (bindingpoint == VIEWPOINT_BINDINGPOINT)
-	{
-		mViewpointOffset = offset;
-		mNeedApply = true;
-	}
+	mViewpointOffset = offset;
+	mNeedApply = true;
 }
 
 void VkRenderState::BeginFrame()
@@ -560,7 +595,7 @@ void VkRenderState::BeginRenderPass(VulkanCommandBuffer *cmdbuffer)
 		if (key.DepthStencil)
 			builder.AddAttachment(mRenderTarget.DepthStencil);
 		builder.DebugName("VkRenderPassSetup.Framebuffer");
-		framebuffer = builder.Create(fb->device.get());
+		framebuffer = builder.Create(fb->GetDevice());
 	}
 
 	// Only clear depth+stencil if the render target actually has that
@@ -589,7 +624,7 @@ void VkRenderStateMolten::Draw(int dt, int index, int count, bool apply)
 {
 	if (dt == DT_TriangleFan)
 	{
-		IIndexBuffer *oldIndexBuffer = mIndexBuffer;
+		IBuffer* oldIndexBuffer = mIndexBuffer;
 		mIndexBuffer = fb->GetBufferManager()->FanToTrisIndexBuffer.get();
 
 		if (apply || mNeedApply)

@@ -2341,7 +2341,7 @@ DEFINE_ACTION_FUNCTION(FLevelLocals, GetChecksum)
 
 	for (int j = 0; j < 16; ++j)
 	{
-		sprintf(md5string + j * 2, "%02x", self->md5[j]);
+		snprintf(md5string + j * 2, 3, "%02x", self->md5[j]);
 	}
 
 	ACTION_RETURN_STRING((const char*)md5string);
@@ -2748,7 +2748,7 @@ DEFINE_ACTION_FUNCTION(_LevelInfo, MapChecksum)
 		map->GetChecksum(cksum);
 		for (int j = 0; j < 16; ++j)
 		{
-			sprintf(md5string + j * 2, "%02x", cksum[j]);
+			snprintf(md5string + j * 2, 3, "%02x", cksum[j]);
 		}
 		delete map;
 	}

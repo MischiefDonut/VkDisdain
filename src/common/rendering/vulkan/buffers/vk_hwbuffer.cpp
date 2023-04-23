@@ -21,12 +21,12 @@
 */
 
 #include "vk_hwbuffer.h"
-#include "zvulkan/vulkanbuilders.h"
-#include "vk_renderdevice.h"
-#include "vk_commandbuffer.h"
 #include "vk_buffer.h"
-#include "vulkan/renderer/vk_renderstate.h"
-#include "vulkan/renderer/vk_descriptorset.h"
+#include "vulkan/vk_renderdevice.h"
+#include "vulkan/vk_renderstate.h"
+#include "vulkan/commands/vk_commandbuffer.h"
+#include "vulkan/descriptorsets/vk_descriptorset.h"
+#include <zvulkan/vulkanbuilders.h>
 #include "engineerrors.h"
 
 VkHardwareBuffer::VkHardwareBuffer(VulkanRenderDevice* fb) : fb(fb)
@@ -80,13 +80,13 @@ void VkHardwareBuffer::SetData(size_t size, const void *data, BufferUsageType us
 			.Usage(VK_BUFFER_USAGE_TRANSFER_DST_BIT | mBufferType, VMA_MEMORY_USAGE_GPU_ONLY)
 			.Size(bufsize)
 			.DebugName(usage == BufferUsageType::Static ? "VkHardwareBuffer.Static" : "VkHardwareBuffer.Stream")
-			.Create(fb->device.get());
+			.Create(fb->GetDevice());
 
 		mStaging = BufferBuilder()
 			.Usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY)
 			.Size(bufsize)
 			.DebugName(usage == BufferUsageType::Static ? "VkHardwareBuffer.Staging.Static" : "VkHardwareBuffer.Staging.Stream")
-			.Create(fb->device.get());
+			.Create(fb->GetDevice());
 
 		if (data)
 		{
@@ -108,7 +108,7 @@ void VkHardwareBuffer::SetData(size_t size, const void *data, BufferUsageType us
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 			.Size(bufsize)
 			.DebugName("VkHardwareBuffer.Persistent")
-			.Create(fb->device.get());
+			.Create(fb->GetDevice());
 
 		map = mBuffer->Map(0, bufsize);
 		if (data)
@@ -125,7 +125,7 @@ void VkHardwareBuffer::SetData(size_t size, const void *data, BufferUsageType us
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 			.Size(bufsize)
 			.DebugName("VkHardwareBuffer.Mappable")
-			.Create(fb->device.get());
+			.Create(fb->GetDevice());
 
 		if (data)
 		{
@@ -176,7 +176,7 @@ void VkHardwareBuffer::Resize(size_t newsize)
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 		.Size(newsize)
 		.DebugName("VkHardwareBuffer.Resized")
-		.Create(fb->device.get());
+		.Create(fb->GetDevice());
 	buffersize = newsize;
 
 	// Transfer data from old to new
@@ -236,19 +236,3 @@ void VkHardwareBuffer::Unlock()
 		map = nullptr;
 	}
 }
-
-/////////////////////////////////////////////////////////////////////////////
-
-void VkHardwareVertexBuffer::SetFormat(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute *attrs)
-{
-	VertexFormat = fb->GetRenderPassManager()->GetVertexFormat(numBindingPoints, numAttributes, stride, attrs);
-}
-
-/////////////////////////////////////////////////////////////////////////////
-
-
-void VkHardwareDataBuffer::BindRange(FRenderState* state, size_t start, size_t length)
-{
-	static_cast<VkRenderState*>(state)->Bind(bindingpoint, (uint32_t)start);
-}
-

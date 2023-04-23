@@ -24,17 +24,17 @@
 #include "vulkan/shaders/vk_shader.h"
 #include <zvulkan/vulkanswapchain.h>
 #include <zvulkan/vulkanbuilders.h>
-#include "vulkan/system/vk_renderdevice.h"
-#include "vulkan/system/vk_hwbuffer.h"
-#include "vulkan/system/vk_commandbuffer.h"
-#include "vulkan/renderer/vk_renderstate.h"
-#include "vulkan/renderer/vk_pprenderstate.h"
+#include "vulkan/vk_renderdevice.h"
+#include "vulkan/buffers/vk_hwbuffer.h"
+#include "vulkan/commands/vk_commandbuffer.h"
+#include "vulkan/vk_renderstate.h"
+#include "vulkan/vk_pprenderstate.h"
 #include "vulkan/shaders/vk_ppshader.h"
 #include "vulkan/textures/vk_pptexture.h"
 #include "vulkan/textures/vk_renderbuffers.h"
 #include "vulkan/textures/vk_imagetransition.h"
 #include "vulkan/textures/vk_texture.h"
-#include "vulkan/textures/vk_framebuffer.h"
+#include "vulkan/framebuffers/vk_framebuffer.h"
 #include "hw_cvars.h"
 #include "hwrenderer/postprocessing/hw_postprocess.h"
 #include "hwrenderer/postprocessing/hw_postprocess_cvars.h"
@@ -275,7 +275,7 @@ void VkPostprocess::ClearTonemapPalette()
 
 void VkPostprocess::UpdateShadowMap()
 {
-	if (screen->mShadowMap.PerformUpdate())
+	if (screen->mShadowMap->PerformUpdate())
 	{
 		VkPPRenderState renderstate(fb);
 		hw_postprocess.shadowmap.Update(&renderstate);
@@ -284,7 +284,7 @@ void VkPostprocess::UpdateShadowMap()
 			.AddImage(&fb->GetTextureManager()->Shadowmap, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, false)
 			.Execute(fb->GetCommands()->GetDrawCommands());
 
-		screen->mShadowMap.FinishUpdate();
+		screen->mShadowMap->FinishUpdate();
 	}
 }
 

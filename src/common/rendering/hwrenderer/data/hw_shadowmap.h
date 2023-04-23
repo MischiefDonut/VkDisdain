@@ -6,13 +6,16 @@
 #include <memory>
 #include <functional>
 
-class IDataBuffer;
+class IBuffer;
+class DFrameBuffer;
 
-class IShadowMap
+class ShadowMap
 {
+	DFrameBuffer* fb = nullptr;
+
 public:
-	IShadowMap() { }
-	virtual ~IShadowMap();
+	ShadowMap(DFrameBuffer* fb) : fb(fb) { }
+	virtual ~ShadowMap();
 
 	void Reset();
 
@@ -75,17 +78,17 @@ protected:
 	hwrenderer::LevelAABBTree* mAABBTree = nullptr;
 	bool mNewTree = false;
 
-	IShadowMap(const IShadowMap &) = delete;
-	IShadowMap &operator=(IShadowMap &) = delete;
+	ShadowMap(const ShadowMap &) = delete;
+	ShadowMap &operator=(ShadowMap &) = delete;
 
 	// OpenGL storage buffer with the list of lights in the shadow map texture
 	// These buffers need to be accessed by the OpenGL backend directly so that they can be bound.
 public:
-	IDataBuffer *mLightList = nullptr;
+	IBuffer* mLightList = nullptr;
 
 	// OpenGL storage buffers for the AABB tree
-	IDataBuffer *mNodesBuffer = nullptr;
-	IDataBuffer *mLinesBuffer = nullptr;
+	IBuffer* mNodesBuffer = nullptr;
+	IBuffer* mLinesBuffer = nullptr;
 
 	std::function<void()> CollectLights = nullptr;
 

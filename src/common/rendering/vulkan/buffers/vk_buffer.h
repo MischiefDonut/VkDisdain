@@ -8,9 +8,8 @@ class VulkanRenderDevice;
 class VkHardwareBuffer;
 class VkHardwareDataBuffer;
 class VkStreamBuffer;
-class IIndexBuffer;
-class IVertexBuffer;
-class IDataBuffer;
+class IBuffer;
+struct FVertexBufferAttribute;
 
 class VkBufferManager
 {
@@ -21,9 +20,15 @@ public:
 	void Init();
 	void Deinit();
 
-	IVertexBuffer* CreateVertexBuffer();
-	IIndexBuffer* CreateIndexBuffer();
-	IDataBuffer* CreateDataBuffer(int bindingpoint, bool ssbo, bool needsresize);
+	IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs);
+	IBuffer* CreateIndexBuffer();
+
+	IBuffer* CreateLightBuffer();
+	IBuffer* CreateBoneBuffer();
+	IBuffer* CreateViewpointBuffer();
+	IBuffer* CreateShadowmapNodesBuffer();
+	IBuffer* CreateShadowmapLinesBuffer();
+	IBuffer* CreateShadowmapLightsBuffer();
 
 	void AddBuffer(VkHardwareBuffer* buffer);
 	void RemoveBuffer(VkHardwareBuffer* buffer);
@@ -38,7 +43,7 @@ public:
 	std::unique_ptr<VkStreamBuffer> MatrixBuffer;
 	std::unique_ptr<VkStreamBuffer> StreamBuffer;
 
-	std::unique_ptr<IIndexBuffer> FanToTrisIndexBuffer;
+	std::unique_ptr<IBuffer> FanToTrisIndexBuffer;
 
 private:
 	void CreateFanToTrisIndexBuffer();
@@ -46,6 +51,8 @@ private:
 	VulkanRenderDevice* fb = nullptr;
 
 	std::list<VkHardwareBuffer*> Buffers;
+
+	friend class VkStreamBuffer;
 };
 
 class VkStreamBuffer

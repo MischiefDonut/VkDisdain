@@ -25,12 +25,11 @@ class SWSceneDrawer;
 
 class VulkanRenderDevice : public SystemBaseFrameBuffer
 {
-	typedef SystemBaseFrameBuffer Super;
-
-
 public:
-	std::shared_ptr<VulkanDevice> device;
+	VulkanRenderDevice(void* hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface);
+	~VulkanRenderDevice();
 
+	VulkanDevice* GetDevice() { return mDevice.get(); }
 	VkCommandBufferManager* GetCommands() { return mCommands.get(); }
 	VkShaderManager *GetShaderManager() { return mShaderManager.get(); }
 	VkSamplerManager *GetSamplerManager() { return mSamplerManager.get(); }
@@ -47,8 +46,6 @@ public:
 
 	unsigned int GetLightBufferBlockSize() const;
 
-	VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface);
-	~VulkanRenderDevice();
 	bool IsVulkan() override { return true; }
 
 	void Update() override;
@@ -75,9 +72,16 @@ public:
 
 	IHardwareTexture *CreateHardwareTexture(int numchannels) override;
 	FMaterial* CreateMaterial(FGameTexture* tex, int scaleflags) override;
-	IVertexBuffer *CreateVertexBuffer() override;
-	IIndexBuffer *CreateIndexBuffer() override;
-	IDataBuffer *CreateDataBuffer(int bindingpoint, bool ssbo, bool needsresize) override;
+
+	IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs) override;
+	IBuffer* CreateIndexBuffer() override;
+
+	IBuffer* CreateLightBuffer() override;
+	IBuffer* CreateBoneBuffer() override;
+	IBuffer* CreateViewpointBuffer() override;
+	IBuffer* CreateShadowmapNodesBuffer() override;
+	IBuffer* CreateShadowmapLinesBuffer() override;
+	IBuffer* CreateShadowmapLightsBuffer() override;
 
 	FTexture *WipeStartScreen() override;
 	FTexture *WipeEndScreen() override;
@@ -96,6 +100,7 @@ private:
 	void PrintStartupLog();
 	void CopyScreenToBuffer(int w, int h, uint8_t *data) override;
 
+	std::shared_ptr<VulkanDevice> mDevice;
 	std::unique_ptr<VkCommandBufferManager> mCommands;
 	std::unique_ptr<VkBufferManager> mBufferManager;
 	std::unique_ptr<VkSamplerManager> mSamplerManager;

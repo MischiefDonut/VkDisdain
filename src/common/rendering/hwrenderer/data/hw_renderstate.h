@@ -8,8 +8,7 @@
 #include "i_interface.h"
 
 struct FColormap;
-class IVertexBuffer;
-class IIndexBuffer;
+class IBuffer;
 
 enum EClearTarget
 {
@@ -223,6 +222,7 @@ protected:
 	int mTextureClamp;
 	int mTextureModeFlags;
 	int mSoftLight;
+	int mLightMode = -1;
 	float mLightParms[4];
 
 	float mAlphaThreshold;
@@ -240,9 +240,9 @@ protected:
 	FMaterialState mMaterial;
 	FDepthBiasState mBias;
 
-	IVertexBuffer *mVertexBuffer;
+	IBuffer* mVertexBuffer;
 	int mVertexOffsets[2];	// one per binding point
-	IIndexBuffer *mIndexBuffer;
+	IBuffer* mIndexBuffer;
 
 	EPassType mPassType = NORMAL_PASS;
 
@@ -460,6 +460,11 @@ public:
 		 mLightParms[3] = -1.f;
 	}
 
+	void SetLightMode(int lightmode)
+	{
+		mLightMode = lightmode;
+	}
+
 	void SetGlowPlanes(const FVector4 &tp, const FVector4& bp)
 	{
 		mStreamData.uGlowTopPlane = tp;
@@ -657,7 +662,7 @@ public:
 		mClipSplit[1] = 1000000.f;
 	}
 
-	void SetVertexBuffer(IVertexBuffer *vb, int offset0, int offset1)
+	void SetVertexBuffer(IBuffer* vb, int offset0, int offset1)
 	{
 		assert(vb);
 		mVertexBuffer = vb;
@@ -665,7 +670,7 @@ public:
 		mVertexOffsets[1] = offset1;
 	}
 
-	void SetIndexBuffer(IIndexBuffer *ib)
+	void SetIndexBuffer(IBuffer* ib)
 	{
 		mIndexBuffer = ib;
 	}
@@ -737,6 +742,7 @@ public:
 	virtual void EnableMultisampling(bool on) = 0;				// only active for 2D
 	virtual void EnableLineSmooth(bool on) = 0;					// constant setting for each 2D drawer operation
 	virtual void EnableDrawBuffers(int count, bool apply = false) = 0;	// Used by SSAO and EnableDrawBufferAttachments
+	virtual void SetViewpointOffset(uint32_t offset) = 0;		// HWViewpoint uniform binding offset
 
 	void SetColorMask(bool on)
 	{
