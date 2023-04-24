@@ -349,6 +349,7 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(MF8, ONLYSLAMSOLID, AActor, flags8),
 
 	DEFINE_FLAG(MF9, SWIM, AActor, flags9),
+	DEFINE_FLAG(MF9, GLIDESONWALLS, AActor, flags9),
 
 	// Effect flags
 	DEFINE_FLAG(FX, VISIBILITYPULSE, AActor, effects),

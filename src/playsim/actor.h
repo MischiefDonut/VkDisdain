@@ -438,6 +438,7 @@ enum ActorFlag8
 enum ActorFlag9
 {
 	MF9_SWIM			= 0x00000001, // Don't leave liquids when traversing
+	MF9_GLIDESONWALLS	= 0x00000002, // If the difference between the move and wall angle is small enough, glide along it instead of stopping.
 };
 
 // --- mobj.renderflags ---
@@ -1262,6 +1263,7 @@ public:
 	double MaxDropOffHeight;
 	double MaxStepHeight;
 	double MaxSlopeSteepness;
+	double MaxWallGlideAngle; // cos(angle) between wall and movement direction.
 
 	int32_t Mass;
 	int16_t PainChance;
