@@ -1682,7 +1682,7 @@ bool AActor::OkayToSwitchTarget(AActor *other)
 	if (mygroup != 0 && mygroup == othergroup)
 		return false;
 
-	if ((flags7 & MF7_NOINFIGHTSPECIES) && GetSpecies() == other->GetSpecies())
+	if ((flags7 & MF7_NOINFIGHTSPECIES) && GetSpecies() == other->GetSpecies() && !IsHostile(other))
 		return false;		// Don't fight own species.
 
 	if ((other->flags3 & MF3_NOTARGET) &&
