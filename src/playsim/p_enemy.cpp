@@ -670,13 +670,7 @@ static int P_Move (AActor *actor)
 					FWaterResults res;
 					P_UpdateWaterDepth(actor->Pos(), actor->Height, actor->Sector, actor->Height, false, res);
 					if (res.level < 2)
-					{
-						double center = actor->Height * 0.5;
-						if (actor->Z() + center >= actor->watertop)
-							actor->SetZ((res.level == 1 ? res.top : actor->watertop) - center);
-						else
-							actor->SetZ(actor->waterbottom - center);
-					}
+						ClampWaterHeight(actor, actor->Z(), res);
 				}
 
 				// [RH] Check to make sure there's nothing in the way of the float

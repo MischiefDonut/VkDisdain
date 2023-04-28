@@ -2446,17 +2446,14 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 //
 // adjust height
 //
-	if ((mo->flags & MF_FLOAT) && !(mo->flags2 & MF2_DORMANT) && mo->target && (!(mo->flags9 & MF9_SWIM) || mo->waterlevel > 1))
+	if ((mo->flags & MF_FLOAT) && ShouldFloat(mo))
 	{	// float down towards target if too close
-		if (!(mo->flags & (MF_SKULLFLY | MF_INFLOAT)))
-		{
-			dist = mo->Distance2D (mo->target);
-			delta = (mo->target->Center()) - mo->Z();
-			if (delta < 0 && dist < -(delta*3))
-				mo->AddZ(-mo->FloatSpeed);
-			else if (delta > 0 && dist < (delta*3))
-				mo->AddZ(mo->FloatSpeed);
-		}
+		dist = mo->Distance2D (mo->target);
+		delta = (mo->target->Center()) - mo->Z();
+		if (delta < 0 && dist < -(delta*3))
+			mo->AddZ(-mo->FloatSpeed);
+		else if (delta > 0 && dist < (delta*3))
+			mo->AddZ(mo->FloatSpeed);
 	}
 	if (mo->player && (mo->flags & MF_NOGRAVITY) && (mo->Z() > mo->floorz))
 	{
@@ -2473,8 +2470,7 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 			mo->Vel.Z *= FRICTION_FLY;
 		}
 	}
-	if ((mo->flags9 & MF9_SWIM) && (mo->flags3 & MF3_ISMONSTER) && !(mo->flags6 & MF6_KILLED)
-		&& mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed)
+	if ((mo->flags9 & MF9_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		double newz = clamp(mo->Z(), mo->floorz, mo->ceilingz - mo->Height);
 
@@ -2482,12 +2478,7 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 		P_UpdateWaterDepth(DVector3(mo->Pos().XY(), newz), mo->Height, mo->Sector, mo->Height, false, res);
 		if (res.level < 2)
 		{
-			double center = mo->Height * 0.5;
-			if (newz + center >= mo->watertop)
-				mo->SetZ((res.level == 1 ? res.top : mo->watertop) - center);
-			else
-				mo->SetZ(mo->waterbottom - center);
-
+			ClampWaterHeight(mo, newz, res);
 			mo->Vel.Z = 0.0;
 		}
 	}

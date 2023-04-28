@@ -2158,17 +2158,14 @@ void P_FakeZMovement(AActor *mo)
 	// adjust height
 	//
 	mo->AddZ(mo->Vel.Z);
-	if ((mo->flags&MF_FLOAT) && mo->target && (!(mo->flags9 & MF9_SWIM) || mo->waterlevel > 1))
+	if ((mo->flags&MF_FLOAT) && ShouldFloat(mo))
 	{ // float down towards target if too close
-		if (!(mo->flags & MF_SKULLFLY) && !(mo->flags & MF_INFLOAT))
-		{
-			double dist = mo->Distance2D(mo->target);
-			double delta = mo->target->Center() - mo->Z();
-			if (delta < 0 && dist < -(delta * 3))
-				mo->AddZ(-mo->FloatSpeed);
-			else if (delta > 0 && dist < (delta * 3))
-				mo->AddZ(mo->FloatSpeed);
-		}
+		double dist = mo->Distance2D(mo->target);
+		double delta = mo->target->Center() - mo->Z();
+		if (delta < 0 && dist < -(delta * 3))
+			mo->AddZ(-mo->FloatSpeed);
+		else if (delta > 0 && dist < (delta * 3))
+			mo->AddZ(mo->FloatSpeed);
 	}
 	if (mo->player && mo->flags&MF_NOGRAVITY && (mo->Z() > mo->floorz) && !mo->IsNoClip2())
 	{
@@ -2188,19 +2185,12 @@ void P_FakeZMovement(AActor *mo)
 		mo->SetZ(mo->ceilingz - mo->Height);
 	}
 
-	if ((mo->flags9 & MF9_SWIM) && (mo->flags3 & MF3_ISMONSTER) && !(mo->flags6 & MF6_KILLED)
-		&& mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed)
+	if ((mo->flags9 & MF9_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		FWaterResults res;
 		P_UpdateWaterDepth(mo->Pos(), mo->Height, mo->Sector, mo->Height, false, res);
 		if (res.level < 2)
-		{
-			double center = mo->Height * 0.5;
-			if (mo->Z() + center >= mo->watertop)
-				mo->SetZ((res.level == 1 ? res.top : mo->watertop) - center);
-			else
-				mo->SetZ(mo->waterbottom - center);
-		}
+			ClampWaterHeight(mo, mo->Z(), res);
 	}
 }
 
@@ -2491,7 +2481,7 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 		}
 
 		// Make sure the spot is a valid liquid
-		if ((thing->flags9 & MF9_SWIM) && (thing->flags3 & MF3_ISMONSTER) && !(thing->flags6 & MF6_KILLED)
+		if ((thing->flags9 & MF9_SWIM) && CanSwim(thing)
 			&& ((thing->waterlevel > 1 && thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed) || (thing->waterlevel <= 1 && tm.FromPMove)))
 		{
 			FWaterResults res;
@@ -2910,8 +2900,8 @@ bool P_CheckMove(AActor *thing, const DVector2 &pos, FCheckPosition& tm, int fla
 		}
 
 		// FIXME: Should monsters simply be allowed to get shoved out of water?
-		if ((thing->flags9 & MF9_SWIM) && (thing->flags3 & MF3_ISMONSTER) && !(thing->flags6 & MF6_KILLED)
-			&& thing->waterlevel > 1 && thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed)
+		if ((thing->flags9 & MF9_SWIM) && thing->waterlevel > 1 && CanSwim(thing)
+			&& thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed)
 		{
 			FWaterResults res;
 			P_UpdateWaterDepth(DVector3(tm.pos.XY(), newz), thing->Height, tm.sector, thing->Height, false, res);
