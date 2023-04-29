@@ -69,6 +69,7 @@ int ZCCDoomCompiler::Compile()
 	InitDefaults();
 	InitFunctions();
 	CompileStates();
+	InitDefaultFunctionPointers();
 	return FScriptPosition::ErrorCounter;
 }
 
@@ -390,6 +391,45 @@ void ZCCDoomCompiler::DispatchProperty(FPropertyInfo *prop, ZCC_PropertyStmt *pr
 //
 //==========================================================================
 
+PFunction * FindFunctionPointer(PClass * cls, int fn_name);
+PFunction *NativeFunctionPointerCast(PFunction *from, const PFunctionPointer *to);
+
+struct FunctionPointerProperties
+{
+	ZCC_PropertyStmt *prop;
+	PClass * cls;
+	FName name;
+	const PFunctionPointer * type;
+	PFunction ** addr;
+};
+
+TArray<FunctionPointerProperties> DefaultFunctionPointers;
+
+void ZCCDoomCompiler::InitDefaultFunctionPointers()
+{
+	for(auto &d : DefaultFunctionPointers)
+	{
+		PFunction * fn = FindFunctionPointer(d.cls, d.name.GetIndex());
+		if(!fn)
+		{
+			Error(d.prop, "Could not find static function '%s' in class '%s'",d.name.GetChars(), d.cls->TypeName.GetChars());
+		}
+		else
+		{
+			PFunction * casted = NativeFunctionPointerCast(fn,d.type);
+			if(!casted)
+			{
+				FString fn_proto_name = PFunctionPointer::GenerateNameForError(fn);
+				Error(d.prop, "Function has incompatible types, cannot convert from '%s' to '%s'",fn_proto_name.GetChars(), d.type->DescriptiveName());
+			}
+			else
+			{
+				(*d.addr) = casted;
+			}
+		}
+	}
+}
+
 void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag)
 {
 	ZCC_ExprConstant one;
@@ -602,6 +642,44 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 				}
 				*(PClass**)addr = cls;
 			}
+		}
+		else if (f->Type->isFunctionPointer())
+		{
+			const char * fn_str = GetStringConst(ex, ctx);
+			if (*fn_str == 0 || !stricmp(fn_str, "none"))
+			{
+				*(PFunction**)addr = nullptr;
+			}
+			else
+			{
+				TArray<FString> fn_info(FString(fn_str).Split("::", FString::TOK_SKIPEMPTY));
+				if(fn_info.Size() != 2)
+				{
+					Error(property, "Malformed function pointer property \"%s\", must be \"Class::Function\"",fn_info);
+				}
+				PClass * cls = PClass::FindClass(fn_info[0]);
+				if(!cls)
+				{
+					Error(property, "Could not find class '%s'",fn_info[0].GetChars());
+					*(PFunction**)addr = nullptr;
+				}
+				else
+				{
+					FName fn_name(fn_info[1], true);
+					if(fn_name.GetIndex() == 0)
+					{
+						Error(property, "Could not find function '%s' in class '%s'",fn_info[1].GetChars(),fn_info[0].GetChars());
+						*(PFunction**)addr = nullptr;
+					}
+					else
+					{
+						DefaultFunctionPointers.Push({property, cls, fn_name, static_cast<const PFunctionPointer *>(f->Type), (PFunction**)addr});
+						*(PFunction**)addr = nullptr;
+					}
+
+				}
+			}
+
 		}
 		else
 		{
