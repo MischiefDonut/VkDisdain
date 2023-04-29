@@ -244,7 +244,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 		pipelineKey.ShaderKey.EffectState = mTextureEnabled ? effectState : SHADER_NoTexture;
 		if (r_skipmats && pipelineKey.ShaderKey.EffectState >= 3 && pipelineKey.ShaderKey.EffectState <= 4)
 			pipelineKey.ShaderKey.EffectState = 0;
-		pipelineKey.ShaderKey.AlphaTest = mAlphaThreshold >= 0.f;
+		pipelineKey.ShaderKey.AlphaTest = mStreamData.uAlphaThreshold >= 0.f;
 	}
 
 	int uTextureMode = GetTextureModeAndFlags((mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas()) ? TM_OPAQUE : TM_NORMAL);
@@ -278,7 +278,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 	pipelineKey.ShaderKey.SWLightRadial = (gl_fogmode == 2);
 	pipelineKey.ShaderKey.SWLightBanded = false; // gl_bandedswlight;
 
-	float lightlevel = mLightParms[3];
+	float lightlevel = mStreamData.uLightLevel;
 	if (lightlevel < 0.0)
 	{
 		pipelineKey.ShaderKey.LightMode = 0; // Default
@@ -295,6 +295,8 @@ void VkRenderState::ApplyRenderPass(int dt)
 
 	pipelineKey.ShaderKey.UseShadowmap = gl_light_shadowmap;
 	pipelineKey.ShaderKey.UseRaytrace = gl_light_raytrace;
+
+	pipelineKey.ShaderKey.GBufferPass = mRenderTarget.DrawBuffers > 1;
 
 	// Is this the one we already have?
 	bool inRenderPass = mCommandBuffer;
@@ -393,6 +395,12 @@ void VkRenderState::ApplyStreamData()
 	else
 		mStreamData.timer = 0.0f;
 
+	if (mMaterial.mMaterial)
+	{
+		auto source = mMaterial.mMaterial->Source();
+		mStreamData.uSpecularMaterial = { source->GetGlossiness(), source->GetSpecularLevel() };
+	}
+
 	if (!mStreamBufferWriter.Write(mStreamData))
 	{
 		WaitForStreamBuffers();
@@ -402,40 +410,9 @@ void VkRenderState::ApplyStreamData()
 
 void VkRenderState::ApplyPushConstants()
 {
-	int fogset = 0;
-	if (mFogEnabled)
-	{
-		if (mFogEnabled == 2)
-		{
-			fogset = -3;	// 2D rendering with 'foggy' overlay.
-		}
-		else if ((GetFogColor() & 0xffffff) == 0)
-		{
-			fogset = gl_fogmode;
-		}
-		else
-		{
-			fogset = -gl_fogmode;
-		}
-	}
-
-	mPushConstants.uFogEnabled = fogset;
-	mPushConstants.uLightDist = mLightParms[0];
-	mPushConstants.uLightFactor = mLightParms[1];
-	mPushConstants.uFogDensity = mLightParms[2];
-	mPushConstants.uLightLevel = mLightParms[3];
-	mPushConstants.uAlphaThreshold = mAlphaThreshold;
-	mPushConstants.uClipSplit = { mClipSplit[0], mClipSplit[1] };
-
-	if (mMaterial.mMaterial)
-	{
-		auto source = mMaterial.mMaterial->Source();
-		mPushConstants.uSpecularMaterial = { source->GetGlossiness(), source->GetSpecularLevel() };
-	}
-
+	mPushConstants.uDataIndex = mStreamBufferWriter.DataIndex();
 	mPushConstants.uLightIndex = mLightIndex;
 	mPushConstants.uBoneIndexBase = mBoneIndexBase;
-	mPushConstants.uDataIndex = mStreamBufferWriter.DataIndex();
 
 	auto passManager = fb->GetRenderPassManager();
 	mCommandBuffer->pushConstants(passManager->GetPipelineLayout(mPipelineKey.NumTextureLayers), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);

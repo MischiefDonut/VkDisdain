@@ -886,6 +886,7 @@ set (PCH_SOURCES
 	rendering/hwrenderer/scene/hw_lighting.cpp
 	rendering/hwrenderer/scene/hw_drawlistadd.cpp
 	rendering/hwrenderer/scene/hw_setcolor.cpp
+	rendering/hwrenderer/scene/hw_meshcache.cpp
 	maploader/edata.cpp
 	maploader/specials.cpp
 	maploader/maploader.cpp
@@ -1117,6 +1118,8 @@ set (PCH_SOURCES
 	common/rendering/hwrenderer/data/hw_shadowmap.cpp
 	common/rendering/hwrenderer/data/hw_shaderpatcher.cpp
 	common/rendering/hwrenderer/data/hw_collision.cpp
+	common/rendering/hwrenderer/data/hw_meshbuilder.cpp
+	common/rendering/hwrenderer/data/hw_mesh.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocessshader.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess_cvars.cpp
