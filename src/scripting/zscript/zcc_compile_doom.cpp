@@ -428,6 +428,7 @@ void ZCCDoomCompiler::InitDefaultFunctionPointers()
 			}
 		}
 	}
+	DefaultFunctionPointers.Clear();
 }
 
 void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag)
