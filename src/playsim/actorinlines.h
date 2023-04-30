@@ -279,19 +279,19 @@ inline void ClampWaterHeight(AActor* actor, double z, const FWaterResults &res)
 }
 
 // Yet another hack for MBF...
-inline bool CanJump(const AActor* actor)
+inline bool CanJump(AActor* actor)
 {
 	return (actor->flags6 & MF6_CANJUMP) || (
 		(actor->BounceFlags & BOUNCE_MBF) && (actor->flags & MF_FLOAT) && actor->IsSentient());
 }
 
-inline bool ShouldFloat(const AActor* actor)
+inline bool ShouldFloat(AActor* actor)
 {
-	return !(actor->flags2 & MF2_DORMANT) && actor->target.Get() && (!(actor->flags9 & MF9_SWIM) || actor->waterlevel > 1)
+	return !(actor->flags2 & MF2_DORMANT) && actor->target && (!(actor->flags9 & MF9_SWIM) || actor->waterlevel > 1)
 			&& !(actor->flags & (MF_SKULLFLY | MF_INFLOAT));
 }
 
-inline bool CanSwim(const AActor* actor)
+inline bool CanSwim(AActor* actor)
 {
 	return (actor->flags3 & MF3_ISMONSTER) && !(actor->flags6 & MF6_KILLED);
 }
