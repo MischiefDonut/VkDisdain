@@ -32,11 +32,10 @@
 
 #include "hw_skydome.h"
 #include "hw_viewpointuniforms.h"
-#include "hw_lightbuffer.h"
+#include "hw_dynlightdata.h"
 #include "hw_cvars.h"
 #include "hw_clock.h"
 #include "flatvertices.h"
-#include "hwrenderer/data/hw_viewpointbuffer.h"
 
 CVAR(Int, vk_submit_size, 1000, 0);
 EXTERN_CVAR(Bool, r_skipmats)
@@ -48,7 +47,7 @@ VkRenderState::VkRenderState(VulkanRenderDevice* fb) : fb(fb), mStreamBufferWrit
 
 void VkRenderState::ClearScreen()
 {
-	screen->mViewpoints->Set2D(*this, SCREENWIDTH, SCREENHEIGHT);
+	Set2DViewpoint(SCREENWIDTH, SCREENHEIGHT);
 	SetColor(0, 0, 0);
 	Apply(DT_TriangleStrip);
 	mCommandBuffer->draw(4, 1, FFlatVertexBuffer::FULLSCREEN_INDEX, 0);
@@ -127,10 +126,6 @@ void VkRenderState::SetCulling(int mode)
 	mNeedApply = true;
 }
 
-void VkRenderState::EnableClipDistance(int num, bool state)
-{
-}
-
 void VkRenderState::Clear(int targets)
 {
 	mClearTargets = targets;
@@ -167,10 +162,6 @@ void VkRenderState::EnableDepthTest(bool on)
 {
 	mDepthTest = on;
 	mNeedApply = true;
-}
-
-void VkRenderState::EnableMultisampling(bool on)
-{
 }
 
 void VkRenderState::EnableLineSmooth(bool on)
@@ -492,16 +483,108 @@ void VkRenderState::WaitForStreamBuffers()
 	mMatrixBufferWriter.Reset();
 }
 
-void VkRenderState::SetViewpointOffset(uint32_t offset)
+int VkRenderState::SetViewpoint(const HWViewpointUniforms& vp)
 {
-	mViewpointOffset = offset;
+	auto buffers = fb->GetBufferManager();
+	if (buffers->Viewpoint.Count == buffers->Viewpoint.UploadIndex)
+	{
+		return buffers->Viewpoint.Count - 1;
+	}
+	memcpy(((char*)buffers->Viewpoint.UBO->Memory()) + buffers->Viewpoint.UploadIndex * buffers->Viewpoint.BlockAlign, &vp, sizeof(HWViewpointUniforms));
+	int index = buffers->Viewpoint.UploadIndex++;
+	mViewpointOffset = index * buffers->Viewpoint.BlockAlign;
 	mNeedApply = true;
+	return index;
+}
+
+void VkRenderState::SetViewpoint(int index)
+{
+	mViewpointOffset = index * fb->GetBufferManager()->Viewpoint.BlockAlign;
+	mNeedApply = true;
+}
+
+int VkRenderState::UploadLights(const FDynLightData& data)
+{
+	auto buffers = fb->GetBufferManager();
+
+	// All meaasurements here are in vec4's.
+	int size0 = data.arrays[0].Size() / 4;
+	int size1 = data.arrays[1].Size() / 4;
+	int size2 = data.arrays[2].Size() / 4;
+	int totalsize = size0 + size1 + size2 + 1;
+
+	if (totalsize > buffers->Lightbuffer.Count)
+	{
+		int diff = totalsize - buffers->Lightbuffer.Count;
+
+		size2 -= diff;
+		if (size2 < 0)
+		{
+			size1 += size2;
+			size2 = 0;
+		}
+		if (size1 < 0)
+		{
+			size0 += size1;
+			size1 = 0;
+		}
+		totalsize = size0 + size1 + size2 + 1;
+	}
+
+	if (totalsize <= 1) return -1;	// there are no lights
+
+	int thisindex = buffers->Lightbuffer.UploadIndex;
+	buffers->Lightbuffer.UploadIndex += totalsize;
+
+	float parmcnt[] = { 0, float(size0), float(size0 + size1), float(size0 + size1 + size2) };
+
+	if (thisindex + totalsize <= buffers->Lightbuffer.Count)
+	{
+		float* copyptr = (float*)buffers->Lightbuffer.SSO->Memory() + thisindex * 4;
+
+		memcpy(&copyptr[0], parmcnt, sizeof(FVector4));
+		memcpy(&copyptr[4], &data.arrays[0][0], size0 * sizeof(FVector4));
+		memcpy(&copyptr[4 + 4 * size0], &data.arrays[1][0], size1 * sizeof(FVector4));
+		memcpy(&copyptr[4 + 4 * (size0 + size1)], &data.arrays[2][0], size2 * sizeof(FVector4));
+		return thisindex;
+	}
+	else
+	{
+		return -1;	// Buffer is full. Since it is being used live at the point of the upload we cannot do much here but to abort.
+	}
+}
+
+int VkRenderState::UploadBones(const TArray<VSMatrix>& bones)
+{
+	auto buffers = fb->GetBufferManager();
+
+	int totalsize = bones.Size();
+	if (bones.Size() == 0)
+	{
+		return -1;
+	}
+
+	int thisindex = buffers->Bonebuffer.UploadIndex;
+	buffers->Bonebuffer.UploadIndex += totalsize;
+
+	if (thisindex + totalsize <= buffers->Bonebuffer.Count)
+	{
+		memcpy((VSMatrix*)buffers->Bonebuffer.SSO->Memory() + thisindex, bones.Data(), bones.Size() * sizeof(VSMatrix));
+		return thisindex;
+	}
+	else
+	{
+		return -1;	// Buffer is full. Since it is being used live at the point of the upload we cannot do much here but to abort.
+	}
 }
 
 void VkRenderState::BeginFrame()
 {
 	mMaterial.Reset();
 	mApplyCount = 0;
+	fb->GetBufferManager()->Viewpoint.UploadIndex = 0;
+	fb->GetBufferManager()->Lightbuffer.UploadIndex = 0;
+	fb->GetBufferManager()->Bonebuffer.UploadIndex = 0;
 }
 
 void VkRenderState::EndRenderPass()

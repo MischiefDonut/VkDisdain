@@ -43,10 +43,7 @@
 #include "g_cvars.h"
 #include "v_draw.h"
 
-#include "hw_lightbuffer.h"
-#include "hw_bonebuffer.h"
 #include "hw_cvars.h"
-#include "hwrenderer/data/hw_viewpointbuffer.h"
 #include "hwrenderer/scene/hw_fakeflat.h"
 #include "hwrenderer/scene/hw_clipper.h"
 #include "hwrenderer/scene/hw_portal.h"
@@ -113,16 +110,16 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 
 	if (mainview && toscreen && !(camera->Level->flags3 & LEVEL3_NOSHADOWMAP) && camera->Level->HasDynamicLights && gl_light_shadowmap && screen->allowSSBO() && (screen->hwcaps & RFL_SHADER_STORAGE_BUFFER))
 	{
-		screen->SetAABBTree(camera->Level->aabbTree);
+		screen->mShadowMap->SetAABBTree(camera->Level->aabbTree);
 		screen->mShadowMap->SetCollectLights([=] {
 			CollectLights(camera->Level);
 		});
-		screen->UpdateShadowMap();
+		screen->mShadowMap->PerformUpdate();
 	}
 	else
 	{
 		// null all references to the level if we do not need a shadowmap. This will shortcut all internal calculations without further checks.
-		screen->SetAABBTree(nullptr);
+		screen->mShadowMap->SetAABBTree(nullptr);
 		screen->mShadowMap->SetCollectLights(nullptr);
 	}
 
@@ -280,9 +277,6 @@ void WriteSavePic(player_t* player, FileWriter* file, int width, int height)
 		hw_ClearFakeFlat();
 		screen->mVertexData->Reset();
 		RenderState.SetVertexBuffer(screen->mVertexData);
-		screen->mLights->Clear();
-		screen->mBones->Clear();
-		screen->mViewpoints->Clear();
 
 		// This shouldn't overwrite the global viewpoint even for a short time.
 		FRenderViewpoint savevp;
@@ -345,10 +339,6 @@ sector_t* RenderView(player_t* player)
 		// Get this before everything else
 		if (cl_capfps || r_NoInterpolate) r_viewpoint.TicFrac = 1.;
 		else r_viewpoint.TicFrac = I_GetTimeFrac();
-
-		screen->mLights->Clear();
-		screen->mBones->Clear();
-		screen->mViewpoints->Clear();
 
 		// NoInterpolateView should have no bearing on camera textures, but needs to be preserved for the main view below.
 		bool saved_niv = NoInterpolateView;

@@ -10,6 +10,7 @@ class VkHardwareDataBuffer;
 class VkStreamBuffer;
 class IBuffer;
 struct FVertexBufferAttribute;
+struct HWViewpointUniforms;
 
 class VkBufferManager
 {
@@ -23,22 +24,37 @@ public:
 	IBuffer* CreateVertexBuffer(int numBindingPoints, int numAttributes, size_t stride, const FVertexBufferAttribute* attrs);
 	IBuffer* CreateIndexBuffer();
 
-	IBuffer* CreateLightBuffer();
-	IBuffer* CreateBoneBuffer();
-	IBuffer* CreateViewpointBuffer();
-	IBuffer* CreateShadowmapNodesBuffer();
-	IBuffer* CreateShadowmapLinesBuffer();
-	IBuffer* CreateShadowmapLightsBuffer();
-
 	void AddBuffer(VkHardwareBuffer* buffer);
 	void RemoveBuffer(VkHardwareBuffer* buffer);
 
-	VkHardwareDataBuffer* ViewpointUBO = nullptr;
-	VkHardwareDataBuffer* LightBufferSSO = nullptr;
-	VkHardwareDataBuffer* LightNodes = nullptr;
-	VkHardwareDataBuffer* LightLines = nullptr;
-	VkHardwareDataBuffer* LightList = nullptr;
-	VkHardwareDataBuffer* BoneBufferSSO = nullptr;
+	struct
+	{
+		int UploadIndex = 0;
+		int BlockAlign = 0;
+		int Count = 1000;
+		std::unique_ptr<VkHardwareDataBuffer> UBO;
+	} Viewpoint;
+
+	struct
+	{
+		int UploadIndex = 0;
+		int Count = 80000;
+		std::unique_ptr<VkHardwareDataBuffer> SSO;
+	} Lightbuffer;
+
+	struct
+	{
+		int UploadIndex = 0;
+		int Count = 80000;
+		std::unique_ptr<VkHardwareDataBuffer> SSO;
+	} Bonebuffer;
+
+	struct
+	{
+		std::unique_ptr<VkHardwareDataBuffer> Nodes;
+		std::unique_ptr<VkHardwareDataBuffer> Lines;
+		std::unique_ptr<VkHardwareDataBuffer> Lights;
+	} Shadowmap;
 
 	std::unique_ptr<VkStreamBuffer> MatrixBuffer;
 	std::unique_ptr<VkStreamBuffer> StreamBuffer;

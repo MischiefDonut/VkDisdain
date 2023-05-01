@@ -1108,12 +1108,9 @@ set (PCH_SOURCES
 	common/rendering/hwrenderer/data/hw_clock.cpp
 	common/rendering/hwrenderer/data/hw_skydome.cpp
 	common/rendering/hwrenderer/data/flatvertices.cpp
-	common/rendering/hwrenderer/data/hw_viewpointbuffer.cpp
 	common/rendering/hwrenderer/data/hw_modelvertexbuffer.cpp
 	common/rendering/hwrenderer/data/hw_cvars.cpp
 	common/rendering/hwrenderer/data/hw_vrmodes.cpp
-	common/rendering/hwrenderer/data/hw_lightbuffer.cpp
-	common/rendering/hwrenderer/data/hw_bonebuffer.cpp
 	common/rendering/hwrenderer/data/hw_aabbtree.cpp
 	common/rendering/hwrenderer/data/hw_shadowmap.cpp
 	common/rendering/hwrenderer/data/hw_shaderpatcher.cpp

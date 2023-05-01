@@ -37,10 +37,7 @@
 #include "hw_vrmodes.h"
 #include "hw_cvars.h"
 #include "hw_skydome.h"
-#include "hwrenderer/data/hw_viewpointbuffer.h"
 #include "flatvertices.h"
-#include "hw_lightbuffer.h"
-#include "hw_bonebuffer.h"
 
 #include "vk_renderdevice.h"
 #include "vulkan/vk_renderstate.h"
@@ -134,9 +131,6 @@ VulkanRenderDevice::~VulkanRenderDevice()
 
 	delete mVertexData;
 	delete mSkyData;
-	delete mViewpoints;
-	delete mLights;
-	delete mBones;
 	delete mShadowMap;
 
 	if (mDescriptorSetManager)
@@ -193,9 +187,6 @@ void VulkanRenderDevice::InitializeState()
 
 	mVertexData = new FFlatVertexBuffer(this, GetWidth(), GetHeight());
 	mSkyData = new FSkyVertexBuffer(this);
-	mViewpoints = new HWViewpointBuffer(this);
-	mLights = new FLightBuffer(this);
-	mBones = new BoneBuffer(this);
 	mShadowMap = new ShadowMap(this);
 
 	mShaderManager.reset(new VkShaderManager(this));
@@ -320,36 +311,6 @@ IBuffer*VulkanRenderDevice::CreateVertexBuffer(int numBindingPoints, int numAttr
 IBuffer*VulkanRenderDevice::CreateIndexBuffer()
 {
 	return GetBufferManager()->CreateIndexBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateLightBuffer()
-{
-	return GetBufferManager()->CreateLightBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateBoneBuffer()
-{
-	return GetBufferManager()->CreateBoneBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateViewpointBuffer()
-{
-	return GetBufferManager()->CreateViewpointBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateShadowmapNodesBuffer()
-{
-	return GetBufferManager()->CreateShadowmapNodesBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateShadowmapLinesBuffer()
-{
-	return GetBufferManager()->CreateShadowmapLinesBuffer();
-}
-
-IBuffer* VulkanRenderDevice::CreateShadowmapLightsBuffer()
-{
-	return GetBufferManager()->CreateShadowmapLightsBuffer();
 }
 
 void VulkanRenderDevice::SetTextureFilterMode()
@@ -486,7 +447,6 @@ TArray<uint8_t> VulkanRenderDevice::GetScreenshotBuffer(int &pitch, ESSType &col
 void VulkanRenderDevice::BeginFrame()
 {
 	SetViewportRects(nullptr);
-	mViewpoints->Clear();
 	mCommands->BeginFrame();
 	mTextureManager->BeginFrame();
 	mScreenBuffers->BeginFrame(screen->mScreenViewport.width, screen->mScreenViewport.height, screen->mSceneViewport.width, screen->mSceneViewport.height);
@@ -512,11 +472,6 @@ void VulkanRenderDevice::Draw2D()
 void VulkanRenderDevice::WaitForCommands(bool finish)
 {
 	mCommands->WaitForCommands(finish);
-}
-
-unsigned int VulkanRenderDevice::GetLightBufferBlockSize() const
-{
-	return mLights->GetBlockSize();
 }
 
 void VulkanRenderDevice::PrintStartupLog()
@@ -560,8 +515,23 @@ void VulkanRenderDevice::SetLevelMesh(hwrenderer::LevelMesh* mesh)
 	mRaytrace->SetLevelMesh(mesh);
 }
 
-void VulkanRenderDevice::UpdateShadowMap()
+void VulkanRenderDevice::SetShadowMaps(const TArray<float>& lights, hwrenderer::LevelAABBTree* tree, bool newTree)
 {
+	auto buffers = GetBufferManager();
+
+	buffers->Shadowmap.Lights->SetData(sizeof(float) * lights.Size(), lights.Data(), BufferUsageType::Stream);
+
+	if (newTree)
+	{
+		buffers->Shadowmap.Nodes->SetData(tree->NodesSize(), tree->Nodes(), BufferUsageType::Static);
+		buffers->Shadowmap.Lines->SetData(tree->LinesSize(), tree->Lines(), BufferUsageType::Static);
+	}
+	else if (tree->Update())
+	{
+		buffers->Shadowmap.Nodes->SetSubData(tree->DynamicNodesOffset(), tree->DynamicNodesSize(), tree->DynamicNodes());
+		buffers->Shadowmap.Lines->SetSubData(tree->DynamicLinesOffset(), tree->DynamicLinesSize(), tree->DynamicLines());
+	}
+
 	mPostprocess->UpdateShadowMap();
 }
 
