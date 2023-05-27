@@ -1355,13 +1355,22 @@ bool AActor::Massacre ()
 //
 //----------------------------------------------------------------------------
 
+FSerializer &Serialize(FSerializer &arc, const char *key, ModelOverride &sid, ModelOverride *def)
+{
+	arc.BeginObject(key);
+	arc("modelID", sid.modelID);
+	arc("surfaceSkinIDs", sid.surfaceSkinIDs);
+	arc.EndObject();
+	return arc;
+}
+
 void DActorModelData::Serialize(FSerializer& arc)
 {
 	Super::Serialize(arc);
 	arc("modelDef", modelDef)
-		("modelIDs", modelIDs)
+		("models", models)
 		("skinIDs", skinIDs)
-		("surfaceSkinIDs", surfaceSkinIDs)
+		//("surfaceSkinIDs", surfaceSkinIDs)
 		("animationIDs", animationIDs)
 		("modelFrameGenerators", modelFrameGenerators)
 		("hasModel", hasModel);
@@ -1369,10 +1378,10 @@ void DActorModelData::Serialize(FSerializer& arc)
 
 void DActorModelData::OnDestroy()
 {
-	modelIDs.Reset();
+	models.Reset();
 	modelFrameGenerators.Reset();
 	skinIDs.Reset();
-	surfaceSkinIDs.Reset();
+	//surfaceSkinIDs.Reset();
 	animationIDs.Reset();
 }
 
