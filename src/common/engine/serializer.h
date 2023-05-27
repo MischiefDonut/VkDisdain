@@ -240,6 +240,7 @@ FSerializer &Serialize(FSerializer &arc, const char *key, FName &value, FName *d
 FSerializer &Serialize(FSerializer &arc, const char *key, FSoundID &sid, FSoundID *def);
 FSerializer &Serialize(FSerializer &arc, const char *key, FString &sid, FString *def);
 FSerializer &Serialize(FSerializer &arc, const char *key, NumericValue &sid, NumericValue *def);
+FSerializer &Serialize(FSerializer &arc, const char *key, struct ModelOverride &sid, struct ModelOverride *def);
 
 void SerializeFunctionPointer(FSerializer &arc, const char *key, FunctionPointerValue *&p);
 
@@ -251,7 +252,6 @@ FSerializer &Serialize(FSerializer &arc, const char *key, T *&value, T **)
 	value = static_cast<T*>(v);
 	return arc;
 }
-
 
 template<class T, class TT>
 FSerializer &Serialize(FSerializer &arc, const char *key, TArray<T, TT> &value, TArray<T, TT> *def)
