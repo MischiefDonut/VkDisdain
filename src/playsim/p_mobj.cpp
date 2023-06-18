@@ -2022,7 +2022,7 @@ static double P_XYMovement (AActor *mo, DVector2 scroll)
 				// Do nothing, relevant actions already done in the condition.
 				// This allows to avoid setting velocities to 0 in the final else of this series.
 			}
-			else if (DVector2 du = nullptr;
+			else if (DVector2 du = 0;
 					(mo->flags9 & MF9_GLIDESONWALLS) && mo->BlockingLine != nullptr && abs(normMove | (du = mo->BlockingLine->delta.Unit())) >= mo->MaxWallGlideAngle)
 			{
 				// Glide along the wall instead of stopping.
