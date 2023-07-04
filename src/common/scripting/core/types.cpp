@@ -2148,28 +2148,63 @@ void PDynArray::GetTypeIDs(intptr_t &id1, intptr_t &id2) const
 //
 //==========================================================================
 
+
+#define FOR_EACH_ARRAY_TYPE(FN) \
+	switch(ElementType->GetRegType())\
+	{\
+		case REGT_INT: \
+			switch(ElementType->Size) \
+			{ \
+			case 1: \
+				FN( uint8_t ) ;break; \
+			case 2: \
+				FN( uint16_t ) ;break; \
+			case 4: \
+				FN( uint32_t ) ;break; \
+			} break; \
+		case REGT_FLOAT: \
+			switch(ElementType->Size) \
+			{ \
+			case 4: \
+				FN( float ) ;break; \
+			case 8: \
+				FN( double ) ;break; \
+			} break; \
+		case REGT_STRING: \
+			FN( FString ); \
+		case REGT_POINTER: \
+			if(ElementType->isObjectPointer()) \
+			{ FN( DObject* ); } else { FN( void* ); } break; \
+	}
+/*
+void PDynArray::Construct(void * addr) const
+{
+	#define ARRAY_CONSTRUCT(T) new(addr) TArray< T >(); break;
+	FOR_EACH_ARRAY_TYPE(ARRAY_CONSTRUCT)
+	#undef ARRAY_CONSTRUCT
+}
+*/
+
+void PDynArray::CopyConstruct(void * addr, const void * def) const
+{
+	#define ARRAY_COPY_CONSTRUCT(T) new(addr) TArray< T >(*((const TArray< T >*)def))
+	FOR_EACH_ARRAY_TYPE(ARRAY_COPY_CONSTRUCT)
+	#undef ARRAY_COPY_CONSTRUCT
+}
+
 void PDynArray::InitializeValue(void *addr, const void *deff) const
 {
-	const FArray *def = (const FArray*)deff;
-	FArray *aray = (FArray*)addr;
+	const FArray *def = static_cast<const FArray*>(deff);
 
-	if (def == nullptr || def->Count == 0)
+	if (def && def->Count > 0)
 	{
-		// Empty arrays do not need construction.
-		*aray = { nullptr, 0, 0 };
-	}
-	else if (ElementType->GetRegType() != REGT_STRING)
-	{
-		// These are just integral values which can be done without any constructor hackery.
-		size_t blocksize = ElementType->Size * def->Count;
-		aray->Array = M_Malloc(blocksize);
-		memcpy(aray->Array, def->Array, blocksize);
-		aray->Most = aray->Count = def->Count;
+		CopyConstruct(addr, deff);
 	}
 	else
 	{
-		// non-empty string arrays require explicit construction.
-		new(addr) TArray<FString>(*(TArray<FString>*)def);
+		FArray *aray = static_cast<FArray*>(addr);
+		// Empty arrays do not need construction.
+		*aray = { nullptr, 0, 0 };
 	}
 }
 
@@ -2197,6 +2232,19 @@ void PDynArray::DestroyValue(void *addr) const
 	}
 	aray->Count = aray->Most = 0;
 	aray->Array = nullptr;
+}
+
+//==========================================================================
+//
+// PDynArray :: ClearValue
+//
+//==========================================================================
+
+void PDynArray::ClearValue(void * addr) const
+{
+	#define ARRAY_CLEAR(T) static_cast<TArray< T >*>(addr)->Clear()
+	FOR_EACH_ARRAY_TYPE(ARRAY_CLEAR)
+	#undef ARRAY_CLEAR
 }
 
 //==========================================================================
@@ -2396,53 +2444,69 @@ void PMap::GetTypeIDs(intptr_t &id1, intptr_t &id2) const
 //
 //==========================================================================
 
-#define FOR_EACH_MAP_TYPE(FN) \
-		case PMap::MAP_I32_I8: \
-			FN( uint32_t , uint8_t ) \
-		case PMap::MAP_I32_I16: \
-			FN( uint32_t , uint16_t ) \
-		case PMap::MAP_I32_I32: \
-			FN( uint32_t , uint32_t ) \
-		case PMap::MAP_I32_F32: \
-			FN( uint32_t , float ) \
-		case PMap::MAP_I32_F64: \
-			FN( uint32_t , double ) \
-		case PMap::MAP_I32_OBJ: \
-			FN( uint32_t , DObject* ) \
-		case PMap::MAP_I32_PTR: \
-			FN( uint32_t , void* ) \
-		case PMap::MAP_I32_STR: \
-			FN( uint32_t , FString ) \
-		case PMap::MAP_STR_I8: \
-			FN( FString , uint8_t ) \
-		case PMap::MAP_STR_I16: \
-			FN( FString , uint16_t ) \
-		case PMap::MAP_STR_I32: \
-			FN( FString , uint32_t ) \
-		case PMap::MAP_STR_F32: \
-			FN( FString , float ) \
-		case PMap::MAP_STR_F64: \
-			FN( FString , double ) \
-		case PMap::MAP_STR_OBJ: \
-			FN( FString , DObject* ) \
-		case PMap::MAP_STR_PTR: \
-			FN( FString , void* ) \
-		case PMap::MAP_STR_STR: \
-			FN( FString , FString )
+#define FOR_EACH_MAP_TYPE(FN)  \
+	switch(BackingClass) \
+	{ \
+	case PMap::MAP_I32_I8: \
+		FN( uint32_t , uint8_t ) ;break; \
+	case PMap::MAP_I32_I16: \
+		FN( uint32_t , uint16_t ) ;break; \
+	case PMap::MAP_I32_I32: \
+		FN( uint32_t , uint32_t ) ;break; \
+	case PMap::MAP_I32_F32: \
+		FN( uint32_t , float ) ;break; \
+	case PMap::MAP_I32_F64: \
+		FN( uint32_t , double ) ;break; \
+	case PMap::MAP_I32_OBJ: \
+		FN( uint32_t , DObject* ) ;break; \
+	case PMap::MAP_I32_PTR: \
+		FN( uint32_t , void* ) ;break; \
+	case PMap::MAP_I32_STR: \
+		FN( uint32_t , FString ) ;break; \
+	case PMap::MAP_STR_I8: \
+		FN( FString , uint8_t ) ;break; \
+	case PMap::MAP_STR_I16: \
+		FN( FString , uint16_t ) ;break; \
+	case PMap::MAP_STR_I32: \
+		FN( FString , uint32_t ) ;break; \
+	case PMap::MAP_STR_F32: \
+		FN( FString , float ) ;break; \
+	case PMap::MAP_STR_F64: \
+		FN( FString , double ) ;break; \
+	case PMap::MAP_STR_OBJ: \
+		FN( FString , DObject* ) ;break; \
+	case PMap::MAP_STR_PTR: \
+		FN( FString , void* ) ;break; \
+	case PMap::MAP_STR_STR: \
+		FN( FString , FString ) ;break; \
+	}
 
-void PMap::Construct(void * addr) const {
-	switch(BackingClass)
-	{
-		#define MAP_CONSTRUCT(KT, VT) new(addr) ZSMap< KT, VT >(); break;
-		FOR_EACH_MAP_TYPE(MAP_CONSTRUCT)
-		#undef MAP_CONSTRUCT
-	};
+void PMap::Construct(void * addr) const
+{
+	#define MAP_CONSTRUCT(KT, VT) new(addr) ZSMap< KT, VT >()
+	FOR_EACH_MAP_TYPE(MAP_CONSTRUCT)
+	#undef MAP_CONSTRUCT
 }
 
-
-void PMap::InitializeValue(void *addr, const void *def) const
+void PMap::CopyConstruct(void * addr, const void * def) const
 {
-	Construct(addr);
+	#define MAP_COPY_CONSTRUCT(KT, VT) new(addr) ZSMap< KT, VT >(*static_cast<const ZSMap< KT, VT >*>(def))
+	FOR_EACH_MAP_TYPE(MAP_COPY_CONSTRUCT)
+	#undef MAP_COPY_CONSTRUCT
+}
+
+void PMap::InitializeValue(void *addr, const void *deff) const
+{
+	const ZSFMap * self = static_cast<const ZSFMap *>(addr);
+	const ZSFMap * def = static_cast<const ZSFMap *>(deff);
+	if(def && def->NumUsed > 0)
+	{
+		CopyConstruct(addr, deff);
+	}
+	else
+	{
+		Construct(addr);
+	}
 }
 
 //==========================================================================
@@ -2453,12 +2517,22 @@ void PMap::InitializeValue(void *addr, const void *def) const
 
 void PMap::DestroyValue(void *addr) const
 {
-	switch(BackingClass)
-	{
-		#define MAP_DESTRUCT(KT, VT) static_cast<ZSMap< KT, VT >*>(addr)->~ZSMap(); break;
-		FOR_EACH_MAP_TYPE(MAP_DESTRUCT)
-		#undef MAP_DESTRUCT
-	}
+	#define MAP_DESTRUCT(KT, VT) static_cast<ZSMap< KT, VT >*>(addr)->~ZSMap()
+	FOR_EACH_MAP_TYPE(MAP_DESTRUCT)
+	#undef MAP_DESTRUCT
+}
+
+//==========================================================================
+//
+// PMap :: ClearValue
+//
+//==========================================================================
+
+void PMap::ClearValue(void * addr) const
+{
+	#define MAP_CLEAR(KT, VT) static_cast<ZSMap< KT, VT >*>(addr)->Clear()
+	FOR_EACH_MAP_TYPE(MAP_CLEAR)
+	#undef MAP_CLEAR
 }
 
 //==========================================================================
@@ -2530,12 +2604,9 @@ void PMap::WriteValue(FSerializer &ar, const char *key, const void *addr) const
 {
 	if(ar.BeginObject(key))
 	{
-		switch(BackingClass)
-		{
-			#define MAP_WRITE(KT, VT) PMapValueWriter(ar, static_cast<const ZSMap< KT, VT >*>(addr), this); break;
-			FOR_EACH_MAP_TYPE(MAP_WRITE)
-			#undef MAP_WRITE
-		}
+		#define MAP_WRITE(KT, VT) PMapValueWriter(ar, static_cast<const ZSMap< KT, VT >*>(addr), this)
+		FOR_EACH_MAP_TYPE(MAP_WRITE)
+		#undef MAP_WRITE
 		ar.EndObject();
 	}
 }
@@ -2585,12 +2656,9 @@ bool PMap::ReadValue(FSerializer &ar, const char *key, void *addr) const
 	InitializeValue(addr, nullptr);
 	if(ar.BeginObject(key))
 	{
-		switch(BackingClass)
-		{
-			#define MAP_READ(KT, VT) return PMapValueReader(ar, static_cast<ZSMap< KT, VT >*>(addr), this);
-			FOR_EACH_MAP_TYPE(MAP_READ)
-			#undef MAP_READ
-		}
+		#define MAP_READ(KT, VT) return PMapValueReader(ar, static_cast<ZSMap< KT, VT >*>(addr), this)
+		FOR_EACH_MAP_TYPE(MAP_READ)
+		#undef MAP_READ
 	}
 	return false;
 }
@@ -2731,13 +2799,11 @@ void PMapIterator::GetTypeIDs(intptr_t &id1, intptr_t &id2) const
 //
 //==========================================================================
 
-void PMapIterator::Construct(void * addr) const {
-	switch(BackingClass)
-	{
-		#define MAP_IT_CONSTRUCT(KT, VT) new(addr) ZSMapIterator< KT, VT >(); break;
-		FOR_EACH_MAP_TYPE(MAP_IT_CONSTRUCT)
-		#undef MAP_IT_CONSTRUCT
-	};
+void PMapIterator::Construct(void * addr) const
+{
+	#define MAP_IT_CONSTRUCT(KT, VT) new(addr) ZSMapIterator< KT, VT >()
+	FOR_EACH_MAP_TYPE(MAP_IT_CONSTRUCT)
+	#undef MAP_IT_CONSTRUCT
 }
 
 void PMapIterator::InitializeValue(void *addr, const void *def) const
@@ -2753,12 +2819,9 @@ void PMapIterator::InitializeValue(void *addr, const void *def) const
 
 void PMapIterator::DestroyValue(void *addr) const
 {
-	switch(BackingClass)
-	{
-		#define MAP_IT_DESTROY(KT, VT) static_cast<ZSMapIterator< KT, VT >*>(addr)->~ZSMapIterator(); break;
-		FOR_EACH_MAP_TYPE(MAP_IT_DESTROY)
-		#undef MAP_IT_DESTROY
-	}
+	#define MAP_IT_DESTROY(KT, VT) static_cast<ZSMapIterator< KT, VT >*>(addr)->~ZSMapIterator()
+	FOR_EACH_MAP_TYPE(MAP_IT_DESTROY)
+	#undef MAP_IT_DESTROY
 }
 
 //==========================================================================

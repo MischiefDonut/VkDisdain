@@ -512,6 +512,8 @@ public:
 
 class PDynArray : public PCompoundType
 {
+	//void Construct(void * addr) const;
+	void CopyConstruct(void * addr, const void * def) const;
 public:
 	PDynArray(PType *etype, PStruct *backing);
 
@@ -528,12 +530,14 @@ public:
 	void SetDefaultValue(void *base, unsigned offset, TArray<FTypeAndOffset> *specials) override;
 	void InitializeValue(void *addr, const void *def) const override;
 	void DestroyValue(void *addr) const override;
+	void ClearValue(void *addr) const;
 	void SetPointerArray(void *base, unsigned offset, TArray<size_t> *ptrofs = NULL) override;
 };
 
 class PMap : public PCompoundType
 {
 	void Construct(void * addr) const;
+	void CopyConstruct(void * addr, const void * def) const;
 public:
 	PMap(PType *keytype, PType *valtype, PStruct *backing, int backing_class);
 
@@ -572,6 +576,7 @@ public:
 	void SetDefaultValue(void *base, unsigned offset, TArray<FTypeAndOffset> *specials) override;
 	void InitializeValue(void *addr, const void *def) const override;
 	void DestroyValue(void *addr) const override;
+	void ClearValue(void *addr) const;
 	void SetPointerMap(void *base, unsigned offset, TArray<std::pair<size_t,PType *>> *ptrofs) override;
 };
 

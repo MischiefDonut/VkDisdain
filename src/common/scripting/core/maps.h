@@ -21,13 +21,36 @@ class ZSMap : public TMap<KT,VT>
 public:
     RefCountedPtr<ZSMapInfo> info;
     ZSMap() :
-        TMap<KT,VT>(), info(new ZSMapInfo)
+        TMap<KT, VT>(), info(new ZSMapInfo)
     {
         info->self = this;
     }
+
     ~ZSMap()
     {
         info->self = nullptr;
+    }
+
+    ZSMap(ZSMap &&o) : TMap<KT, VT>(static_cast<TMap<KT, VT>&&>(o)), info(new ZSMapInfo)
+    {
+        info->self = this;
+    }
+
+    ZSMap(const ZSMap &o) : TMap<KT, VT>((const TMap<KT, VT>&)o), info(new ZSMapInfo)
+    {
+        info->self = this;
+    }
+
+    ZSMap &operator= (const ZSMap &o)
+    {
+        TMap<KT, VT>::operator= ((const TMap<KT, VT>&)o);
+        return *this;
+    }
+
+    ZSMap &operator= (ZSMap &&o)
+    {
+        TMap<KT, VT>::operator= (static_cast<TMap<KT, VT>&&>(o));
+        return *this;
     }
 };
 
