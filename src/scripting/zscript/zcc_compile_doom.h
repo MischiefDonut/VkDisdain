@@ -21,7 +21,7 @@ private:
 	bool CompileProperties(PClass *type, TArray<ZCC_Property *> &Properties, FName prefix);
 	bool CompileFlagDefs(PClass *type, TArray<ZCC_FlagDef *> &Properties, FName prefix);
 	void DispatchProperty(FPropertyInfo *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag);
-	void DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag);
+	void DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag, bool isClear);
 	void ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt *prop, Baggage &bag);
 	void ProcessDefaultFlag(PClassActor *cls, ZCC_FlagStmt *flg);
 	void InitDefaults() override final;
