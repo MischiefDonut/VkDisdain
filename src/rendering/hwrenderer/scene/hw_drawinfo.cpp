@@ -34,6 +34,7 @@
 #include "hw_portal.h"
 #include "hw_renderstate.h"
 #include "hw_drawinfo.h"
+#include "hw_drawcontext.h"
 #include "po_man.h"
 #include "models.h"
 #include "hw_clock.h"
@@ -64,50 +65,6 @@ CVAR(Bool, gl_meshcache, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
 
 sector_t * hw_FakeFlat(sector_t * sec, sector_t * dest, area_t in_area, bool back);
 
-//==========================================================================
-//
-//
-//
-//==========================================================================
-
-class FDrawInfoList
-{
-public:
-	TDeletingArray<HWDrawInfo *> mList;
-
-	HWDrawInfo * GetNew();
-	void Release(HWDrawInfo *);
-};
-
-
-FDrawInfoList di_list;
-
-//==========================================================================
-//
-// Try to reuse the lists as often as possible as they contain resources that
-// are expensive to create and delete.
-//
-// Note: If multithreading gets used, this class needs synchronization.
-//
-//==========================================================================
-
-HWDrawInfo *FDrawInfoList::GetNew()
-{
-	if (mList.Size() > 0)
-	{
-		HWDrawInfo *di;
-		mList.Pop(di);
-		return di;
-	}
-	return new HWDrawInfo();
-}
-
-void FDrawInfoList::Release(HWDrawInfo * di)
-{
-	di->ClearBuffers();
-	di->Level = nullptr;
-	mList.Push(di);
-}
 
 //==========================================================================
 //
@@ -115,28 +72,18 @@ void FDrawInfoList::Release(HWDrawInfo * di)
 //
 //==========================================================================
 
-HWDrawInfo *HWDrawInfo::StartDrawInfo(FLevelLocals *lev, HWDrawInfo *parent, FRenderViewpoint &parentvp, HWViewpointUniforms *uniforms)
+HWDrawInfo *HWDrawInfo::StartDrawInfo(HWDrawContext* drawctx, FLevelLocals *lev, HWDrawInfo *parent, FRenderViewpoint &parentvp, HWViewpointUniforms *uniforms)
 {
-	HWDrawInfo *di = di_list.GetNew();
+	HWDrawInfo *di = drawctx->di_list.GetNew();
 	di->Level = lev;
 	di->StartScene(parentvp, uniforms);
 	return di;
 }
 
-
-//==========================================================================
-//
-//
-//
-//==========================================================================
-
-static Clipper staticClipper;		// Since all scenes are processed sequentially we only need one clipper.
-static HWDrawInfo * gl_drawinfo;	// This is a linked list of all active DrawInfos and needed to free the memory arena after the last one goes out of scope.
-
 void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uniforms)
 {
-	staticClipper.Clear();
-	mClipper = &staticClipper;
+	drawctx->staticClipper.Clear();
+	mClipper = &drawctx->staticClipper;
 
 	Viewpoint = parentvp;
 	lightmode = Level->lightMode;
@@ -180,8 +127,8 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 	if (outer != nullptr) FullbrightFlags = outer->FullbrightFlags;
 	else FullbrightFlags = 0;
 
-	outer = gl_drawinfo;
-	gl_drawinfo = this;
+	outer = drawctx->gl_drawinfo;
+	drawctx->gl_drawinfo = this;
 
 }
 
@@ -193,13 +140,13 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 
 HWDrawInfo *HWDrawInfo::EndDrawInfo()
 {
-	assert(this == gl_drawinfo);
+	assert(this == drawctx->gl_drawinfo);
 	for (int i = 0; i < GLDL_TYPES; i++) drawlists[i].Reset();
-	gl_drawinfo = outer;
-	di_list.Release(this);
-	if (gl_drawinfo == nullptr)
-		ResetRenderDataAllocator();
-	return gl_drawinfo;
+	drawctx->gl_drawinfo = outer;
+	drawctx->di_list.Release(this);
+	if (drawctx->gl_drawinfo == nullptr)
+		drawctx->ResetRenderDataAllocator();
+	return drawctx->gl_drawinfo;
 }
 
 
@@ -421,7 +368,7 @@ HWPortal * HWDrawInfo::FindPortal(const void * src)
 
 HWDecal *HWDrawInfo::AddDecal(bool onmirror)
 {
-	auto decal = (HWDecal*)RenderDataAllocator.Alloc(sizeof(HWDecal));
+	auto decal = (HWDecal*)drawctx->RenderDataAllocator.Alloc(sizeof(HWDecal));
 	Decals[onmirror ? 1 : 0].Push(decal);
 	return decal;
 }
@@ -441,15 +388,13 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 	mClipper->SafeAddClipRangeRealAngles(vp.Angles.Yaw.BAMs() + a1, vp.Angles.Yaw.BAMs() - a1);
 
 	// reset the portal manager
-	portalState.StartFrame();
+	drawctx->portalState.StartFrame();
 
 	ProcessAll.Clock();
 
 	// clip the scene and fill the drawlists
-	screen->mVertexData->Map();
 
-	if (!gl_meshcache)
-		RenderBSP(Level->HeadNode(), drawpsprites, state);
+	RenderBSP(Level->HeadNode(), drawpsprites, state);
 
 	// And now the crappy hacks that have to be done to avoid rendering anomalies.
 	// These cannot be multithreaded when the time comes because all these depend
@@ -459,7 +404,6 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 	HandleHackedSubsectors(state);	// open sector hacks for deep water
 	PrepareUnhandledMissingTextures(state);
 	DispatchRenderHacks(state);
-	screen->mVertexData->Unmap();
 
 	ProcessAll.Unclock();
 
@@ -584,12 +528,12 @@ void HWDrawInfo::RenderPortal(HWPortal *p, FRenderState &state, bool usestencil)
 {
 	auto gp = static_cast<HWPortal *>(p);
 	gp->SetupStencil(this, state, usestencil);
-	auto new_di = StartDrawInfo(this->Level, this, Viewpoint, &VPUniforms);
+	auto new_di = StartDrawInfo(drawctx, this->Level, this, Viewpoint, &VPUniforms);
 	new_di->mCurrentPortal = gp;
 	state.SetLightIndex(-1);
 	gp->DrawContents(new_di, state);
 	new_di->EndDrawInfo();
-	state.SetVertexBuffer(screen->mVertexData);
+	state.SetFlatVertexBuffer();
 	state.SetViewpoint(vpIndex);
 	gp->RemoveStencil(this, state, usestencil);
 
@@ -841,7 +785,7 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 	}
 
 	state.SetDepthMask(true);
-	if (!gl_no_skyclear) portalState.RenderFirstSkyPortal(recursion, this, state);
+	if (!gl_no_skyclear) drawctx->portalState.RenderFirstSkyPortal(recursion, this, state);
 
 	RenderScene(state);
 
@@ -854,7 +798,7 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 	// Handle all portals after rendering the opaque objects but before
 	// doing all translucent stuff
 	recursion++;
-	portalState.EndFrame(this, state);
+	drawctx->portalState.EndFrame(this, state);
 	recursion--;
 	RenderTranslucent(state);
 }
@@ -868,7 +812,7 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 
 void HWDrawInfo::ProcessScene(bool toscreen, FRenderState& state)
 {
-	portalState.BeginScene();
+	drawctx->portalState.BeginScene();
 
 	int mapsection = Level->PointInRenderSubsector(Viewpoint.Pos)->mapsection;
 	CurrentMapSections.Set(mapsection);
@@ -887,7 +831,7 @@ void HWDrawInfo::AddSubsectorToPortal(FSectorPortalGroup *ptg, subsector_t *sub)
 	auto portal = FindPortal(ptg);
 	if (!portal)
 	{
-        portal = new HWSectorStackPortal(&portalState, ptg);
+        portal = new HWSectorStackPortal(&drawctx->portalState, ptg);
 		Portals.Push(portal);
 	}
     auto ptl = static_cast<HWSectorStackPortal*>(portal);

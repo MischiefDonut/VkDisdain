@@ -228,8 +228,6 @@ protected:
 	uint8_t mTextureEnabled:1;
 	uint8_t mGlowEnabled : 1;
 	uint8_t mGradientEnabled : 1;
-	uint8_t mModelMatrixEnabled : 1;
-	uint8_t mTextureMatrixEnabled : 1;
 	uint8_t mSplitEnabled : 1;
 	uint8_t mBrightmapEnabled : 1;
 
@@ -262,10 +260,6 @@ protected:
 public:
 
 	uint64_t firstFrame = 0;
-	VSMatrix mModelMatrix;
-	VSMatrix mTextureMatrix;
-
-public:
 
 	void Reset()
 	{
@@ -278,8 +272,6 @@ public:
 		mTextureModeFlags = 0;
 		mStreamData.uDesaturationFactor = 0.0f;
 		mStreamData.uAlphaThreshold = 0.5f;
-		mModelMatrixEnabled = false;
-		mTextureMatrixEnabled = false;
 		mSplitEnabled = false;
 		mStreamData.uAddColor = 0;
 		mStreamData.uObjectColor = 0xffffffff;
@@ -322,8 +314,6 @@ public:
 #ifdef NPOT_EMULATION
 		mStreamData.uNpotEmulation = { 0,0,0,0 };
 #endif
-		mModelMatrix.loadIdentity();
-		mTextureMatrix.loadIdentity();
 		ClearClipSplit();
 	}
 
@@ -446,16 +436,6 @@ public:
 			mStreamData.uSplitBottomPlane = { 0.0f, 0.0f, 0.0f, 0.0f };
 		}
 		mSplitEnabled = on;
-	}
-
-	void EnableModelMatrix(bool on)
-	{
-		mModelMatrixEnabled = on;
-	}
-
-	void EnableTextureMatrix(bool on)
-	{
-		mTextureMatrixEnabled = on;
 	}
 
 	void SetGlowParams(float *t, float *b)
@@ -679,9 +659,8 @@ public:
 		mStreamData.uClipSplit.Y = 1000000.f;
 	}
 
-	void SetVertexBuffer(IBuffer* vb, int offset0, int offset1)
+	void SetVertexBuffer(IBuffer* vb, int offset0 = 0, int offset1 = 0)
 	{
-		assert(vb);
 		mVertexBuffer = vb;
 		mVertexOffsets[0] = offset0;
 		mVertexOffsets[1] = offset1;
@@ -692,11 +671,10 @@ public:
 		mIndexBuffer = ib;
 	}
 
-	template <class T> void SetVertexBuffer(T *buffer)
+	void SetFlatVertexBuffer()
 	{
-		auto ptrs = buffer->GetBufferObjects(); 
-		SetVertexBuffer(ptrs.first, 0, 0);
-		SetIndexBuffer(ptrs.second);
+		SetVertexBuffer(nullptr);
+		SetIndexBuffer(nullptr);
 	}
 
 	void SetInterpolationFactor(float fac)
@@ -753,12 +731,20 @@ public:
 
 	// API-dependent render interface
 
+	// Worker threads
+	virtual void FlushCommands() { }
+
 	// Vertices
-	virtual std::pair<FFlatVertex*, unsigned int> AllocVertices(unsigned int count);
+	virtual std::pair<FFlatVertex*, unsigned int> AllocVertices(unsigned int count) = 0;
+	virtual void SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes) = 0;
+	virtual void UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count) = 0;
+	virtual void ResetVertices() = 0;
 
 	// Buffers
 	virtual int SetViewpoint(const HWViewpointUniforms& vp) = 0;
 	virtual void SetViewpoint(int index) = 0;
+	virtual void SetModelMatrix(const VSMatrix& matrix, const VSMatrix& normalMatrix) = 0;
+	virtual void SetTextureMatrix(const VSMatrix& matrix) = 0;
 	virtual int UploadLights(const FDynLightData& lightdata) = 0;
 	virtual int UploadBones(const TArray<VSMatrix>& bones) = 0;
 

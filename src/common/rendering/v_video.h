@@ -50,7 +50,6 @@
 struct FPortalSceneState;
 class FSkyVertexBuffer;
 class IBuffer;
-class FFlatVertexBuffer;
 struct HWDrawInfo;
 class FMaterial;
 class FGameTexture;
@@ -137,7 +136,6 @@ public:
 	unsigned int maxuniformblock = 65536;
 	const char *vendorstring;					// We have to account for some issues with particular vendors.
 	FSkyVertexBuffer *mSkyData = nullptr;		// the sky vertex buffer
-	FFlatVertexBuffer *mVertexData = nullptr;	// Global vertex data
 	ShadowMap* mShadowMap = nullptr;
 
 	int mGameScreenWidth = 0;
@@ -216,7 +214,7 @@ public:
 	virtual void BeginFrame() {}
 	virtual void SetWindowSize(int w, int h) {}
 	virtual void StartPrecaching() {}
-	virtual FRenderState* RenderState() { return nullptr; }
+	virtual FRenderState* RenderState(int threadIndex) { return nullptr; }
 
 	virtual int GetClientWidth() = 0;
 	virtual int GetClientHeight() = 0;
@@ -276,8 +274,10 @@ public:
 	static float GetZNear() { return 5.f; }
 	static float GetZFar() { return 65536.f; }
 
-	// The original size of the framebuffer as selected in the video menu.
 	uint64_t FrameTime = 0;
+	uint64_t FrameTimeNS = 0;
+
+	int MaxThreads = 8; // To do: this may need to be limited by how much memory is available for dedicated buffer mapping (i.e. is resizeable bar available or not)
 
 private:
 	uint64_t fpsLimitTime = 0;

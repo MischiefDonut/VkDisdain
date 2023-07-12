@@ -24,7 +24,7 @@ void HWMeshCache::Clear()
 	TranslucentDepthBiased.reset();
 }
 
-void HWMeshCache::Update(FRenderViewpoint& vp)
+void HWMeshCache::Update(HWDrawContext* drawctx, FRenderViewpoint& vp)
 {
 	if (!gl_meshcache)
 		return;
@@ -74,10 +74,11 @@ void HWMeshCache::Update(FRenderViewpoint& vp)
 
 	if (!Opaque)
 	{
-		HWDrawInfo* di = HWDrawInfo::StartDrawInfo(vp.ViewLevel, nullptr, vp, nullptr);
+		HWDrawInfo* di = HWDrawInfo::StartDrawInfo(drawctx, vp.ViewLevel, nullptr, vp, nullptr);
 		di->MeshBuilding = true;
 
 		MeshBuilder state;
+		state.SetShadowData(sector_vertices, sector_indexes);
 
 		// Add to the draw lists
 
@@ -86,7 +87,7 @@ void HWMeshCache::Update(FRenderViewpoint& vp)
 		{
 			auto sector = &level->sectors[i];
 
-			CheckUpdate(screen->mVertexData, sector);
+			// CheckUpdate(state, sector);
 			std::unordered_set<FSection*> seenSections;
 			for (int i = 0, count = sector->subsectorcount; i < count; i++)
 			{
@@ -97,7 +98,7 @@ void HWMeshCache::Update(FRenderViewpoint& vp)
 
 					HWFlat flat;
 					flat.section = subsector->section;
-					sector_t* front = hw_FakeFlat(subsector->render_sector, area_default, false);
+					sector_t* front = hw_FakeFlat(di->drawctx, subsector->render_sector, area_default, false);
 					flat.ProcessSector(di, state, front);
 				}
 			}

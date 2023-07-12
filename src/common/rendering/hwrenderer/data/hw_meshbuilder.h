@@ -27,6 +27,7 @@ public:
 	ApplyData applyData;
 	StreamData streamData;
 	FMaterialState material;
+	VSMatrix textureMatrix;
 
 	bool operator<(const MeshApplyState& other) const
 	{
@@ -40,6 +41,10 @@ public:
 			return material.mOverrideShader < other.material.mOverrideShader;
 
 		int result = memcmp(&applyData, &other.applyData, sizeof(ApplyData));
+		if (result != 0)
+			return result < 0;
+
+		result = memcmp(&textureMatrix, &other.textureMatrix, sizeof(VSMatrix));
 		if (result != 0)
 			return result < 0;
 
@@ -64,10 +69,15 @@ public:
 
 	// Vertices
 	std::pair<FFlatVertex*, unsigned int> AllocVertices(unsigned int count) override;
+	void SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes) override;
+	void UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count) override { }
+	void ResetVertices() override { }
 
 	// Buffers
 	int SetViewpoint(const HWViewpointUniforms& vp) override { return 0; }
 	void SetViewpoint(int index) override { }
+	void SetModelMatrix(const VSMatrix& matrix, const VSMatrix& normalMatrix) override { }
+	void SetTextureMatrix(const VSMatrix& matrix) override { mTextureMatrix = matrix; }
 	int UploadLights(const FDynLightData& lightdata) override { return -1; }
 	int UploadBones(const TArray<VSMatrix>& bones) override { return -1; }
 
@@ -108,5 +118,8 @@ private:
 	DrawLists* mDrawLists = nullptr;
 
 	TArray<FFlatVertex> mVertices;
+	TArray<uint32_t> mIndexes;
 	int mDepthFunc = 0;
+
+	VSMatrix mTextureMatrix = VSMatrix::identity();
 };

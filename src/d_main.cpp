@@ -640,7 +640,7 @@ CUSTOM_CVAR(Int, compatmode, 0, CVAR_ARCHIVE|CVAR_NOINITCALL)
 			COMPATF_TRACE | COMPATF_MISSILECLIP | COMPATF_SOUNDTARGET | COMPATF_NO_PASSMOBJ | COMPATF_LIMITPAIN |
 			COMPATF_DEHHEALTH | COMPATF_INVISIBILITY | COMPATF_CROSSDROPOFF | COMPATF_VILEGHOSTS | COMPATF_HITSCAN |
 			COMPATF_WALLRUN | COMPATF_NOTOSSDROPS | COMPATF_LIGHT | COMPATF_MASKEDMIDTEX;
-		w = COMPATF2_BADANGLES | COMPATF2_FLOORMOVE | COMPATF2_POINTONLINE | COMPATF2_EXPLODE2 | COMPATF2_NOMBF21;
+		w = COMPATF2_BADANGLES | COMPATF2_FLOORMOVE | COMPATF2_POINTONLINE | COMPATF2_EXPLODE2 | COMPATF2_NOMBF21 | COMPATF2_VOODOO_ZOMBIES;
 		break;
 
 	case 3: // Boom compat mode
@@ -791,33 +791,45 @@ static void DrawPaletteTester(int paletteno)
 // Draws the fps counter, dot ticker, and palette debug.
 //
 //==========================================================================
-uint64_t LastFPS, LastMSCount;
+uint64_t LastFPS, LastAvgNSCount, LastMaxNSCount, LastMinNSCount;
 
 void CalcFps()
 {
-	static uint64_t LastMS = 0, LastSec = 0, FrameCount = 0, LastTic = 0;
+	static uint64_t LastNS = 0, LastStart = 0, FrameCount = 0, AccumNS = 0, MaxNS = 0, MinNS = 0xffff'ffff'ffffULL;
 
-	uint64_t ms = screen->FrameTime;
-	uint64_t howlong = ms - LastMS;
+	uint64_t ns = screen->FrameTimeNS;
+	uint64_t howlong = ns - LastNS;
 	if ((signed)howlong > 0) // do this only once per frame.
 	{
-		uint32_t thisSec = (uint32_t)(ms / 1000);
-		if (LastSec < thisSec)
-		{
-			LastFPS = FrameCount / (thisSec - LastSec);
-			LastSec = thisSec;
-			FrameCount = 0;
-		}
 		FrameCount++;
-		LastMS = ms;
-		LastMSCount = howlong;
+
+		// Wait until at least a second has elapsed
+		if (LastStart / 1'000'000'000ULL < ns / 1'000'000'000ULL)
+		{
+			LastFPS = (FrameCount * 1'000'000'000ULL + 100'000'000ULL) / (ns - LastStart);
+			LastStart = ns;
+			LastAvgNSCount = AccumNS / FrameCount;
+			LastMaxNSCount = MaxNS;
+			LastMinNSCount = MinNS;
+			FrameCount = 0;
+			AccumNS = 0;
+			MaxNS = 0;
+			MinNS = 0xffff'ffff'ffffULL;
+		}
+		LastNS = ns;
+		AccumNS += howlong;
+		MaxNS = std::max(MaxNS, howlong);
+		MinNS = std::min(MinNS, howlong);
 	}
 }
 
 ADD_STAT(fps)
 {
 	CalcFps();
-	return FStringf("%2llu ms (%3llu fps)", (unsigned long long)LastMSCount , (unsigned long long)LastFPS);
+	return FStringf("%2llu.%llu ms avg (%4llu fps), %2llu.%llu ms max, %2llu.%llu ms min",
+		(unsigned long long)(LastAvgNSCount / 1'000'000ULL), (unsigned long long)(LastAvgNSCount / 100'000ULL % 10), (unsigned long long)LastFPS,
+		(unsigned long long)(LastMaxNSCount / 1'000'000ULL), (unsigned long long)(LastMaxNSCount / 100'000ULL % 10),
+		(unsigned long long)(LastMinNSCount / 1'000'000ULL), (unsigned long long)(LastMinNSCount / 100'000ULL % 10));
 }
 
 static void DrawRateStuff()
@@ -833,7 +845,7 @@ static void DrawRateStuff()
 		int rate_x;
 		int textScale = active_con_scale(twod);
 
-		chars = mysnprintf(fpsbuff, countof(fpsbuff), "%2llu ms (%3llu fps)", (unsigned long long)LastMSCount, (unsigned long long)LastFPS);
+		chars = mysnprintf(fpsbuff, countof(fpsbuff), "%2llu.%llu ms (%4llu fps)", (unsigned long long)(LastAvgNSCount / 1'000'000ULL), (unsigned long long)(LastAvgNSCount / 100'000ULL % 10), (unsigned long long)LastFPS);
 		rate_x = screen->GetWidth() / textScale - NewConsoleFont->StringWidth(&fpsbuff[0]);
 		ClearRect(twod, rate_x * textScale, 0, screen->GetWidth(), NewConsoleFont->GetHeight() * textScale, GPalette.BlackIndex, 0);
 		DrawText(twod, NewConsoleFont, CR_WHITE, rate_x, 0, (char*)&fpsbuff[0],
@@ -995,6 +1007,7 @@ void D_Display ()
 	}
 	
 	screen->FrameTime = I_msTimeFS();
+	screen->FrameTimeNS = I_nsTime();
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
 	screen->BeginFrame();

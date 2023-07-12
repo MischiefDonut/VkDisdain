@@ -56,6 +56,7 @@ if( WIN32 )
 	add_definitions( -D_WIN32 )
 
 	set( PROJECT_LIBRARIES
+		psapi
 		wsock32
 		winmm
 		dinput8
@@ -715,11 +716,13 @@ set( FASTMATH_SOURCES
 	rendering/hwrenderer/scene/hw_bsp.cpp
 	rendering/hwrenderer/scene/hw_fakeflat.cpp
 	rendering/hwrenderer/scene/hw_decal.cpp
+	rendering/hwrenderer/scene/hw_drawcontext.cpp
 	rendering/hwrenderer/scene/hw_drawinfo.cpp
 	rendering/hwrenderer/scene/hw_drawlist.cpp
 	rendering/hwrenderer/scene/hw_clipper.cpp
 	rendering/hwrenderer/scene/hw_flats.cpp
 	rendering/hwrenderer/scene/hw_portal.cpp
+	rendering/hwrenderer/scene/hw_meshportal.cpp
 	rendering/hwrenderer/scene/hw_renderhacks.cpp
 	rendering/hwrenderer/scene/hw_sky.cpp
 	rendering/hwrenderer/scene/hw_skyportal.cpp
@@ -738,12 +741,13 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/vk_postprocess.cpp
 	common/rendering/vulkan/vk_pprenderstate.cpp
 	common/rendering/vulkan/commands/vk_commandbuffer.cpp
-	common/rendering/vulkan/buffers/vk_streambuffer.cpp
+	common/rendering/vulkan/buffers/vk_rsbuffers.cpp
 	common/rendering/vulkan/buffers/vk_hwbuffer.cpp
 	common/rendering/vulkan/buffers/vk_buffer.cpp	
 	common/rendering/vulkan/samplers/vk_samplers.cpp
 	common/rendering/vulkan/descriptorsets/vk_descriptorset.cpp
 	common/rendering/vulkan/pipelines/vk_renderpass.cpp
+	common/rendering/vulkan/pipelines/vk_pprenderpass.cpp
 	common/rendering/vulkan/shaders/vk_shader.cpp
 	common/rendering/vulkan/shaders/vk_ppshader.cpp
 	common/rendering/vulkan/textures/vk_hwtexture.cpp
@@ -1107,7 +1111,6 @@ set (PCH_SOURCES
 	common/rendering/hwrenderer/hw_draw2d.cpp
 	common/rendering/hwrenderer/data/hw_clock.cpp
 	common/rendering/hwrenderer/data/hw_skydome.cpp
-	common/rendering/hwrenderer/data/flatvertices.cpp
 	common/rendering/hwrenderer/data/hw_modelvertexbuffer.cpp
 	common/rendering/hwrenderer/data/hw_cvars.cpp
 	common/rendering/hwrenderer/data/hw_vrmodes.cpp

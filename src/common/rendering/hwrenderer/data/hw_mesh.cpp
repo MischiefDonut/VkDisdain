@@ -1,6 +1,7 @@
 
 #include "hw_mesh.h"
 #include "v_video.h"
+#include "cmdlib.h"
 
 #define USE_MESH_VERTEX_BUFFER
 
@@ -42,6 +43,7 @@ void Mesh::Draw(FRenderState& renderstate)
 	origState.applyData.TextureModeFlags = renderstate.mTextureModeFlags;
 	origState.streamData = renderstate.mStreamData;
 	origState.material = renderstate.mMaterial;
+	origState.textureMatrix.loadIdentity();
 
 	int applyIndex = -1;
 	int depthFunc = -1;
@@ -70,7 +72,7 @@ void Mesh::Draw(FRenderState& renderstate)
 
 #ifdef USE_MESH_VERTEX_BUFFER
 	if (mVertexBuffer)
-		renderstate.SetVertexBuffer(screen->mVertexData);
+		renderstate.SetFlatVertexBuffer();
 #endif
 
 	for (const MeshDrawCommand& cmd : mIndexedDraws)
@@ -106,4 +108,5 @@ void Mesh::Apply(FRenderState& renderstate, const MeshApplyState& state)
 	renderstate.mTextureModeFlags = state.applyData.TextureModeFlags;
 	renderstate.mStreamData = state.streamData;
 	renderstate.mMaterial = state.material;
+	renderstate.SetTextureMatrix(state.textureMatrix);
 }

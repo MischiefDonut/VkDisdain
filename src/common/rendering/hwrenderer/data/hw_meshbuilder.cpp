@@ -17,9 +17,12 @@ MeshBuilder::MeshBuilder()
 	ClearDepthBias();
 	EnableTexture(1);
 	EnableBrightmap(true);
+}
 
-	// Add the vbo_shadowdata as some geometry might use it
-	mVertices = screen->mVertexData->vbo_shadowdata;
+void MeshBuilder::SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes)
+{
+	mVertices = vertices;
+	mIndexes = indexes;
 }
 
 void MeshBuilder::Draw(int dt, int index, int count, bool apply)
@@ -69,6 +72,7 @@ void MeshBuilder::Apply()
 	state.applyData.TextureModeFlags = mTextureModeFlags;
 	state.streamData = mStreamData;
 	state.material = mMaterial;
+	state.textureMatrix = mTextureMatrix;
 
 	state.streamData.uVertexNormal = FVector4(0.0f, 0.0f, 0.0f, 0.0f); // Grr, this should be part of the vertex!!
 

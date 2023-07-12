@@ -22,9 +22,11 @@
 
 #include "vk_buffer.h"
 #include "vk_hwbuffer.h"
-#include "vk_streambuffer.h"
+#include "vk_rsbuffers.h"
 #include "vulkan/vk_renderdevice.h"
 #include "vulkan/pipelines/vk_renderpass.h"
+#include "vulkan/commands/vk_commandbuffer.h"
+#include <zvulkan/vulkanbuilders.h>
 
 VkBufferManager::VkBufferManager(VulkanRenderDevice* fb) : fb(fb)
 {
@@ -36,18 +38,10 @@ VkBufferManager::~VkBufferManager()
 
 void VkBufferManager::Init()
 {
-	MatrixBuffer.reset(new VkStreamBuffer(this, sizeof(MatricesUBO), 50000));
-	StreamBuffer.reset(new VkStreamBuffer(this, sizeof(StreamUBO), 300));
-
-	Viewpoint.BlockAlign = (sizeof(HWViewpointUniforms) + fb->uniformblockalignment - 1) / fb->uniformblockalignment * fb->uniformblockalignment;
-	Viewpoint.UBO.reset(new VkHardwareDataBuffer(fb, false, true));
-	Viewpoint.UBO->SetData(Viewpoint.Count * Viewpoint.BlockAlign, nullptr, BufferUsageType::Persistent);
-
-	Lightbuffer.SSO.reset(new VkHardwareDataBuffer(fb, true, false));
-	Lightbuffer.SSO->SetData(Lightbuffer.Count * 4 * sizeof(FVector4), nullptr, BufferUsageType::Persistent);
-
-	Bonebuffer.SSO.reset(new VkHardwareDataBuffer(fb, true, false));
-	Bonebuffer.SSO->SetData(Bonebuffer.Count * sizeof(VSMatrix), nullptr, BufferUsageType::Persistent);
+	for (int threadIndex = 0; threadIndex < fb->MaxThreads; threadIndex++)
+	{
+		RSBuffers.push_back(std::make_unique<VkRSBuffers>(fb));
+	}
 
 	Shadowmap.Nodes.reset(new VkHardwareDataBuffer(fb, true, false));
 	Shadowmap.Lines.reset(new VkHardwareDataBuffer(fb, true, false));
@@ -58,9 +52,8 @@ void VkBufferManager::Init()
 
 void VkBufferManager::Deinit()
 {
-	Viewpoint.UBO.reset();
-	Lightbuffer.SSO.reset();
-	Bonebuffer.SSO.reset();
+	RSBuffers.clear();
+
 	Shadowmap.Nodes.reset();
 	Shadowmap.Lines.reset();
 	Shadowmap.Lights.reset();
@@ -103,30 +96,4 @@ void VkBufferManager::CreateFanToTrisIndexBuffer()
 
 	FanToTrisIndexBuffer.reset(CreateIndexBuffer());
 	FanToTrisIndexBuffer->SetData(sizeof(uint32_t) * data.Size(), data.Data(), BufferUsageType::Static);
-}
-
-/////////////////////////////////////////////////////////////////////////////
-
-VkStreamBuffer::VkStreamBuffer(VkBufferManager* buffers, size_t structSize, size_t count)
-{
-	mBlockSize = static_cast<uint32_t>((structSize + buffers->fb->uniformblockalignment - 1) / buffers->fb->uniformblockalignment * buffers->fb->uniformblockalignment);
-
-	UniformBuffer = new VkHardwareDataBuffer(buffers->fb, false, false);
-	UniformBuffer->SetData(mBlockSize * count, nullptr, BufferUsageType::Persistent);
-}
-
-VkStreamBuffer::~VkStreamBuffer()
-{
-	delete UniformBuffer;
-}
-
-uint32_t VkStreamBuffer::NextStreamDataBlock()
-{
-	mStreamDataOffset += mBlockSize;
-	if (mStreamDataOffset + (size_t)mBlockSize >= UniformBuffer->Size())
-	{
-		mStreamDataOffset = 0;
-		return 0xffffffff;
-	}
-	return mStreamDataOffset;
 }

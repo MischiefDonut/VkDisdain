@@ -271,3 +271,4 @@ xx(BuiltinClassCast)
 xx(BuiltinFunctionPtrCast)
 
 xx(ScreenJobRunner)
+xx(Action)

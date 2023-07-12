@@ -42,6 +42,7 @@
 #include "hw_renderstate.h"
 #include "hwrenderer/scene/hw_portal.h"
 #include "hw_models.h"
+#include "hwrenderer/scene/hw_drawcontext.h"
 
 CVAR(Bool, gl_light_models, true, CVAR_ARCHIVE)
 EXTERN_CVAR(Bool, gl_texture);
@@ -70,17 +71,18 @@ void FHWModelRenderer::BeginDrawModel(FRenderStyle style, FSpriteModelFrame *smf
 	// TO-DO: Implement proper depth sorting.
 	if (!(style == DefaultRenderStyle()) && !(smf->flags & MDL_DONTCULLBACKFACES))
 	{
-		state.SetCulling((mirrored ^ portalState.isMirrored()) ? Cull_CCW : Cull_CW);
+		state.SetCulling((mirrored ^ di->drawctx->portalState.isMirrored()) ? Cull_CCW : Cull_CW);
 	}
 
-	state.mModelMatrix = objectToWorldMatrix;
-	state.EnableModelMatrix(true);
+	VSMatrix normalModelMatrix;
+	normalModelMatrix.computeNormalMatrix(objectToWorldMatrix);
+	state.SetModelMatrix(objectToWorldMatrix, normalModelMatrix);
 }
 
 void FHWModelRenderer::EndDrawModel(FRenderStyle style, FSpriteModelFrame *smf)
 {
 	state.SetBoneIndexBase(-1);
-	state.EnableModelMatrix(false);
+	state.SetModelMatrix(VSMatrix::identity(), VSMatrix::identity());
 	state.SetDepthFunc(DF_Less);
 	if (!(style == DefaultRenderStyle()) && !(smf->flags & MDL_DONTCULLBACKFACES))
 		state.SetCulling(Cull_None);
@@ -103,17 +105,18 @@ void FHWModelRenderer::BeginDrawHUDModel(FRenderStyle style, const VSMatrix &obj
 	// TO-DO: Implement proper depth sorting.
 	if (!(style == DefaultRenderStyle()))
 	{
-		state.SetCulling((mirrored ^ portalState.isMirrored()) ? Cull_CW : Cull_CCW);
+		state.SetCulling((mirrored ^ di->drawctx->portalState.isMirrored()) ? Cull_CW : Cull_CCW);
 	}
 
-	state.mModelMatrix = objectToWorldMatrix;
-	state.EnableModelMatrix(true);
+	VSMatrix normalModelMatrix;
+	normalModelMatrix.computeNormalMatrix(objectToWorldMatrix);
+	state.SetModelMatrix(objectToWorldMatrix, normalModelMatrix);
 }
 
 void FHWModelRenderer::EndDrawHUDModel(FRenderStyle style)
 {
 	state.SetBoneIndexBase(-1);
-	state.EnableModelMatrix(false);
+	state.SetModelMatrix(VSMatrix::identity(), VSMatrix::identity());
 
 	state.SetDepthFunc(DF_Less);
 	if (!(style == DefaultRenderStyle()))

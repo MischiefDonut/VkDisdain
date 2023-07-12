@@ -41,7 +41,7 @@
 EXTERN_CVAR(Int, r_mirror_recursions)
 EXTERN_CVAR(Bool, gl_portals)
 
-void SetPlaneTextureRotation(FRenderState& state, HWSectorPlane* plane, FGameTexture* texture);
+bool SetPlaneTextureRotation(FRenderState& state, HWSectorPlane* plane, FGameTexture* texture);
 
 //-----------------------------------------------------------------------------
 //
@@ -73,7 +73,6 @@ CCMD(gl_portalinfo)
 }
 
 static FString indent;
-FPortalSceneState portalState;
 
 //-----------------------------------------------------------------------------
 //
@@ -191,7 +190,6 @@ void HWPortal::DrawPortalStencil(FRenderState &state, int pass)
 
 		if (NeedCap() && lines.Size() > 1 && planesused != 0)
 		{
-			screen->mVertexData->Map();
 			if (planesused & (1 << sector_t::floor))
 			{
 				auto verts = state.AllocVertices(4);
@@ -212,7 +210,6 @@ void HWPortal::DrawPortalStencil(FRenderState &state, int pass)
 				ptr[3].Set((float)boundingBox.right, 32767.f, (float)boundingBox.bottom, 0, 0);
 				mTopCap = verts.second;
 			}
-			screen->mVertexData->Unmap();
 		}
 
 	}
@@ -986,10 +983,10 @@ void HWHorizonPortal::DrawContents(HWDrawInfo *di, FRenderState &state)
 	state.EnableBrightmap(true);
 	state.SetMaterial(texture, UF_Texture, 0, CLAMP_NONE, 0, -1);
 	state.SetObjectColor(origin->specialcolor);
-
-	SetPlaneTextureRotation(state, sp, texture);
 	state.AlphaFunc(Alpha_GEqual, 0.f);
 	state.SetRenderStyle(STYLE_Source);
+
+	bool texmatrix = SetPlaneTextureRotation(state, sp, texture);
 
 	for (unsigned i = 0; i < vcount; i += 4)
 	{
@@ -997,7 +994,8 @@ void HWHorizonPortal::DrawContents(HWDrawInfo *di, FRenderState &state)
 	}
 	state.Draw(DT_TriangleStrip, voffset + vcount, 10, false);
 
-	state.EnableTextureMatrix(false);
+	if (texmatrix)
+		state.SetTextureMatrix(VSMatrix::identity());
 }
 
 

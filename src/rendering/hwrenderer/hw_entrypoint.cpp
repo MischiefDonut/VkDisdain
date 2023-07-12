@@ -48,6 +48,7 @@
 #include "hwrenderer/scene/hw_clipper.h"
 #include "hwrenderer/scene/hw_portal.h"
 #include "hwrenderer/scene/hw_meshcache.h"
+#include "hwrenderer/scene/hw_drawcontext.h"
 #include "hw_vrmodes.h"
 
 EXTERN_CVAR(Bool, cl_capfps)
@@ -104,7 +105,7 @@ void CollectLights(FLevelLocals* Level)
 
 sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bounds, float fov, float ratio, float fovratio, bool mainview, bool toscreen)
 {
-	auto& RenderState = *screen->RenderState();
+	auto& RenderState = *screen->RenderState(0);
 
 	R_SetupFrame(mainvp, r_viewwindow, camera);
 
@@ -125,7 +126,11 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 
 	screen->SetLevelMesh(camera->Level->levelMesh);
 
-	meshcache.Update(mainvp);
+	static HWDrawContext mainthread_drawctx;
+
+	hw_ClearFakeFlat(&mainthread_drawctx);
+
+	meshcache.Update(&mainthread_drawctx, mainvp);
 
 	// Update the attenuation flag of all light defaults for each viewpoint.
 	// This function will only do something if the setting differs.
@@ -149,7 +154,7 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 			RenderState.EnableDrawBuffers(RenderState.GetPassDrawBufferCount(), true);
 		}
 
-		auto di = HWDrawInfo::StartDrawInfo(mainvp.ViewLevel, nullptr, mainvp, nullptr);
+		auto di = HWDrawInfo::StartDrawInfo(&mainthread_drawctx, mainvp.ViewLevel, nullptr, mainvp, nullptr);
 		auto& vp = di->Viewpoint;
 
 		di->Set3DViewport(RenderState);
@@ -168,7 +173,7 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 		vp.Pos += eye.GetViewShift(vp.HWAngles.Yaw.Degrees());
 		di->SetupView(RenderState, vp.Pos.X, vp.Pos.Y, vp.Pos.Z, false, false);
 
-		di->ProcessScene(toscreen, *screen->RenderState());
+		di->ProcessScene(toscreen, *screen->RenderState(0));
 
 		if (mainview)
 		{
@@ -264,7 +269,7 @@ void WriteSavePic(player_t* player, FileWriter* file, int width, int height)
 		bounds.top = 0;
 		bounds.width = width;
 		bounds.height = height;
-		auto& RenderState = *screen->RenderState();
+		auto& RenderState = *screen->RenderState(0);
 
 		// we must be sure the GPU finished reading from the buffer before we fill it with new data.
 		screen->WaitForCommands(false);
@@ -274,9 +279,8 @@ void WriteSavePic(player_t* player, FileWriter* file, int width, int height)
 		screen->ImageTransitionScene(true);
 
 		hw_postprocess.SetTonemapMode(level.info ? level.info->tonemap : ETonemapMode::None);
-		hw_ClearFakeFlat();
-		screen->mVertexData->Reset();
-		RenderState.SetVertexBuffer(screen->mVertexData);
+		RenderState.ResetVertices();
+		RenderState.SetFlatVertexBuffer();
 
 		// This shouldn't overwrite the global viewpoint even for a short time.
 		FRenderViewpoint savevp;
@@ -312,9 +316,9 @@ static void CheckTimer(FRenderState &state, uint64_t ShaderStartTime)
 
 sector_t* RenderView(player_t* player)
 {
-	auto RenderState = screen->RenderState();
-	RenderState->SetVertexBuffer(screen->mVertexData);
-	screen->mVertexData->Reset();
+	auto RenderState = screen->RenderState(0);
+	RenderState->SetFlatVertexBuffer();
+	RenderState->ResetVertices();
 	hw_postprocess.SetTonemapMode(level.info ? level.info->tonemap : ETonemapMode::None);
 
 	sector_t* retsec;
@@ -327,8 +331,6 @@ sector_t* RenderView(player_t* player)
 	}
 	else
 	{
-		hw_ClearFakeFlat();
-
 		iter_dlightf = iter_dlight = draw_dlight = draw_dlightf = 0;
 
 		checkBenchActive();
@@ -356,7 +358,7 @@ sector_t* RenderView(player_t* player)
 				screen->RenderTextureView(canvas->Tex, [=](IntRect& bounds)
 					{
 						screen->SetViewportRects(&bounds);
-						Draw2D(&canvas->Drawer, *screen->RenderState(), 0, 0, canvas->Tex->GetWidth(), canvas->Tex->GetHeight());
+						Draw2D(&canvas->Drawer, *screen->RenderState(0), 0, 0, canvas->Tex->GetWidth(), canvas->Tex->GetHeight());
 						canvas->Drawer.Clear();
 					});
 				canvas->Tex->SetUpdated(true);

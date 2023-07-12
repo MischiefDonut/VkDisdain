@@ -29,10 +29,11 @@
 #include "vulkan/shaders/vk_ppshader.h"
 #include "vulkan/textures/vk_pptexture.h"
 #include "vulkan/textures/vk_renderbuffers.h"
-#include "vulkan/samplers/vk_samplers.h"
 #include "vulkan/textures/vk_texture.h"
+#include "vulkan/samplers/vk_samplers.h"
 #include "vulkan/framebuffers/vk_framebuffer.h"
 #include "vulkan/descriptorsets/vk_descriptorset.h"
+#include "vulkan/pipelines/vk_pprenderpass.h"
 #include <zvulkan/vulkanswapchain.h>
 #include "flatvertices.h"
 
@@ -52,7 +53,7 @@ void VkPPRenderState::PopGroup()
 
 void VkPPRenderState::Draw()
 {
-	fb->GetRenderState()->EndRenderPass();
+	fb->GetRenderState(0)->EndRenderPass();
 
 	VkPPRenderPassKey key;
 	key.BlendMode = BlendMode;
@@ -122,18 +123,14 @@ void VkPPRenderState::RenderScreenQuad(VkPPRenderPassSetup *passSetup, VulkanDes
 		.AddClearColor(0.0f, 0.0f, 0.0f, 1.0f)
 		.Execute(cmdbuffer);
 
-	VkBuffer vertexBuffers[] = { static_cast<VkHardwareVertexBuffer*>(screen->mVertexData->GetBufferObjects().first)->mBuffer->buffer };
-	VkDeviceSize offsets[] = { 0 };
-
 	cmdbuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, passSetup->Pipeline.get());
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, passSetup->PipelineLayout.get(), 0, descriptorSet);
-	cmdbuffer->bindVertexBuffers(0, 1, vertexBuffers, offsets);
 	cmdbuffer->setViewport(0, 1, &viewport);
 	cmdbuffer->setScissor(0, 1, &scissor);
 	if (stencilTest)
 		cmdbuffer->setStencilReference(VK_STENCIL_FRONT_AND_BACK, screen->stencilValue);
 	if (pushConstantsSize > 0)
 		cmdbuffer->pushConstants(passSetup->PipelineLayout.get(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, pushConstantsSize, pushConstants);
-	cmdbuffer->draw(3, 1, FFlatVertexBuffer::PRESENT_INDEX, 0);
+	cmdbuffer->draw(3, 1, 0, 0);
 	cmdbuffer->endRenderPass();
 }

@@ -40,17 +40,32 @@
 CVAR(Int, vk_submit_size, 1000, 0);
 EXTERN_CVAR(Bool, r_skipmats)
 
-VkRenderState::VkRenderState(VulkanRenderDevice* fb) : fb(fb), mStreamBufferWriter(fb), mMatrixBufferWriter(fb)
+VkRenderState::VkRenderState(VulkanRenderDevice* fb, int threadIndex) : fb(fb), threadIndex(threadIndex), mRSBuffers(fb->GetBufferManager()->GetRSBuffers(threadIndex)), mStreamBufferWriter(mRSBuffers), mMatrixBufferWriter(mRSBuffers)
 {
+	mMatrices.ModelMatrix.loadIdentity();
+	mMatrices.NormalModelMatrix.loadIdentity();
+	mMatrices.TextureMatrix.loadIdentity();
+
 	Reset();
 }
 
 void VkRenderState::ClearScreen()
 {
-	Set2DViewpoint(SCREENWIDTH, SCREENHEIGHT);
+	int width = fb->GetWidth();
+	int height = fb->GetHeight();
+
+	auto vertices = AllocVertices(4);
+	FFlatVertex* v = vertices.first;
+	v[0].Set(0, 0, 0, 0, 0);
+	v[1].Set(0, (float)height, 0, 0, 1);
+	v[2].Set((float)width, 0, 0, 1, 0);
+	v[3].Set((float)width, (float)height, 0, 1, 1);
+
+	Set2DViewpoint(width, height);
 	SetColor(0, 0, 0);
 	Apply(DT_TriangleStrip);
-	mCommandBuffer->draw(4, 1, FFlatVertexBuffer::FULLSCREEN_INDEX, 0);
+
+	mCommandBuffer->draw(4, 1, vertices.second, 0);
 }
 
 void VkRenderState::Draw(int dt, int index, int count, bool apply)
@@ -173,7 +188,7 @@ void VkRenderState::Apply(int dt)
 	drawcalls.Clock();
 
 	mApplyCount++;
-	if (mApplyCount >= vk_submit_size)
+	if (threadIndex == 0 && mApplyCount >= vk_submit_size)
 	{
 		fb->GetCommands()->FlushCommands(false);
 		mApplyCount = 0;
@@ -188,7 +203,7 @@ void VkRenderState::Apply(int dt)
 	ApplyDepthBias();
 	ApplyPushConstants();
 	ApplyVertexBuffers();
-	ApplyHWBufferSet();
+	ApplyBufferSets();
 	ApplyMaterial();
 	mNeedApply = false;
 
@@ -209,7 +224,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 	// Find a pipeline that matches our state
 	VkPipelineKey pipelineKey;
 	pipelineKey.DrawType = dt;
-	pipelineKey.VertexFormat = static_cast<VkHardwareVertexBuffer*>(mVertexBuffer)->VertexFormat;
+	pipelineKey.VertexFormat = mVertexBuffer ? static_cast<VkHardwareVertexBuffer*>(mVertexBuffer)->VertexFormat : mRSBuffers->Flatbuffer.VertexFormat;
 	pipelineKey.RenderStyle = mRenderStyle;
 	pipelineKey.DepthTest = mDepthTest;
 	pipelineKey.DepthWrite = mDepthTest && mDepthWrite;
@@ -295,7 +310,16 @@ void VkRenderState::ApplyRenderPass(int dt)
 
 	if (!inRenderPass)
 	{
-		mCommandBuffer = fb->GetCommands()->GetDrawCommands();
+		if (threadIndex == 0)
+		{
+			mCommandBuffer = fb->GetCommands()->GetDrawCommands();
+		}
+		else
+		{
+			mThreadCommandBuffer = fb->GetCommands()->BeginThreadCommands();
+			mCommandBuffer = mThreadCommandBuffer.get();
+		}
+
 		mScissorChanged = true;
 		mViewportChanged = true;
 		mStencilRefChanged = true;
@@ -379,7 +403,7 @@ void VkRenderState::ApplyStreamData()
 {
 	auto passManager = fb->GetRenderPassManager();
 
-	mStreamData.useVertexData = passManager->GetVertexFormat(static_cast<VkHardwareVertexBuffer*>(mVertexBuffer)->VertexFormat)->UseVertexData;
+	mStreamData.useVertexData = mVertexBuffer ? passManager->GetVertexFormat(static_cast<VkHardwareVertexBuffer*>(mVertexBuffer)->VertexFormat)->UseVertexData : 0;
 
 	if (mMaterial.mMaterial && mMaterial.mMaterial->Source())
 		mStreamData.timer = static_cast<float>((double)(screen->FrameTime - firstFrame) * (double)mMaterial.mMaterial->Source()->GetShaderSpeed() / 1000.);
@@ -402,40 +426,62 @@ void VkRenderState::ApplyStreamData()
 void VkRenderState::ApplyPushConstants()
 {
 	mPushConstants.uDataIndex = mStreamBufferWriter.DataIndex();
-	mPushConstants.uLightIndex = mLightIndex;
+	mPushConstants.uLightIndex = mLightIndex >= 0 ? (mLightIndex % MAX_LIGHT_DATA) : -1;
 	mPushConstants.uBoneIndexBase = mBoneIndexBase;
 
-	auto passManager = fb->GetRenderPassManager();
-	mCommandBuffer->pushConstants(passManager->GetPipelineLayout(mPipelineKey.NumTextureLayers), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
+	mCommandBuffer->pushConstants(GetPipelineLayout(mPipelineKey.NumTextureLayers), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
 }
 
 void VkRenderState::ApplyMatrices()
 {
-	if (!mMatrixBufferWriter.Write(mModelMatrix, mModelMatrixEnabled, mTextureMatrix, mTextureMatrixEnabled))
+	if (mMatricesChanged)
 	{
-		WaitForStreamBuffers();
-		mMatrixBufferWriter.Write(mModelMatrix, mModelMatrixEnabled, mTextureMatrix, mTextureMatrixEnabled);
+		if (!mMatrixBufferWriter.Write(mMatrices))
+		{
+			WaitForStreamBuffers();
+			mMatrixBufferWriter.Write(mMatrices);
+		}
+		mMatricesChanged = false;
 	}
 }
 
 void VkRenderState::ApplyVertexBuffers()
 {
-	if ((mVertexBuffer != mLastVertexBuffer || mVertexOffsets[0] != mLastVertexOffsets[0] || mVertexOffsets[1] != mLastVertexOffsets[1]) && mVertexBuffer)
+	if ((mVertexBuffer != mLastVertexBuffer || mVertexOffsets[0] != mLastVertexOffsets[0] || mVertexOffsets[1] != mLastVertexOffsets[1]))
 	{
-		auto vkbuf = static_cast<VkHardwareVertexBuffer*>(mVertexBuffer);
-		const VkVertexFormat *format = fb->GetRenderPassManager()->GetVertexFormat(vkbuf->VertexFormat);
-		VkBuffer vertexBuffers[2] = { vkbuf->mBuffer->buffer, vkbuf->mBuffer->buffer };
-		VkDeviceSize offsets[] = { mVertexOffsets[0] * format->Stride, mVertexOffsets[1] * format->Stride };
-		mCommandBuffer->bindVertexBuffers(0, 2, vertexBuffers, offsets);
+		if (mVertexBuffer)
+		{
+			auto vkbuf = static_cast<VkHardwareVertexBuffer*>(mVertexBuffer);
+			const VkVertexFormat* format = fb->GetRenderPassManager()->GetVertexFormat(vkbuf->VertexFormat);
+			VkBuffer vertexBuffers[2] = { vkbuf->mBuffer->buffer, vkbuf->mBuffer->buffer };
+			VkDeviceSize offsets[] = { mVertexOffsets[0] * format->Stride, mVertexOffsets[1] * format->Stride };
+			mCommandBuffer->bindVertexBuffers(0, 2, vertexBuffers, offsets);
+		}
+		else
+		{
+			const VkVertexFormat* format = fb->GetRenderPassManager()->GetVertexFormat(mRSBuffers->Flatbuffer.VertexFormat);
+			VkBuffer vertexBuffers[2] = { mRSBuffers->Flatbuffer.VertexBuffer->buffer, mRSBuffers->Flatbuffer.VertexBuffer->buffer };
+			VkDeviceSize offsets[] = { mVertexOffsets[0] * format->Stride, mVertexOffsets[1] * format->Stride };
+			mCommandBuffer->bindVertexBuffers(0, 2, vertexBuffers, offsets);
+		}
+
 		mLastVertexBuffer = mVertexBuffer;
 		mLastVertexOffsets[0] = mVertexOffsets[0];
 		mLastVertexOffsets[1] = mVertexOffsets[1];
 	}
 
-	if (mIndexBuffer != mLastIndexBuffer && mIndexBuffer)
+	if (mIndexBuffer != mLastIndexBuffer || mIndexBufferNeedsBind)
 	{
-		mCommandBuffer->bindIndexBuffer(static_cast<VkHardwareIndexBuffer*>(mIndexBuffer)->mBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+		if (mIndexBuffer)
+		{
+			mCommandBuffer->bindIndexBuffer(static_cast<VkHardwareIndexBuffer*>(mIndexBuffer)->mBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+		else
+		{
+			mCommandBuffer->bindIndexBuffer(mRSBuffers->Flatbuffer.IndexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
 		mLastIndexBuffer = mIndexBuffer;
+		mIndexBufferNeedsBind = false;
 	}
 }
 
@@ -443,35 +489,38 @@ void VkRenderState::ApplyMaterial()
 {
 	if (mMaterial.mChanged)
 	{
-		auto passManager = fb->GetRenderPassManager();
 		auto descriptors = fb->GetDescriptorSetManager();
+		VulkanPipelineLayout* layout = GetPipelineLayout(mPipelineKey.NumTextureLayers);
 
-		if (mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas()) static_cast<FCanvasTexture*>(mMaterial.mMaterial->Source()->GetTexture())->NeedUpdate();
+		if (mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas())
+			static_cast<FCanvasTexture*>(mMaterial.mMaterial->Source()->GetTexture())->NeedUpdate();
 
-		VulkanDescriptorSet* descriptorset = mMaterial.mMaterial ? static_cast<VkMaterial*>(mMaterial.mMaterial)->GetDescriptorSet(mMaterial) : descriptors->GetNullTextureDescriptorSet();
+		VulkanDescriptorSet* descriptorset = mMaterial.mMaterial ? static_cast<VkMaterial*>(mMaterial.mMaterial)->GetDescriptorSet(threadIndex, mMaterial) : descriptors->GetNullTextureDescriptorSet();
 
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.NumTextureLayers), 0, fb->GetDescriptorSetManager()->GetFixedDescriptorSet());
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, passManager->GetPipelineLayout(mPipelineKey.NumTextureLayers), 2, descriptorset);
+		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedDescriptorSet());
+		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, descriptorset);
 		mMaterial.mChanged = false;
 	}
 }
 
-void VkRenderState::ApplyHWBufferSet()
+void VkRenderState::ApplyBufferSets()
 {
 	uint32_t matrixOffset = mMatrixBufferWriter.Offset();
 	uint32_t streamDataOffset = mStreamBufferWriter.StreamDataOffset();
-	if (mViewpointOffset != mLastViewpointOffset || matrixOffset != mLastMatricesOffset || streamDataOffset != mLastStreamDataOffset)
+	uint32_t lightsOffset = mLightIndex >= 0 ? (uint32_t)(mLightIndex / MAX_LIGHT_DATA) * sizeof(LightBufferUBO) : mLastLightsOffset;
+	if (mViewpointOffset != mLastViewpointOffset || matrixOffset != mLastMatricesOffset || streamDataOffset != mLastStreamDataOffset || lightsOffset != mLastLightsOffset)
 	{
-		auto passManager = fb->GetRenderPassManager();
 		auto descriptors = fb->GetDescriptorSetManager();
+		VulkanPipelineLayout* layout = GetPipelineLayout(mPipelineKey.NumTextureLayers);
 
-		uint32_t offsets[3] = { mViewpointOffset, matrixOffset, streamDataOffset };
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, passManager->GetPipelineLayout(mPipelineKey.NumTextureLayers), 0, fb->GetDescriptorSetManager()->GetFixedDescriptorSet());
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, passManager->GetPipelineLayout(mPipelineKey.NumTextureLayers), 1, descriptors->GetHWBufferDescriptorSet(), 3, offsets);
+		uint32_t offsets[4] = { mViewpointOffset, matrixOffset, streamDataOffset, lightsOffset };
+		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedDescriptorSet());
+		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, descriptors->GetRSBufferDescriptorSet(threadIndex), 4, offsets);
 
 		mLastViewpointOffset = mViewpointOffset;
 		mLastMatricesOffset = matrixOffset;
 		mLastStreamDataOffset = streamDataOffset;
+		mLastLightsOffset = lightsOffset;
 	}
 }
 
@@ -485,37 +534,50 @@ void VkRenderState::WaitForStreamBuffers()
 
 int VkRenderState::SetViewpoint(const HWViewpointUniforms& vp)
 {
-	auto buffers = fb->GetBufferManager();
-	if (buffers->Viewpoint.Count == buffers->Viewpoint.UploadIndex)
+	if (mRSBuffers->Viewpoint.Count == mRSBuffers->Viewpoint.UploadIndex)
 	{
-		return buffers->Viewpoint.Count - 1;
+		return mRSBuffers->Viewpoint.Count - 1;
 	}
-	memcpy(((char*)buffers->Viewpoint.UBO->Memory()) + buffers->Viewpoint.UploadIndex * buffers->Viewpoint.BlockAlign, &vp, sizeof(HWViewpointUniforms));
-	int index = buffers->Viewpoint.UploadIndex++;
-	mViewpointOffset = index * buffers->Viewpoint.BlockAlign;
+	memcpy(((char*)mRSBuffers->Viewpoint.Data) + mRSBuffers->Viewpoint.UploadIndex * mRSBuffers->Viewpoint.BlockAlign, &vp, sizeof(HWViewpointUniforms));
+	int index = mRSBuffers->Viewpoint.UploadIndex++;
+	mViewpointOffset = index * mRSBuffers->Viewpoint.BlockAlign;
 	mNeedApply = true;
 	return index;
 }
 
 void VkRenderState::SetViewpoint(int index)
 {
-	mViewpointOffset = index * fb->GetBufferManager()->Viewpoint.BlockAlign;
+	mViewpointOffset = index * mRSBuffers->Viewpoint.BlockAlign;
+	mNeedApply = true;
+}
+
+void VkRenderState::SetModelMatrix(const VSMatrix& matrix, const VSMatrix& normalMatrix)
+{
+	mMatrices.ModelMatrix = matrix;
+	mMatrices.NormalModelMatrix = normalMatrix;
+	mMatricesChanged = true;
+	mNeedApply = true;
+}
+
+void VkRenderState::SetTextureMatrix(const VSMatrix& matrix)
+{
+	mMatrices.TextureMatrix = matrix;
+	mMatricesChanged = true;
 	mNeedApply = true;
 }
 
 int VkRenderState::UploadLights(const FDynLightData& data)
 {
-	auto buffers = fb->GetBufferManager();
-
 	// All meaasurements here are in vec4's.
 	int size0 = data.arrays[0].Size() / 4;
 	int size1 = data.arrays[1].Size() / 4;
 	int size2 = data.arrays[2].Size() / 4;
 	int totalsize = size0 + size1 + size2 + 1;
 
-	if (totalsize > buffers->Lightbuffer.Count)
+	// Clamp lights so they aren't bigger than what fits into a single dynamic uniform buffer page
+	if (totalsize > MAX_LIGHT_DATA)
 	{
-		int diff = totalsize - buffers->Lightbuffer.Count;
+		int diff = totalsize - MAX_LIGHT_DATA;
 
 		size2 -= diff;
 		if (size2 < 0)
@@ -531,17 +593,22 @@ int VkRenderState::UploadLights(const FDynLightData& data)
 		totalsize = size0 + size1 + size2 + 1;
 	}
 
-	if (totalsize <= 1) return -1;	// there are no lights
+	// Check if we still have any lights
+	if (totalsize <= 1)
+		return -1;
 
-	int thisindex = buffers->Lightbuffer.UploadIndex;
-	buffers->Lightbuffer.UploadIndex += totalsize;
+	// Make sure the light list doesn't cross a page boundary
+	if (mRSBuffers->Lightbuffer.UploadIndex % MAX_LIGHT_DATA + totalsize > MAX_LIGHT_DATA)
+		mRSBuffers->Lightbuffer.UploadIndex = (mRSBuffers->Lightbuffer.UploadIndex / MAX_LIGHT_DATA + 1) * MAX_LIGHT_DATA;
 
-	float parmcnt[] = { 0, float(size0), float(size0 + size1), float(size0 + size1 + size2) };
-
-	if (thisindex + totalsize <= buffers->Lightbuffer.Count)
+	int thisindex = mRSBuffers->Lightbuffer.UploadIndex;
+	if (thisindex + totalsize <= mRSBuffers->Lightbuffer.Count)
 	{
-		float* copyptr = (float*)buffers->Lightbuffer.SSO->Memory() + thisindex * 4;
+		mRSBuffers->Lightbuffer.UploadIndex += totalsize;
 
+		float parmcnt[] = { 0, float(size0), float(size0 + size1), float(size0 + size1 + size2) };
+
+		float* copyptr = (float*)mRSBuffers->Lightbuffer.Data + thisindex * 4;
 		memcpy(&copyptr[0], parmcnt, sizeof(FVector4));
 		memcpy(&copyptr[4], &data.arrays[0][0], size0 * sizeof(FVector4));
 		memcpy(&copyptr[4 + 4 * size0], &data.arrays[1][0], size1 * sizeof(FVector4));
@@ -556,20 +623,18 @@ int VkRenderState::UploadLights(const FDynLightData& data)
 
 int VkRenderState::UploadBones(const TArray<VSMatrix>& bones)
 {
-	auto buffers = fb->GetBufferManager();
-
 	int totalsize = bones.Size();
 	if (bones.Size() == 0)
 	{
 		return -1;
 	}
 
-	int thisindex = buffers->Bonebuffer.UploadIndex;
-	buffers->Bonebuffer.UploadIndex += totalsize;
+	int thisindex = mRSBuffers->Bonebuffer.UploadIndex;
+	mRSBuffers->Bonebuffer.UploadIndex += totalsize;
 
-	if (thisindex + totalsize <= buffers->Bonebuffer.Count)
+	if (thisindex + totalsize <= mRSBuffers->Bonebuffer.Count)
 	{
-		memcpy((VSMatrix*)buffers->Bonebuffer.SSO->Memory() + thisindex, bones.Data(), bones.Size() * sizeof(VSMatrix));
+		memcpy((VSMatrix*)mRSBuffers->Bonebuffer.Data + thisindex, bones.Data(), bones.Size() * sizeof(VSMatrix));
 		return thisindex;
 	}
 	else
@@ -578,13 +643,75 @@ int VkRenderState::UploadBones(const TArray<VSMatrix>& bones)
 	}
 }
 
+std::pair<FFlatVertex*, unsigned int> VkRenderState::AllocVertices(unsigned int count)
+{
+	unsigned int index = mRSBuffers->Flatbuffer.CurIndex;
+	if (index + count >= mRSBuffers->Flatbuffer.BUFFER_SIZE_TO_USE)
+	{
+		// If a single scene needs 2'000'000 vertices there must be something very wrong. 
+		I_FatalError("Out of vertex memory. Tried to allocate more than %u vertices for a single frame", index + count);
+	}
+	mRSBuffers->Flatbuffer.CurIndex += count;
+	return std::make_pair(mRSBuffers->Flatbuffer.Vertices + index, index);
+}
+
+void VkRenderState::SetShadowData(const TArray<FFlatVertex>& vertices, const TArray<uint32_t>& indexes)
+{
+	auto commands = fb->GetCommands();
+
+	UpdateShadowData(0, vertices.Data(), vertices.Size());
+	mRSBuffers->Flatbuffer.ShadowDataSize = vertices.Size();
+	mRSBuffers->Flatbuffer.CurIndex = mRSBuffers->Flatbuffer.ShadowDataSize;
+
+	if (indexes.Size() > 0)
+	{
+		size_t bufsize = indexes.Size() * sizeof(uint32_t);
+
+		auto buffer = BufferBuilder()
+			.Usage(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY)
+			.Size(bufsize)
+			.DebugName("Flatbuffer.IndexBuffer")
+			.Create(fb->GetDevice());
+
+		auto staging = BufferBuilder()
+			.Usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY)
+			.Size(bufsize)
+			.DebugName("Flatbuffer.IndexBuffer.Staging")
+			.Create(fb->GetDevice());
+
+		void* dst = staging->Map(0, bufsize);
+		memcpy(dst, indexes.Data(), bufsize);
+		staging->Unmap();
+
+		commands->GetTransferCommands()->copyBuffer(staging.get(), buffer.get());
+		commands->TransferDeleteList->Add(std::move(staging));
+
+		commands->DrawDeleteList->Add(std::move(mRSBuffers->Flatbuffer.IndexBuffer));
+		mRSBuffers->Flatbuffer.IndexBuffer = std::move(buffer);
+
+		mIndexBufferNeedsBind = true;
+		mNeedApply = true;
+	}
+}
+
+void VkRenderState::UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count)
+{
+	memcpy(mRSBuffers->Flatbuffer.Vertices + index, vertices, count * sizeof(FFlatVertex));
+}
+
+void VkRenderState::ResetVertices()
+{
+	mRSBuffers->Flatbuffer.CurIndex = mRSBuffers->Flatbuffer.ShadowDataSize;
+}
+
 void VkRenderState::BeginFrame()
 {
 	mMaterial.Reset();
 	mApplyCount = 0;
-	fb->GetBufferManager()->Viewpoint.UploadIndex = 0;
-	fb->GetBufferManager()->Lightbuffer.UploadIndex = 0;
-	fb->GetBufferManager()->Bonebuffer.UploadIndex = 0;
+
+	mRSBuffers->Viewpoint.UploadIndex = 0;
+	mRSBuffers->Lightbuffer.UploadIndex = 0;
+	mRSBuffers->Bonebuffer.UploadIndex = 0;
 }
 
 void VkRenderState::EndRenderPass()
@@ -593,14 +720,18 @@ void VkRenderState::EndRenderPass()
 	{
 		mCommandBuffer->endRenderPass();
 		mCommandBuffer = nullptr;
-		mPipelineKey = {};
-
-		mLastViewpointOffset = 0xffffffff;
-		mLastVertexBuffer = nullptr;
-		mLastIndexBuffer = nullptr;
-		mLastModelMatrixEnabled = true;
-		mLastTextureMatrixEnabled = true;
 	}
+
+	if (mThreadCommandBuffer)
+	{
+		fb->GetCommands()->EndThreadCommands(std::move(mThreadCommandBuffer));
+	}
+
+	// Force rebind of everything on next draw
+	mPipelineKey = {};
+	mLastViewpointOffset = 0xffffffff;
+	mLastVertexOffsets[0] = 0xffffffff;
+	mIndexBufferNeedsBind = true;
 }
 
 void VkRenderState::EndFrame()
@@ -638,7 +769,7 @@ void VkRenderState::BeginRenderPass(VulkanCommandBuffer *cmdbuffer)
 	key.DrawBuffers = mRenderTarget.DrawBuffers;
 	key.DepthStencil = !!mRenderTarget.DepthStencil;
 
-	mPassSetup = fb->GetRenderPassManager()->GetRenderPass(key);
+	mPassSetup = GetRenderPass(key);
 
 	auto &framebuffer = mRenderTarget.Image->RSFramebuffers[key];
 	if (!framebuffer)
@@ -676,6 +807,55 @@ void VkRenderState::BeginRenderPass(VulkanCommandBuffer *cmdbuffer)
 
 	mMaterial.mChanged = true;
 	mClearTargets = 0;
+}
+
+VkThreadRenderPassSetup* VkRenderState::GetRenderPass(const VkRenderPassKey& key)
+{
+	auto& item = mRenderPassSetups[key];
+	if (!item)
+		item.reset(new VkThreadRenderPassSetup(fb, key));
+	return item.get();
+}
+
+VulkanPipelineLayout* VkRenderState::GetPipelineLayout(int numLayers)
+{
+	if (mPipelineLayouts.size() <= (size_t)numLayers)
+		mPipelineLayouts.resize(numLayers + 1);
+
+	auto& layout = mPipelineLayouts[numLayers];
+	if (layout)
+		return layout;
+
+	std::unique_lock<std::mutex> lock(fb->ThreadMutex);
+	layout = fb->GetRenderPassManager()->GetPipelineLayout(numLayers);
+	return layout;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+VkThreadRenderPassSetup::VkThreadRenderPassSetup(VulkanRenderDevice* fb, const VkRenderPassKey& key) : PassKey(key), fb(fb)
+{
+}
+
+VulkanRenderPass* VkThreadRenderPassSetup::GetRenderPass(int clearTargets)
+{
+	if (RenderPasses[clearTargets])
+		return RenderPasses[clearTargets];
+
+	std::unique_lock<std::mutex> lock(fb->ThreadMutex);
+	RenderPasses[clearTargets] = fb->GetRenderPassManager()->GetRenderPass(PassKey)->GetRenderPass(clearTargets);
+	return RenderPasses[clearTargets];
+}
+
+VulkanPipeline* VkThreadRenderPassSetup::GetPipeline(const VkPipelineKey& key)
+{
+	auto& item = Pipelines[key];
+	if (item)
+		return item;
+
+	std::unique_lock<std::mutex> lock(fb->ThreadMutex);
+	item = fb->GetRenderPassManager()->GetRenderPass(PassKey)->GetPipeline(key);
+	return item;
 }
 
 /////////////////////////////////////////////////////////////////////////////
