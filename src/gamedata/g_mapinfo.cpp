@@ -250,6 +250,7 @@ void level_info_t::Reset()
 	else
 		flags2 = LEVEL2_LAXMONSTERACTIVATION;
 	flags3 = 0;
+	flags9 = 0;
 	flags666 = 0; // [Disdain]
 	Music = "";
 	LevelName = "";
@@ -1800,6 +1801,7 @@ MapFlagHandlers[] =
 	{ "forceworldpanning",				MITYPE_SETFLAG3,	LEVEL3_FORCEWORLDPANNING, 0 },
 	{ "nousersave",						MITYPE_SETFLAG9,	LEVEL9_NOUSERSAVE, 0 },
 	{ "noautomap",						MITYPE_SETFLAG9,	LEVEL9_NOAUTOMAP, 0 },
+	{ "noautosaveonenter",				MITYPE_SETFLAG9,	LEVEL9_NOAUTOSAVEONENTER, 0 },
 	{ "nomaptitle",						MITYPE_SETFLAG666,	LEVEL666_NOMAPTITLE, 0 }, // [Disdain]
 	{ "propermonsterfallingdamage",		MITYPE_SETFLAG3,	LEVEL3_PROPERMONSTERFALLINGDAMAGE, 0 },
 	{ "disableshadowmap",				MITYPE_SETFLAG3,	LEVEL3_NOSHADOWMAP, 0 },

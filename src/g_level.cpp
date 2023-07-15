@@ -1425,6 +1425,10 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	{
 		flags2 |= LEVEL2_PRERAISEWEAPON;
 	}
+	if (changeflags & CHANGELEVEL_NOAUTOSAVE)
+	{
+		flags9 |= LEVEL9_NOAUTOSAVEONENTER;
+	}
 
 	maptime = 0;
 
@@ -1508,6 +1512,12 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	localEventManager->WorldLoaded();
 	DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
 	
+
+	// [Nash] allow modder control of autosaving
+	if (flags9 & LEVEL9_NOAUTOSAVEONENTER)
+	{
+		autosave = false;
+	}
 
 	// [RH] Always save the game when entering a new 
 	if (autosave && !savegamerestore && disableautosave < 1)
@@ -1791,6 +1801,7 @@ void FLevelLocals::Init()
 	flags = 0;
 	flags2 = 0;
 	flags3 = 0;
+	flags9 = 0;
 	flags666 = 0;
 	ImpactDecalCount = 0;
 	frozenstate = 0;
@@ -1840,6 +1851,7 @@ void FLevelLocals::Init()
 	flags |= info->flags;
 	flags2 |= info->flags2;
 	flags3 |= info->flags3;
+	flags9 |= info->flags9;
 	flags666 |= info->flags666; // [Disdain]
 	levelnum = info->levelnum;
 	Music = info->Music;

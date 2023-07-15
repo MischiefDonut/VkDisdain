@@ -2788,6 +2788,7 @@ DEFINE_FIELD_X(LevelInfo, level_info_t, sucktime)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags2)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags3)
+DEFINE_FIELD_X(LevelInfo, level_info_t, flags9)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags666) // [Disdain]
 DEFINE_FIELD_X(LevelInfo, level_info_t, Music)
 DEFINE_FIELD_X(LevelInfo, level_info_t, LevelName)

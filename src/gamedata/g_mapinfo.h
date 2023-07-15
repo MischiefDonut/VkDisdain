@@ -275,6 +275,7 @@ enum ELevelFlags : unsigned int
 	// Deliberately skip ahead...
 	LEVEL9_NOUSERSAVE			= 0x00000001,
 	LEVEL9_NOAUTOMAP			= 0x00000002,
+	LEVEL9_NOAUTOSAVEONENTER	= 0x00000004,	// don't make an autosave when entering a map
 
 	// [Disdain]
 	LEVEL666_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
