@@ -969,6 +969,7 @@ void FLevelLocals::Serialize(FSerializer &arc, bool hubload)
 
 	arc("flags", flags)
 		("flags2", flags2)
+		("flags3", flags3)
 		("flags666", flags666) // [Disdain]
 		("fadeto", fadeto)
 		("found_secrets", found_secrets)
