@@ -1839,6 +1839,7 @@ void FLevelLocals::Init()
 	flags |= info->flags;
 	flags2 |= info->flags2;
 	flags3 |= info->flags3;
+	flags666 |= info->flags666; // [Disdain]
 	levelnum = info->levelnum;
 	Music = info->Music;
 	musicorder = info->musicorder;

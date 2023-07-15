@@ -2788,6 +2788,7 @@ DEFINE_FIELD_X(LevelInfo, level_info_t, sucktime)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags2)
 DEFINE_FIELD_X(LevelInfo, level_info_t, flags3)
+DEFINE_FIELD_X(LevelInfo, level_info_t, flags666) // [Disdain]
 DEFINE_FIELD_X(LevelInfo, level_info_t, Music)
 DEFINE_FIELD_X(LevelInfo, level_info_t, LevelName)
 DEFINE_FIELD_X(LevelInfo, level_info_t, AuthorName)
@@ -2878,6 +2879,9 @@ DEFINE_FIELD_BIT(FLevelLocals, flags2, keepfullinventory, LEVEL2_KEEPFULLINVENTO
 DEFINE_FIELD_BIT(FLevelLocals, flags3, removeitems, LEVEL3_REMOVEITEMS)
 DEFINE_FIELD_BIT(FLevelLocals, flags9, nousersave, LEVEL9_NOUSERSAVE)
 DEFINE_FIELD_BIT(FLevelLocals, flags9, noautomap, LEVEL9_NOAUTOMAP)
+
+// [Disdain]
+DEFINE_FIELD_BIT(FLevelLocals, flags666, nomaptitle, LEVEL666_NOMAPTITLE)
 
 DEFINE_FIELD_X(Sector, sector_t, floorplane)
 DEFINE_FIELD_X(Sector, sector_t, ceilingplane)

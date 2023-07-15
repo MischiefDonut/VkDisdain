@@ -275,6 +275,9 @@ enum ELevelFlags : unsigned int
 	// Deliberately skip ahead...
 	LEVEL9_NOUSERSAVE			= 0x00000001,
 	LEVEL9_NOAUTOMAP			= 0x00000002,
+
+	// [Disdain]
+	LEVEL666_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
 };
 
 
@@ -348,6 +351,9 @@ struct level_info_t
 	uint32_t	flags2;
 	uint32_t	flags3;
 	uint32_t	flags9;
+
+	// [Disdain]
+	uint32_t	flags666;
 
 	FString		Music;
 	FString		LevelName;

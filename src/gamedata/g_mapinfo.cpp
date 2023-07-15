@@ -250,6 +250,7 @@ void level_info_t::Reset()
 	else
 		flags2 = LEVEL2_LAXMONSTERACTIVATION;
 	flags3 = 0;
+	flags666 = 0; // [Disdain]
 	Music = "";
 	LevelName = "";
 	AuthorName = "";
@@ -1696,6 +1697,10 @@ enum EMIType
 	MITYPE_SETFLAG9,
 	MITYPE_CLRFLAG9,
 	MITYPE_SCFLAGS9,
+	// [Disdain]
+	MITYPE_SETFLAG666,
+	MITYPE_CLRFLAG666,
+	MITYPE_SCFLAGS666,
 	MITYPE_COMPATFLAG,
 };
 
@@ -1795,6 +1800,7 @@ MapFlagHandlers[] =
 	{ "forceworldpanning",				MITYPE_SETFLAG3,	LEVEL3_FORCEWORLDPANNING, 0 },
 	{ "nousersave",						MITYPE_SETFLAG9,	LEVEL9_NOUSERSAVE, 0 },
 	{ "noautomap",						MITYPE_SETFLAG9,	LEVEL9_NOAUTOMAP, 0 },
+	{ "nomaptitle",						MITYPE_SETFLAG666,	LEVEL666_NOMAPTITLE, 0 }, // [Disdain]
 	{ "propermonsterfallingdamage",		MITYPE_SETFLAG3,	LEVEL3_PROPERMONSTERFALLINGDAMAGE, 0 },
 	{ "disableshadowmap",				MITYPE_SETFLAG3,	LEVEL3_NOSHADOWMAP, 0 },
 	{ "enableshadowmap",				MITYPE_CLRFLAG3,	LEVEL3_NOSHADOWMAP, 0 },
@@ -1975,6 +1981,32 @@ void FMapInfoParser::ParseMapDefinition(level_info_t &info)
 
 			case MITYPE_SCFLAGS9:
 				info.flags9 = (info.flags9 & handler->data2) | handler->data1;
+				break;
+
+			// [Disdain]
+			case MITYPE_SETFLAG666:
+				if (!CheckAssign())
+				{
+					info.flags666 |= handler->data1;
+				}
+				else
+				{
+					sc.MustGetNumber();
+					if (sc.Number) info.flags666 |= handler->data1;
+					else info.flags666 &= ~handler->data1;
+				}
+				info.flags666 |= handler->data2;
+				break;
+
+			// [Disdain]
+			case MITYPE_CLRFLAG666:
+				info.flags666 &= ~handler->data1;
+				info.flags666 |= handler->data2;
+				break;
+
+			// [Disdain]
+			case MITYPE_SCFLAGS666:
+				info.flags666 = (info.flags666 & handler->data2) | handler->data1;
 				break;
 
 			case MITYPE_COMPATFLAG:
