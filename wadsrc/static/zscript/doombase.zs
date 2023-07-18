@@ -137,6 +137,8 @@ extend class Object
 	native static void MarkSound(Sound snd);
 	native static uint BAM(double angle);
 	native static void SetMusicVolume(float vol);
+
+	// [Disdain]
 	native static String GetVersionString();
 }
 

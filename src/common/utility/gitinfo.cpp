@@ -65,6 +65,7 @@ const char *GetVersionString()
 	}
 }
 
+// [Disdain]
 DEFINE_ACTION_FUNCTION(DObject, GetVersionString)
 {
 	PARAM_PROLOGUE;
