@@ -111,5 +111,7 @@ void RunIntermission(level_info_t* oldlevel, level_info_t* newlevel, DIntermissi
 extern const AActor *SendItemUse, *SendItemDrop;
 extern int SendItemDropAmount;
 
+// [Disdain]
+void DoSetTimescale(double f);
 
 #endif

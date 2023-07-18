@@ -218,6 +218,13 @@ static const char* iwad_folders[] = { "flats/", "textures/", "hires/", "sprites/
 	"materials/", "models/", "fonts/", "brightmaps/"};
 static const char* iwad_reserved[] = { "mapinfo", "zmapinfo", "umapinfo", "gameinfo", "sndinfo", "sndseq", "sbarinfo", "menudef", "gldefs", "animdefs", "decorate", "zscript", "iwadinfo", "maps/" };
 
+// [Disdain]
+void DoSetTimescale(double f)
+{
+	I_FreezeTime(true);
+	TimeScale = f;
+	I_FreezeTime(false);
+}
 
 CUSTOM_CVAR(Float, i_timescale, 1.0f, CVAR_NOINITCALL | CVAR_VIRTUAL)
 {
@@ -228,9 +235,8 @@ CUSTOM_CVAR(Float, i_timescale, 1.0f, CVAR_NOINITCALL | CVAR_VIRTUAL)
 	}
 	else if (self >= 0.05f)
 	{
-		I_FreezeTime(true);
-		TimeScale = self;
-		I_FreezeTime(false);
+		// [Disdain]
+		DoSetTimescale((double)self);
 	}
 	else
 	{
@@ -238,6 +244,13 @@ CUSTOM_CVAR(Float, i_timescale, 1.0f, CVAR_NOINITCALL | CVAR_VIRTUAL)
 	}
 }
 
+DEFINE_ACTION_FUNCTION(DObject, SetTimescale)
+{
+	PARAM_PROLOGUE;
+	PARAM_FLOAT(f);
+	DoSetTimescale((double)f);
+	return 0;
+}
 
 // PUBLIC DATA DEFINITIONS -------------------------------------------------
 
