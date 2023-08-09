@@ -107,8 +107,8 @@ const char *GetVersionString();
 #define GAMENAME "Disdain"
 #define WGAMENAME L"Disdain"
 #define GAMENAMELOWERCASE "disdain"
-//#define FORUM_URL "http://forum.zdoom.org/"
-//#define BUGS_FORUM_URL	"http://forum.zdoom.org/viewforum.php?f=2"
+#define FORUM_URL "http://disdainfps.com/"
+#define BUGS_FORUM_URL	"http://forum.disdainfps.com/"
 
 #if defined(__APPLE__) || defined(_WIN32)
 #define GAME_DIR GAMENAME
@@ -124,6 +124,6 @@ const int VID_MIN_WIDTH = 320;
 const int VID_MIN_HEIGHT = 200;
 
 // [Disdain]
-#define DISDAINVERSION "11"
+#define DISDAINVERSION "12"
 
 #endif //__VERSION_H__
