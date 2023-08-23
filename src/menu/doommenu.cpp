@@ -251,7 +251,7 @@ bool M_SetSpecialMenu(FName& menu, int param)
 			return false;
 		}
 
-		if ((primaryLevel->flags9 & LEVEL9_NOUSERSAVE))
+		if ((primaryLevel->vkdflags & VKDLEVELFLAG_NOUSERSAVE))
 		{
 			M_StartMessage(GStrings("SAVEDEAD"), 1);
 			return false;
@@ -470,7 +470,7 @@ CCMD (quicksave)
 		return;
 	}
 
-	if ((primaryLevel->flags9 & LEVEL9_NOUSERSAVE))
+	if ((primaryLevel->vkdflags & VKDLEVELFLAG_NOUSERSAVE))
 		return;
 
 	if (gamestate != GS_LEVEL)
