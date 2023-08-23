@@ -611,7 +611,7 @@ public:
 	uint32_t		vkdflags;
 
 	// [Disdain]
-	uint32_t		flags666;
+	uint32_t		disflags;
 
 	uint32_t		fadeto;					// The color the palette fades to (usually black)
 	uint32_t		outsidefog;				// The fog for sectors with sky ceilings

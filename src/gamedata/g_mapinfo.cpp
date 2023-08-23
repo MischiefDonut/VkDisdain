@@ -251,7 +251,7 @@ void level_info_t::Reset()
 		flags2 = LEVEL2_LAXMONSTERACTIVATION;
 	flags3 = 0;
 	vkdflags = 0;
-	flags666 = 0; // [Disdain]
+	disflags = 0; // [Disdain]
 	Music = "";
 	LevelName = "";
 	AuthorName = "";
@@ -1702,7 +1702,7 @@ enum EMIType
 	// [Disdain]
 	MITYPE_SETFLAG666,
 	MITYPE_CLRFLAG666,
-	MITYPE_SCFLAGS666,
+	MITYPE_SCDISFLAGS,
 	MITYPE_COMPATFLAG,
 };
 
@@ -1812,7 +1812,7 @@ MapFlagHandlers[] =
 	{ "nousersave",						MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOUSERSAVE, 0 },
 	{ "noautomap",						MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOAUTOMAP, 0 },
 	{ "noautosaveonenter",				MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOAUTOSAVEONENTER, 0 },
-	{ "nomaptitle",						MITYPE_SETFLAG666,	LEVEL666_NOMAPTITLE, 0 }, // [Disdain]
+	{ "nomaptitle",						MITYPE_SETFLAG666,	DISLEVELFLAG_NOMAPTITLE, 0 }, // [Disdain]
 	{ "nobotnodes",						MITYPE_IGNORE,	0, 0 },		// Skulltag option: nobotnodes
 	{ "compat_shorttex",				MITYPE_COMPATFLAG, COMPATF_SHORTTEX, 0 },
 	{ "compat_stairs",					MITYPE_COMPATFLAG, COMPATF_STAIRINDEX, 0 },
@@ -1992,26 +1992,26 @@ void FMapInfoParser::ParseMapDefinition(level_info_t &info)
 			case MITYPE_SETFLAG666:
 				if (!CheckAssign())
 				{
-					info.flags666 |= handler->data1;
+					info.disflags |= handler->data1;
 				}
 				else
 				{
 					sc.MustGetNumber();
-					if (sc.Number) info.flags666 |= handler->data1;
-					else info.flags666 &= ~handler->data1;
+					if (sc.Number) info.disflags |= handler->data1;
+					else info.disflags &= ~handler->data1;
 				}
-				info.flags666 |= handler->data2;
+				info.disflags |= handler->data2;
 				break;
 
 			// [Disdain]
 			case MITYPE_CLRFLAG666:
-				info.flags666 &= ~handler->data1;
-				info.flags666 |= handler->data2;
+				info.disflags &= ~handler->data1;
+				info.disflags |= handler->data2;
 				break;
 
 			// [Disdain]
-			case MITYPE_SCFLAGS666:
-				info.flags666 = (info.flags666 & handler->data2) | handler->data1;
+			case MITYPE_SCDISFLAGS:
+				info.disflags = (info.disflags & handler->data2) | handler->data1;
 				break;
 
 			case MITYPE_COMPATFLAG:
