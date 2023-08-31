@@ -3,6 +3,23 @@
 #include "doom_levelmesh.h"
 #include "g_levellocals.h"
 #include "texturemanager.h"
+#include "playsim/p_lnspec.h"
+
+#include "c_dispatch.h"
+#include "g_levellocals.h"
+
+CCMD(dumplevelmesh)
+{
+	if (level.levelMesh)
+	{
+		level.levelMesh->DumpMesh(FString("levelmesh.obj"));
+		Printf("Level mesh exported.");
+	}
+	else
+	{
+		Printf("No level mesh. Perhaps your level has no lightmap loaded?");
+	}
+}
 
 DoomLevelMesh::DoomLevelMesh(FLevelLocals &doomMap)
 {
@@ -84,6 +101,36 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 	FVector2 dx(v2.X - v1.X, v2.Y - v1.Y);
 	float distance = dx.Length();
 
+	// line_horizont consumes everything
+	if (side->linedef->special == Line_Horizon && front != back)
+	{
+		Surface surf;
+		surf.type = ST_MIDDLEWALL;
+		surf.typeIndex = typeIndex;
+		surf.bSky = front->GetTexture(sector_t::floor) == skyflatnum || front->GetTexture(sector_t::ceiling) == skyflatnum;
+
+		FVector3 verts[4];
+		verts[0].X = verts[2].X = v1.X;
+		verts[0].Y = verts[2].Y = v1.Y;
+		verts[1].X = verts[3].X = v2.X;
+		verts[1].Y = verts[3].Y = v2.Y;
+		verts[0].Z = v1Bottom;
+		verts[1].Z = v2Bottom;
+		verts[2].Z = v1Top;
+		verts[3].Z = v2Top;
+
+		surf.startVertIndex = MeshVertices.Size();
+		surf.numVerts = 4;
+		MeshVertices.Push(verts[0]);
+		MeshVertices.Push(verts[1]);
+		MeshVertices.Push(verts[2]);
+		MeshVertices.Push(verts[3]);
+
+		surf.plane = ToPlane(verts[0], verts[1], verts[2]);
+		Surfaces.Push(surf);
+		return;
+	}
+
 	if (back)
 	{
 		for (unsigned int j = 0; j < front->e->XFloor.ffloors.Size(); j++)
@@ -107,6 +154,7 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 			surf.type = ST_MIDDLEWALL;
 			surf.typeIndex = typeIndex;
 			surf.controlSector = xfloor->model;
+			surf.bSky = false;
 
 			FVector3 verts[4];
 			verts[0].X = verts[2].X = v2.X;
@@ -166,6 +214,7 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 				surf.plane = ToPlane(verts[0], verts[1], verts[2]);
 				surf.type = ST_LOWERWALL;
 				surf.typeIndex = typeIndex;
+				surf.bSky = false;
 				surf.controlSector = nullptr;
 
 				Surfaces.Push(surf);
@@ -218,6 +267,7 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 	if (back == nullptr)
 	{
 		Surface surf;
+		surf.bSky = false;
 
 		FVector3 verts[4];
 		verts[0].X = verts[2].X = v1.X;
@@ -231,6 +281,7 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 
 		surf.startVertIndex = MeshVertices.Size();
 		surf.numVerts = 4;
+		surf.bSky = false;
 		MeshVertices.Push(verts[0]);
 		MeshVertices.Push(verts[1]);
 		MeshVertices.Push(verts[2]);
@@ -248,6 +299,7 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 void DoomLevelMesh::CreateFloorSurface(FLevelLocals &doomMap, subsector_t *sub, sector_t *sector, int typeIndex, bool is3DFloor)
 {
 	Surface surf;
+	surf.bSky = IsSkySector(sector, sector_t::floor);
 
 	if (!is3DFloor)
 	{
@@ -284,7 +336,7 @@ void DoomLevelMesh::CreateFloorSurface(FLevelLocals &doomMap, subsector_t *sub, 
 void DoomLevelMesh::CreateCeilingSurface(FLevelLocals &doomMap, subsector_t *sub, sector_t *sector, int typeIndex, bool is3DFloor)
 {
 	Surface surf;
-	surf.bSky = IsSkySector(sector);
+	surf.bSky = IsSkySector(sector, sector_t::ceiling);
 
 	if (!is3DFloor)
 	{
@@ -346,7 +398,7 @@ void DoomLevelMesh::CreateSubsectorSurfaces(FLevelLocals &doomMap)
 
 bool DoomLevelMesh::IsTopSideSky(sector_t* frontsector, sector_t* backsector, side_t* side)
 {
-	return IsSkySector(frontsector) && IsSkySector(backsector);
+	return IsSkySector(frontsector, sector_t::ceiling) && IsSkySector(backsector, sector_t::ceiling);
 }
 
 bool DoomLevelMesh::IsTopSideVisible(side_t* side)
@@ -361,9 +413,10 @@ bool DoomLevelMesh::IsBottomSideVisible(side_t* side)
 	return tex && tex->isValid();
 }
 
-bool DoomLevelMesh::IsSkySector(sector_t* sector)
+bool DoomLevelMesh::IsSkySector(sector_t* sector, int plane)
 {
-	return sector->GetTexture(sector_t::ceiling) == skyflatnum;
+	// plane is either sector_t::ceiling or sector_t::floor
+	return sector->GetTexture(plane) == skyflatnum;
 }
 
 bool DoomLevelMesh::IsControlSector(sector_t* sector)
@@ -386,4 +439,27 @@ bool DoomLevelMesh::IsDegenerate(const FVector3 &v0, const FVector3 &v1, const F
 	float crossz = ax * by - ay * bx;
 	float crosslengthsqr = crossx * crossx + crossy * crossy + crossz * crossz;
 	return crosslengthsqr <= 1.e-6f;
+}
+
+void DoomLevelMesh::DumpMesh(const FString& filename) const
+{
+	auto f = fopen(filename.GetChars(), "w");
+
+	fprintf(f, "# DoomLevelMesh debug export\n");
+	fprintf(f, "# MeshVertices: %d, MeshElements: %d\n", MeshVertices.Size(), MeshElements.Size());
+
+	double scale = 1 / 100.0;
+
+	for (const auto& v : MeshVertices)
+	{
+		fprintf(f, "v %f %f %f\n", v.X * scale, v.Y * scale, v.Z * scale);
+	}
+
+	const auto s = MeshElements.Size();
+	for (auto i = 0; i + 2 < s; i += 3)
+	{
+		fprintf(f, "f %d %d %d\n", MeshElements[i] + 1, MeshElements[i + 1] + 1, MeshElements[i + 2] + 1);
+	}
+
+	fclose(f);
 }

@@ -207,8 +207,7 @@ enum ActorFlag2
 										// but still considered solid
 	MF2_INVULNERABLE	= 0x08000000,	// mobj is invulnerable
 	MF2_DORMANT			= 0x10000000,	// thing is dormant
-	MF2_ARGSDEFINED		= 0x20000000,	// Internal flag used by DECORATE to signal that the 
-										// args should not be taken from the mapthing definition
+	MF2_ARGSDEFINED		= 0x20000000,	// Internal flag used by DECORATE to signal that the args should not be taken from the mapthing definition
 	MF2_SEEKERMISSILE	= 0x40000000,	// is a seeker (for reflection)
 	MF2_REFLECTIVE		= 0x80000000,	// reflects missiles
 };
@@ -395,11 +394,13 @@ enum ActorFlag7
 	MF7_SPRITEANGLE		= 0x02000000,	// [MC] Utilize the SpriteAngle property and lock the rotation to the degrees specified.
 	MF7_SMASHABLE		= 0x04000000,	// dies if hitting the floor.
 	MF7_NOSHIELDREFLECT = 0x08000000,	// will not be reflected by shields.
-	MF7_FORCEZERORADIUSDMG = 0x10000000,	// passes zero radius damage on to P_DamageMobj, this is necessary in some cases where DoSpecialDamage gets overrideen.
+	MF7_FORCEZERORADIUSDMG = 0x10000000,// passes zero radius damage on to P_DamageMobj, this is necessary in some cases where DoSpecialDamage gets overrideen.
 	MF7_NOINFIGHTSPECIES = 0x20000000,	// don't start infights with one's own species.
 	MF7_FORCEINFIGHTING	= 0x40000000,	// overrides a map setting of 'no infighting'.
 	MF7_INCHASE			= 0x80000000,	// [RH] used by A_Chase and A_Look to avoid recursion
 };
+
+// --- mobj.flags8 ---
 enum ActorFlag8
 {
 	MF8_FRIGHTENING		= 0x00000001,	// for those moments when halloween just won't do
@@ -430,15 +431,21 @@ enum ActorFlag8
 	MF8_STAYONLIFT		= 0x02000000,	// MBF AI enhancement.
 	MF8_DONTFOLLOWPLAYERS	= 0x04000000,	// [inkoalawetrust] Friendly monster will not follow players.
 	MF8_SEEFRIENDLYMONSTERS	= 0X08000000,	// [inkoalawetrust] Hostile monster can see friendly monsters.
-	MF8_CROSSLINECHECK	= 0x10000000,	// [MC]Enables CanCrossLine virtual
+	MF8_CROSSLINECHECK	= 0x10000000,	// [MC] Enables CanCrossLine virtual
 	MF8_MASTERNOSEE		= 0x20000000,	// Don't show object in first person if their master is the current camera.
 	MF8_ADDLIGHTLEVEL	= 0x40000000,	// [MC] Actor light level is additive with sector.
 	MF8_ONLYSLAMSOLID	= 0x80000000,	// [B] Things with skullfly will ignore non-solid Actors.
 };
+
+// --- mobj.flags9 ---
 enum ActorFlag9
 {
-	MF9_SWIM			= 0x00000001, // Don't leave liquids when traversing
-	MF9_GLIDESONWALLS	= 0x00000002, // If the difference between the move and wall angle is small enough, glide along it instead of stopping.
+	MF9_SHADOWAIM = 0x00000001,	// [inkoalawetrust] Monster still gets aim penalty from aiming at shadow actors even with MF6_SEEINVISIBLE on.
+	MF9_DOSHADOWBLOCK = 0x00000002,	// [inkoalawetrust] Should the monster look for SHADOWBLOCK actors ?
+	MF9_SHADOWBLOCK = 0x00000004,	// [inkoalawetrust] Actors in the line of fire with this flag trigger the MF_SHADOW aiming penalty.
+	MF9_SHADOWAIMVERT = 0x00000008,	// [inkoalawetrust] Monster aim is also offset vertically when aiming at shadow actors.
+	MF9_SWIM = 0x00000010,			// [Disdain] Don't leave liquids when traversing
+	MF9_GLIDESONWALLS = 0x00000020,	// [Disdain] If the difference between the move and wall angle is small enough, glide along it instead of stopping.
 };
 
 // --- mobj.renderflags ---
@@ -847,6 +854,11 @@ public:
 	// (virtual on the script side only)
 	int SpecialMissileHit (AActor *victim);
 
+	// Called when bouncing to allow for custom behavior.
+	// Returns -1 for normal behavior, 0 to stop, and 1 to keep going.
+	// (virtual on the script side only)
+	int SpecialBounceHit(AActor* bounceMobj, line_t* bounceLine, secplane_t* bouncePlane);
+
 	// Returns true if it's okay to switch target to "other" after being attacked by it.
 	bool CallOkayToSwitchTarget(AActor *other);
 	bool OkayToSwitchTarget (AActor *other);
@@ -1089,7 +1101,7 @@ public:
 	ActorFlags6		flags6;			// Shit! Where did all the flags go?
 	ActorFlags7		flags7;			// WHO WANTS TO BET ON 8!?
 	ActorFlags8		flags8;			// I see your 8, and raise you a bet for 9.
-	ActorFlags9		flags9;
+	ActorFlags9		flags9;			// Happy ninth actor flag field GZDoom !
 	double			Floorclip;		// value to use for floor clipping
 	double			radius, Height;		// for movement checking
 
@@ -1172,7 +1184,7 @@ public:
 	TObjPtr<AActor*>	LastLookActor;	// Actor last looked for (if TIDtoHate != 0)
 	DVector3		SpawnPoint; 	// For nightmare respawn
 	int				StartHealth;
-	int				PrevSpawnHealth; // For tracking health scaling in co-op
+	int				PrevSpawnHealth; // [Disdain] For tracking health scaling in co-op
 	uint8_t			WeaveIndexXY;	// Separated from special2 because it's used by globally accessible functions.
 	uint8_t			WeaveIndexZ;
 	uint16_t		skillrespawncount;
@@ -1192,7 +1204,7 @@ public:
 	TObjPtr<AActor*> goal;			// Monster's goal if not chasing anything
 	int				waterlevel;		// 0=none, 1=feet, 2=waist, 3=eyes
 	double			waterdepth;		// Stores how deep into water you are, in map units
-	double			watertop, waterbottom; // Stores the z positions of the water surfaces
+	double			watertop, waterbottom; // [Disdain] Stores the z positions of the water surfaces
 	uint8_t			boomwaterlevel;	// splash information for non-swimmable water sectors
 	uint8_t			MinMissileChance;// [RH] If a random # is > than this, then missile attack.
 	int8_t			LastLookPlayerNumber;// Player number last looked for (if TIDtoHate == 0)
@@ -1208,6 +1220,8 @@ public:
 	double			Gravity;		// [GRB] Gravity factor
 	double			Friction;
 	double			pushfactor;
+	double			ShadowAimFactor;	// [inkoalawetrust] How much the actors' aim is affected when attacking shadow actors. 
+	double			ShadowPenaltyFactor;// [inkoalawetrust] How much the shadow actor affects its' shooters' aim.
 	int				bouncecount;	// Strife's grenades only bounce twice before exploding
 	int 			FastChaseStrafeCount;
 	int				lastpush;
@@ -1220,6 +1234,7 @@ public:
 
 	AActor			*BlockingMobj;	// Actor that blocked the last move
 	line_t			*BlockingLine;	// Line that blocked the last move
+	line_t			*MovementBlockingLine; // Line that stopped the Actor's movement in P_XYMovement
 	sector_t		*Blocking3DFloor;	// 3D floor that blocked the last move (if any)
 	sector_t		*BlockingCeiling;	// Sector that blocked the last move (ceiling plane slope)
 	sector_t		*BlockingFloor;		// Sector that blocked the last move (floor plane slope)
@@ -1269,14 +1284,14 @@ public:
 	double MaxDropOffHeight;
 	double MaxStepHeight;
 	double MaxSlopeSteepness;
-	double MaxWallGlideAngle; // cos(angle) between wall and movement direction.
+	double MaxWallGlideAngle; // [Disdain] cos(angle) between wall and movement direction.
 
 	int32_t Mass;
 	int16_t PainChance;
 	int PainThreshold;
-	int MaxPain;
-	int PainAmount;
-	int PainAccumulation;
+	int MaxPain;			// [Disdain]
+	int PainAmount;			// [Disdain]
+	int PainAccumulation;	// [Disdain]
 	FName DamageType;
 	FName DamageTypeReceived;
 	double DamageFactor;
