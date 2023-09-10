@@ -373,7 +373,8 @@ void V_DrawBlend(sector_t* viewsector)
 		Dim(twod, modulateColor, 1, 0, 0, drawer->GetWidth(), drawer->GetHeight(), &LegacyRenderStyles[STYLE_Multiply]);
 	}
 
+	// [Disdain] use additive blending
 	const PalEntry bcolor(255, uint8_t(blend.X), uint8_t(blend.Y), uint8_t(blend.Z));
-	Dim(drawer, bcolor, blend.W, 0, 0, drawer->GetWidth(), drawer->GetHeight());
+	Dim(drawer, bcolor, blend.W, 0, 0, drawer->GetWidth(), drawer->GetHeight(), &LegacyRenderStyles[STYLE_Add]);
 }
 
