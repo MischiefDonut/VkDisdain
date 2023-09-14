@@ -750,6 +750,8 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/textures/vk_texture.cpp
 	common/rendering/vulkan/framebuffers/vk_framebuffer.cpp
 	common/rendering/vulkan/accelstructs/vk_raytrace.cpp
+	common/rendering/vulkan/accelstructs/vk_lightmap.cpp
+	common/rendering/vulkan/accelstructs/halffloat.cpp
 )
 
 if (HAVE_VULKAN)
@@ -1051,6 +1053,7 @@ set (PCH_SOURCES
 	common/utility/s_playlist.cpp
 	common/utility/name.cpp
 	common/utility/r_memory.cpp
+	common/utility/bounds.cpp
 	common/thirdparty/base64.cpp
 	common/thirdparty/md5.cpp
  	common/thirdparty/superfasthash.cpp
@@ -1264,6 +1267,7 @@ include_directories(
 	scripting/zscript
 	rendering
 	../libraries/ZVulkan/include
+	../libraries/dp_rect_pack
 	${SYSTEM_SOURCES_DIR}
 )
 
