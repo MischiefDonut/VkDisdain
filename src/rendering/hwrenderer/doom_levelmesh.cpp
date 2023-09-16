@@ -10,29 +10,106 @@
 #include "common/rendering/vulkan/accelstructs/vk_lightmap.h"
 #include <vulkan/accelstructs/halffloat.h>
 
+void PrintMissingLevelMesh() { Printf("No level mesh. Perhaps your level has no lightmap loaded?\n"); }
+void PrintNoLightmap() { Printf("Lightmap is not enabled in this level.\n"); }
+
+#define GET_LEVELMESH() auto* levelMesh = level.levelMesh
+#define REQUIRE_LEVELMESH(returnValue) GET_LEVELMESH(); do { if(!levelMesh) { PrintMissingLevelMesh(); return returnValue ; } } while(false)
+#define REQUIRE_LIGHTMAP(returnValue) REQUIRE_LEVELMESH(returnValue); do { if(!level.lightmaps) { PrintNoLightmap(); return returnValue ; } } while(false)
+
+ADD_STAT(lightmap)
+{
+	FString out;
+	GET_LEVELMESH();
+
+	if (!levelMesh || !level.lightmaps)
+	{
+		out.Format("No lightmap");
+		return out;
+	}
+
+	uint32_t atlasPixelCount = levelMesh->AtlasPixelCount();
+	auto stats = levelMesh->GatherSurfacePixelStats();
+
+	out.Format("Surfaces: %u (sky: %u, awaiting updates: %u)\nSurface pixel area to update: %u\nSurface pixel area: %u\nAtlas pixel area:   %u\nAtlas efficiency: %.4f%%",
+		stats.surfaces.total, stats.surfaces.sky, std::max(stats.surfaces.dirty - stats.surfaces.sky, (uint32_t)0),
+		stats.pixels.dirty,
+		stats.pixels.total,
+		atlasPixelCount,
+		float(stats.pixels.total) / float(atlasPixelCount) * 100.0f );
+
+	return out;
+}
+
 CCMD(dumplevelmesh)
 {
-	if (level.levelMesh)
-	{
-		level.levelMesh->DumpMesh(FString("levelmesh.obj"), FString("levelmesh.mtl"));
-		Printf("Level mesh exported.");
-	}
-	else
-	{
-		Printf("No level mesh. Perhaps your level has no lightmap loaded?");
-	}
+	REQUIRE_LEVELMESH();
+	levelMesh->DumpMesh(FString("levelmesh.obj"), FString("levelmesh.mtl"));
+	Printf("Level mesh exported.\n");
 }
 
 CCMD(invalidatelightmap)
 {
+	REQUIRE_LIGHTMAP();
+
 	int count = 0;
-	for (auto& surface : level.levelMesh->Surfaces)
+	for (auto& surface : levelMesh->Surfaces)
 	{
 		if (!surface.needsUpdate)
 			++count;
 		surface.needsUpdate = true;
 	}
-	Printf("Marked %d out of %d surfaces for update.\n", count, level.levelMesh->Surfaces.Size());
+	Printf("Marked %d out of %d surfaces for update.\n", count, levelMesh->Surfaces.Size());
+}
+
+void PrintSurfaceInfo(const DoomLevelMeshSurface* surface)
+{
+	REQUIRE_LEVELMESH();
+
+	Printf("Surface %d (%p)\n    Type: %d, TypeIndex: %d, ControlSector: %d\n", levelMesh->GetSurfaceIndex(surface), surface, surface->Type, surface->typeIndex, surface->ControlSector ? surface->ControlSector->Index() : -1);
+	Printf("    Atlas page: %d, x:%d, y:%d\n", surface->atlasPageIndex, surface->atlasX, surface->atlasY);
+	Printf("    Pixels: %dx%d (area: %d)\n", surface->texWidth, surface->texHeight, surface->Area());
+	Printf("    Sample dimension: %d\n", surface->sampleDimension);
+	Printf("    Needs update?: %d\n", surface->needsUpdate);
+}
+
+FVector3 RayDir(FAngle angle, FAngle pitch)
+{
+	auto pc = float(pitch.Cos());
+	return FVector3{ pc * float(angle.Cos()), pc * float(angle.Sin()), -float(pitch.Sin()) };
+}
+
+DVector3 RayDir(DAngle angle, DAngle pitch)
+{
+	auto pc = pitch.Cos();
+	return DVector3{ pc * (angle.Cos()), pc * (angle.Sin()), -(pitch.Sin()) };
+}
+
+CCMD(surfaceinfo)
+{
+	REQUIRE_LEVELMESH();
+
+	auto pov = players[consoleplayer].mo;
+	if (!pov)
+	{
+		Printf("players[consoleplayer].mo is null.\n");
+		return;
+	}
+
+	auto posXYZ = FVector3(pov->Pos());
+	posXYZ.Z = float(players[consoleplayer].viewz);
+	auto angle = pov->Angles.Yaw;
+	auto pitch = pov->Angles.Pitch;
+
+	const auto surface = (DoomLevelMeshSurface*)levelMesh->Trace(posXYZ, FVector3(RayDir(angle, pitch)), 32000.0f);
+	if (surface)
+	{
+		PrintSurfaceInfo(surface);
+	}
+	else
+	{
+		Printf("No surface was hit.\n");
+	}
 }
 
 EXTERN_CVAR(Float, lm_scale);
@@ -204,6 +281,7 @@ void DoomLevelMesh::PropagateLight(const LevelMeshLight* light, std::set<LevelMe
 
 		// TODO skip any surface which isn't physically connected to the sector group in which the light resides
 		//if (light-> == surface.sectorGroup)
+		if (IsInFrontOfPlane(surface.plane, light->RelativeOrigin))
 		{
 			if (surface.portalIndex >= 0)
 			{
@@ -323,6 +401,28 @@ void DoomLevelMesh::UpdateLightLists()
 
 void DoomLevelMesh::BindLightmapSurfacesToGeometry(FLevelLocals& doomMap)
 {
+	// You have no idea how long this took me to figure out...
+
+	// Reorder vertices into renderer format
+	for (LevelMeshSurface& surface : Surfaces)
+	{
+		if (surface.Type == ST_FLOOR)
+		{
+			// reverse vertices on floor
+			for (int j = surface.startUvIndex + surface.numVerts - 1, k = surface.startUvIndex; j > k; j--, k++)
+			{
+				std::swap(LightmapUvs[k], LightmapUvs[j]);
+			}
+		}
+		else if (surface.Type != ST_CEILING) // walls
+		{
+			// from 0 1 2 3
+			// to   0 2 1 3
+			std::swap(LightmapUvs[surface.startUvIndex + 1], LightmapUvs[surface.startUvIndex + 2]);
+			std::swap(LightmapUvs[surface.startUvIndex + 2], LightmapUvs[surface.startUvIndex + 3]);
+		}
+	}
+
 	// Allocate room for all surfaces
 
 	unsigned int allSurfaces = 0;
@@ -376,9 +476,16 @@ void DoomLevelMesh::BindLightmapSurfacesToGeometry(FLevelLocals& doomMap)
 	// Runtime helper
 	for (auto& surface : Surfaces)
 	{
-		if ((surface.Type == ST_FLOOR || surface.Type == ST_CEILING) && surface.ControlSector)
+		if (surface.ControlSector)
 		{
-			XFloorToSurface[surface.Subsector->sector].Push(&surface);
+			if (surface.Type == ST_FLOOR || surface.Type == ST_CEILING)
+			{
+				XFloorToSurface[surface.Subsector->sector].Push(&surface);
+			}
+			else if (surface.Type == ST_MIDDLESIDE)
+			{
+				XFloorToSurfaceSides[surface.ControlSector].Push(&surface);
+			}
 		}
 	}
 }
@@ -698,17 +805,18 @@ void DoomLevelMesh::CreateSideSurfaces(FLevelLocals &doomMap, side_t *side)
 void DoomLevelMesh::CreateFloorSurface(FLevelLocals &doomMap, subsector_t *sub, sector_t *sector, sector_t *controlSector, int typeIndex)
 {
 	DoomLevelMeshSurface surf;
-	surf.bSky = IsSkySector(sector, sector_t::floor);
 
 	secplane_t plane;
 	if (!controlSector)
 	{
 		plane = sector->floorplane;
+		surf.bSky = IsSkySector(sector, sector_t::floor);
 	}
 	else
 	{
 		plane = controlSector->ceilingplane;
 		plane.FlipVert();
+		surf.bSky = false;
 	}
 
 	surf.numVerts = sub->numlines;
@@ -738,17 +846,18 @@ void DoomLevelMesh::CreateFloorSurface(FLevelLocals &doomMap, subsector_t *sub, 
 void DoomLevelMesh::CreateCeilingSurface(FLevelLocals& doomMap, subsector_t* sub, sector_t* sector, sector_t* controlSector, int typeIndex)
 {
 	DoomLevelMeshSurface surf;
-	surf.bSky = IsSkySector(sector, sector_t::ceiling);
 
 	secplane_t plane;
 	if (!controlSector)
 	{
 		plane = sector->ceilingplane;
+		surf.bSky = IsSkySector(sector, sector_t::ceiling);
 	}
 	else
 	{
 		plane = controlSector->floorplane;
 		plane.FlipVert();
+		surf.bSky = false;
 	}
 
 	surf.numVerts = sub->numlines;
@@ -970,20 +1079,6 @@ void DoomLevelMesh::SetupLightmapUvs()
 		sortedSurfaces.push_back(&surface);
 	}
 
-	// VkLightmapper old ZDRay properties
-	for (auto& surface : Surfaces)
-	{
-		for (int i = 0; i < surface.numVerts; ++i)
-		{
-			surface.verts.Push(MeshVertices[surface.startVertIndex + i]);
-		}
-
-		for (int i = 0; i < surface.numVerts; ++i)
-		{
-			surface.uvs.Push(LightmapUvs[surface.startUvIndex + i]);
-		}
-	}
-
 	BuildSmoothingGroups();
 
 	std::sort(sortedSurfaces.begin(), sortedSurfaces.end(), [](LevelMeshSurface* a, LevelMeshSurface* b) { return a->texHeight != b->texHeight ? a->texHeight > b->texHeight : a->texWidth > b->texWidth; });
@@ -993,28 +1088,6 @@ void DoomLevelMesh::SetupLightmapUvs()
 	for (LevelMeshSurface* surf : sortedSurfaces)
 	{
 		FinishSurface(LMTextureSize, LMTextureSize, packer, *surf);
-	}
-
-	// You have no idea how long this took me to figure out...
-
-	// Reorder vertices into renderer format
-	for (LevelMeshSurface& surface : Surfaces)
-	{
-		if (surface.Type == ST_FLOOR)
-		{
-			// reverse vertices on floor
-			for (int j = surface.startUvIndex + surface.numVerts - 1, k = surface.startUvIndex; j > k; j--, k++)
-			{
-				std::swap(LightmapUvs[k], LightmapUvs[j]);
-			}
-		}
-		else if (surface.Type != ST_CEILING) // walls
-		{
-			// from 0 1 2 3
-			// to   0 2 1 3
-			std::swap(LightmapUvs[surface.startUvIndex + 1], LightmapUvs[surface.startUvIndex + 2]);
-			std::swap(LightmapUvs[surface.startUvIndex + 2], LightmapUvs[surface.startUvIndex + 3]);
-		}
 	}
 
 	LMTextureCount = (int)packer.getNumPages();

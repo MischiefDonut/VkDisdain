@@ -7,6 +7,7 @@
 #include "bounds.h"
 #include "common/utility/matrix.h"
 #include <memory>
+#include <cstring>
 
 #include <dp_rect_pack.h>
 
@@ -52,6 +53,7 @@ struct LevelMeshSurface
 	int texWidth = 0;
 	int texHeight = 0;
 
+	// True if the surface needs to be rendered into the lightmap texture before it can be used
 	bool needsUpdate = true;
 
 	//
@@ -78,20 +80,18 @@ struct LevelMeshSurface
 	int smoothingGroupIndex = -1;
 
 	//
-	// VkLightmap extra stuff that I dislike:
+	// Utility/Info
 	//
-	TArray<FVector3> verts;
-	TArray<FVector2> uvs;
+	inline uint32_t Area() const { return texWidth * texHeight; }
 
 	// Touching light sources
 	std::vector<const LevelMeshLight*> LightList;
-
-	// Lightmapper has a lot of additional padding around the borders
-	int lightmapperAtlasPage = -1;
-	int lightmapperAtlasX = -1;
-	int lightmapperAtlasY = -1;
 };
 
+inline float IsInFrontOfPlane(const FVector4& plane, const FVector3& point)
+{
+	return (plane.X * point.X + plane.Y * point.Y + plane.Z * point.Z) >= plane.W;
+}
 
 struct LevelMeshSmoothingGroup
 {
@@ -166,6 +166,15 @@ struct IdenticalPortalComparator
 	}
 };
 
+struct LevelMeshSurfaceStats
+{
+	struct Stats
+	{
+		uint32_t total = 0, dirty = 0, sky = 0;
+	};
+
+	Stats surfaces, pixels;
+};
 
 class LevelMesh
 {
@@ -195,10 +204,41 @@ public:
 	TArray<LevelMeshSmoothingGroup> SmoothingGroups;
 	TArray<LevelMeshPortal> Portals;
 
+	// Lightmap atlas
 	int LMTextureCount = 0;
 	int LMTextureSize = 0;
 	TArray<uint16_t> LMTextureData; // TODO better place for this?
 
+	inline uint32_t AtlasPixelCount() const { return uint32_t(LMTextureCount * LMTextureSize * LMTextureSize); }
+	inline LevelMeshSurfaceStats GatherSurfacePixelStats() //const
+	{
+		LevelMeshSurfaceStats stats;
+
+		int count = GetSurfaceCount();
+		for (int i = 0; i < count; ++i)
+		{
+			const auto* surface = GetSurface(i);
+			auto area = surface->Area();
+
+			stats.pixels.total += area;
+
+			if (surface->needsUpdate)
+			{
+				stats.surfaces.dirty++;
+				stats.pixels.dirty += area;
+			}
+			if (surface->bSky)
+			{
+				stats.surfaces.sky++;
+				stats.pixels.sky += area;
+			}
+		}
+
+		stats.surfaces.total = count;
+		return stats;
+	}
+
+	// Map defaults
 	FVector3 SunDirection = FVector3(0.0f, 0.0f, -1.0f);
 	FVector3 SunColor = FVector3(0.0f, 0.0f, 0.0f);
 	uint16_t LightmapSampleDistance = 16;
