@@ -2166,6 +2166,11 @@ void DAutomap::drawSubsectors()
 			colormap.FadeColor = PalEntry(0, 128, 128, 128);
 		}
 
+		// [Disdain] quick hack. Fill the polygon with a hardcoded Disdain-themed color
+		colormap.LightColor = PalEntry(0, 255, 255, 255);
+		colormap.FadeColor = PalEntry(0, 30, 33, 35);
+		colormap.Desaturation = 0;
+
 		// Draw the polygon.
 		if (maptex.isValid())
 		{
@@ -2206,9 +2211,8 @@ void DAutomap::drawSubsectors()
 				fadelevel = 1. - clamp(floorlight, 0, 255) / 255.f;
 			}
 
-			// [Disdain] quick hack. we don't want any kind of colorization due to how most parts of the map will be dark as a result of
-			// the game's baked lighting level design paradigm. just show the texture clearly.
-			fadelevel = 0.;
+			// [Disdain] quick hack for the flat polygon color.
+			fadelevel = 1.;
 
 			twod->AddPoly(TexMan.GetGameTexture(maptex, true),
 				&points[0], points.Size(),
