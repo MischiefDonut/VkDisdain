@@ -419,7 +419,7 @@ void HWDrawInfo::UpdateLightmaps()
 {
 	if (!outer && VisibleSurfaces.Size() < unsigned(lm_background_updates))
 	{
-		for (auto& e : level.levelMesh->Surfaces)
+		for (auto& e : static_cast<DoomLevelSubmesh*>(level.levelMesh->StaticMesh.get())->Surfaces)
 		{
 			if (e.needsUpdate && !e.bSky && !e.portalIndex)
 			{
@@ -430,12 +430,6 @@ void HWDrawInfo::UpdateLightmaps()
 			}
 		}
 	}
-
-	if (lm_always_update) // To do: this is stupid, but it lets us see the move for now!
-	{
-		level.levelMesh->UpdateLightLists();
-	}
-
 	screen->UpdateLightmaps(VisibleSurfaces);
 }
 

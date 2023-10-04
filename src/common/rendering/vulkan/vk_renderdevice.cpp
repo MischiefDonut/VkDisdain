@@ -84,6 +84,11 @@ CUSTOM_CVAR(Int, vk_device, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCAL
 	Printf("This won't take effect until " GAMENAME " is restarted.\n");
 }
 
+CUSTOM_CVAR(Bool, vk_rayquery, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
+{
+	Printf("This won't take effect until " GAMENAME " is restarted.\n");
+}
+
 CCMD(vk_listdevices)
 {
 	for (size_t i = 0; i < SupportedDevices.size(); i++)
@@ -118,11 +123,22 @@ void VulkanPrintLog(const char* typestr, const std::string& msg)
 VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface) : SystemBaseFrameBuffer(hMonitor, fullscreen)
 {
 	VulkanDeviceBuilder builder;
-	builder.OptionalRayQuery();
+	if (vk_rayquery)
+		builder.OptionalRayQuery();
+	builder.RequireExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 	builder.Surface(surface);
 	builder.SelectDevice(vk_device);
 	SupportedDevices = builder.FindDevices(surface->Instance);
 	mDevice = builder.Create(surface->Instance);
+
+	bool supportsBindless =
+		mDevice->EnabledFeatures.DescriptorIndexing.descriptorBindingPartiallyBound &&
+		mDevice->EnabledFeatures.DescriptorIndexing.runtimeDescriptorArray &&
+		mDevice->EnabledFeatures.DescriptorIndexing.shaderSampledImageArrayNonUniformIndexing;
+	if (!supportsBindless)
+	{
+		I_FatalError("This GPU does not support the minimum requirements of this application");
+	}
 }
 
 VulkanRenderDevice::~VulkanRenderDevice()
@@ -470,10 +486,9 @@ void VulkanRenderDevice::BeginFrame()
 		levelMeshChanged = false;
 		mRaytrace->SetLevelMesh(levelMesh);
 
-		if (levelMesh && levelMesh->GetSurfaceCount() > 0)
+		if (levelMesh && levelMesh->StaticMesh->GetSurfaceCount() > 0)
 		{
-			levelMesh->UpdateLightLists();
-			GetTextureManager()->CreateLightmap(levelMesh->LMTextureSize, levelMesh->LMTextureCount, std::move(levelMesh->LMTextureData));
+			GetTextureManager()->CreateLightmap(levelMesh->StaticMesh->LMTextureSize, levelMesh->StaticMesh->LMTextureCount, std::move(levelMesh->StaticMesh->LMTextureData));
 			GetLightmap()->SetLevelMesh(levelMesh);
 		}
 	}
@@ -486,6 +501,7 @@ void VulkanRenderDevice::BeginFrame()
 	for (auto& renderstate : mRenderState)
 		renderstate->BeginFrame();
 	mDescriptorSetManager->BeginFrame();
+	mRaytrace->BeginFrame();
 	mLightmap->BeginFrame();
 }
 
@@ -604,4 +620,13 @@ void VulkanRenderDevice::SetSceneRenderTarget(bool useSSAO)
 	{
 		renderstate->SetRenderTarget(&GetBuffers()->SceneColor, GetBuffers()->SceneDepthStencil.View.get(), GetBuffers()->GetWidth(), GetBuffers()->GetHeight(), VK_FORMAT_R16G16B16A16_SFLOAT, GetBuffers()->GetSceneSamples());
 	}
+}
+
+int VulkanRenderDevice::GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation)
+{
+	FMaterialState materialState;
+	materialState.mMaterial = material;
+	materialState.mClampMode = clampmode;
+	materialState.mTranslation = translation;
+	return static_cast<VkMaterial*>(material)->GetBindlessIndex(materialState);
 }

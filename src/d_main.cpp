@@ -1023,6 +1023,7 @@ void D_Display ()
 	screen->FrameTimeNS = I_nsTime();
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
+	if (level.levelMesh) level.levelMesh->BeginFrame(level);
 	screen->BeginFrame();
 	twod->ClearClipRect();
 	if ((gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL) && gametic != 0)
@@ -3098,7 +3099,7 @@ static int FileSystemPrintf(FSMessageLevel level, const char* fmt, ...)
 		DPrintf(DMSG_NOTIFY, "%s", text.GetChars());
 		break;
 	}
-	return text.Len();
+	return (int)text.Len();
 }
 //==========================================================================
 //
