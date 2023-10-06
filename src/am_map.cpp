@@ -3263,6 +3263,11 @@ void DAutomap::Drawer (int bottom)
 	if (!automapactive)
 		return;
 
+	// [Disdain]
+	if (menuactive > MENU_Off)
+		return;
+	screen->BlurScene(gameinfo.bluramount);
+
 	if (am_followplayer)
 	{
 		doFollowPlayer();
@@ -3308,7 +3313,10 @@ void DAutomap::Drawer (int bottom)
 		f_w = twod->GetWidth ();
 		f_h = bottom;
 
-		clearFB(AMColors[AMColors.Background]);
+		//clearFB(AMColors[AMColors.Background]);
+
+		// [Disdain]
+		Dim(twod, AMColors[AMColors.Background].RGB, gameinfo.bluramount, f_x, f_y, f_w, f_h);
 	}
 	else 
 	{
