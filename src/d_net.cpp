@@ -1822,8 +1822,6 @@ void D_RestartHostMultiplayer(int numplayers, FString map, int ticdup, int port,
 	Args->RemoveArgs("-port");
 	Args->RemoveArgs("-dup");
 	Args->RemoveArgs("-extratic");
-	Args->RemoveArgs("-deathmatch");
-	Args->RemoveArgs("-nomonsters");
 	Args->RemoveArgs("+map");
 
 	FString tmp;
@@ -1876,10 +1874,6 @@ void D_RestartHostMultiplayer(int numplayers, FString map, int ticdup, int port,
 			Args->AppendArg("-altdeath");
 		}
 	}
-	if(flags & MP_NOMONSTERS)
-	{
-		Args->AppendArg("-nomonsters");
-	}
 	wantToRestart = true;
 	restart_multiplayer = true;
 }
@@ -1898,8 +1892,6 @@ void D_RestartJoinMultiplayer(const char * host_addr, int port, FString loadsave
 	Args->RemoveArgs("-port");
 	Args->RemoveArgs("-dup");
 	Args->RemoveArgs("-extratic");
-	Args->RemoveArgs("-deathmatch");
-	Args->RemoveArgs("-nomonsters");
 	Args->RemoveArgs("+map");
 
 	Args->AppendArg("-join");
