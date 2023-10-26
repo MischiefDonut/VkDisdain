@@ -1808,7 +1808,7 @@ void D_QuitNetGame (void)
 extern bool wantToRestart;
 extern bool restart_multiplayer;
 
-void D_RestartHostMultiplayer(int numplayers, const FString &map, int ticdup, int port, int skill, const FString &loadsave, int flags)
+void D_RestartHostMultiplayer(int numplayers, FString map, int ticdup, int port, int skill, FString loadsave, int flags)
 {
 	if(netgame || multiplayer)
 	{
@@ -1884,7 +1884,7 @@ void D_RestartHostMultiplayer(int numplayers, const FString &map, int ticdup, in
 	restart_multiplayer = true;
 }
 
-void D_RestartJoinMultiplayer(const FString &host_addr, int port,const FString &loadsave)
+void D_RestartJoinMultiplayer(const char * host_addr, int port, FString loadsave)
 {
 	if(netgame || multiplayer)
 	{
