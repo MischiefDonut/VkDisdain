@@ -364,9 +364,19 @@ public:
 		return (D + normal.X*pos.X + normal.Y*pos.Y) * negiC;
 	}
 
+	double ZatPoint(const DVector3& pos) const
+	{
+		return (D + normal.X * pos.X + normal.Y * pos.Y) * negiC;
+	}
+
 	double ZatPoint(const FVector2 &pos) const
 	{
 		return (D + normal.X*pos.X + normal.Y*pos.Y) * negiC;
+	}
+
+	double ZatPoint(const FVector3& pos) const
+	{
+		return (D + normal.X * pos.X + normal.Y * pos.Y) * negiC;
 	}
 
 	double ZatPoint(const vertex_t *v) const
@@ -511,6 +521,7 @@ enum
 	SECF_EXIT1			= 4096,
 	SECF_EXIT2			= 8192,
 	SECF_KILLMONSTERS	= 16384,
+	SECF_LM_DYNAMIC		= 32768, // Lightmap needs to be dynamically updated in this sector
 
 	SECF_WASSECRET		= 1 << 30,	// a secret that was discovered
 	SECF_SECRET			= 1 << 31,	// a secret sector
@@ -1190,6 +1201,15 @@ struct side_t
 		walltop = 0,
 		wallbottom = 1,
 	};
+	enum ESkew
+	{
+		skew_none = 0,
+		skew_front_floor = 1,
+		skew_front_ceiling = 2,
+		skew_back_floor = 3,
+		skew_back_ceiling = 4
+	};
+
 	struct part
 	{
 		enum EPartFlags
@@ -1205,7 +1225,8 @@ struct side_t
 		double xScale;
 		double yScale;
 		TObjPtr<DInterpolation*> interpolation;
-		int flags;
+		int16_t flags;
+		int8_t skew;
 		FTextureID texture;
 		TextureManipulation TextureFx;
 		PalEntry SpecialColors[2];

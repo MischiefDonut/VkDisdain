@@ -1069,9 +1069,9 @@ OptionMenu "LightOptions" protected
 	Option "$GLLIGHTMNU_LIGHTSPRITES",			gl_light_sprites,		"YesNo"
 	Option "$GLLIGHTMNU_LIGHTPARTICLES",		gl_light_particles,		"YesNo"
 	StaticText " "
-	Option "$GLLIGHTMNU_LIGHTSHADOWMAP",		gl_light_shadowmap,		"YesNo"
+	Option "$GLLIGHTMNU_LIGHTSHADOWS",			gl_light_shadows,		"ShadowMode"
+	Option "$GLLIGHTMNU_LIGHTSHADOWFILTER", 	gl_light_shadow_filter,	"ShadowFilter"
 	Option "$GLLIGHTMNU_LIGHTSHADOWMAPQUALITY", gl_shadowmap_quality,	"ShadowMapQuality"
-	Option "$GLLIGHTMNU_LIGHTSHADOWMAPFILTER", 	gl_shadowmap_filter,	"ShadowMapFilter"
 	StaticText " "
 	Option "$GLPREFMNU_SWLMBANDED",				gl_bandedswlight,				"OnOff"
 	Option "$GLPREFMNU_FOGFORCEFULLBRIGHT",		gl_brightfog,					"YesNo"
@@ -1590,6 +1590,7 @@ OptionMenu MapColorMenuOverlay protected
 	ColorPicker "$MAPCOLORMNU_INTRALEVELCOLOR",			"am_ovtelecolor"
 	ColorPicker "$MAPCOLORMNU_INTERLEVELCOLOR",			"am_ovinterlevelcolor"
 	ColorPicker "$MAPCOLORMNU_SECRETSECTORCOLOR",		"am_ovsecretsectorcolor"
+	ColorPicker "$MAPCOLORMNU_UNEXPLOREDSECRETCOLOR",	"am_ovunexploredsecretcolor"
 	ColorPicker "$MAPCOLORMNU_SPECIALWALLCOLOR",		"am_ovspecialwallcolor"
 	ColorPicker "$MAPCOLORMNU_PORTAL",					"am_ovportalcolor"
 }
@@ -2388,6 +2389,10 @@ OptionValue MaxFps
 	200, "$OPTVAL_200FPS"
 }
 
+OptionString VKDevices
+{
+	// filled in by the display code
+}
 
 OptionMenu VideoModeMenu protected
 {
@@ -2405,10 +2410,8 @@ OptionMenu VideoModeMenu protected
 
 	StaticText " "
 	Option "$DSPLYMNU_CAPFPS",					"cl_capfps", "OffOn"
-
-
-	StaticText " "
-//	Option "$VKMNU_HDR",				"vk_hdr", "OnOff"
+	Option "$VKMNU_HDR",				"vk_hdr", "OnOff"
+	Option "$VKMNU_DEVICE",		"vk_device",		"VKDevices"
 	
 	StaticText ""
 	StaticText "$VIDMNU_CUSTOMRES"
@@ -2421,10 +2424,6 @@ OptionMenu VideoModeMenu protected
 	StaticText ""
 
 	SubMenu "$VIDMNU_RESPRESET", CustomResolutionMenu
-
-	StaticText ""
-	Option "$VIDMNU_PREFERBACKEND",		"vid_preferbackend", "PreferBackend"
-	TextField "$VKMNU_DEVICE",			vk_device
 }
 
 OptionMenu CustomResolutionMenu protected
@@ -2688,7 +2687,14 @@ OptionValue ShadowMapQuality
 	1024, "1024"
 }
 
-OptionValue ShadowMapFilter
+OptionValue ShadowMode
+{
+	0, "$OPTVAL_NONE"
+	1, "$OPTVAL_SHADOWMAP"
+	2, "$OPTVAL_RAYTRACE"
+}
+
+OptionValue ShadowFilter
 {
 	0, "$OPTVAL_NEAREST"
 	1, "$OPTVAL_PCF_LOW"

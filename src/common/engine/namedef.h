@@ -140,6 +140,7 @@ xx(Max)
 xx(Min_Normal)
 xx(Min_Denormal)
 xx(Epsilon)
+xx(Equal_Epsilon)
 xx(NaN)
 xx(Infinity)
 xx(Dig)
@@ -261,6 +262,8 @@ xx(Color)
 xx(Mididevices)
 xx(Aldevices)
 xx(Alresamplers)
+
+xx(Vkdevices)
 
 // Decorate compatibility functions
 xx(BuiltinRandom)

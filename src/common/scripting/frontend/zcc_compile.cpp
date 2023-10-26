@@ -57,6 +57,13 @@ double GetFloatConst(FxExpression *ex, FCompileContext &ctx)
 	return ex ? static_cast<FxConstant*>(ex)->GetValue().GetFloat() : 0;
 }
 
+VMFunction* GetFuncConst(FxExpression* ex, FCompileContext& ctx)
+{
+	ex = new FxTypeCast(ex, TypeVMFunction, false);
+	ex = ex->Resolve(ctx);
+	return static_cast<VMFunction*>(ex ? static_cast<FxConstant*>(ex)->GetValue().GetPointer() : nullptr);
+}
+
 const char * ZCCCompiler::GetStringConst(FxExpression *ex, FCompileContext &ctx)
 {
 	ex = new FxStringCast(ex);
@@ -452,6 +459,11 @@ void ZCCCompiler::ProcessStruct(ZCC_Struct *cnode, PSymbolTreeNode *treenode, ZC
 			}
 			break;
 
+		case AST_FlagDef:
+			cls->FlagDefs.Push(static_cast<ZCC_FlagDef*>(node));
+			break;
+
+
 		default:
 			assert(0 && "Unhandled AST node type");
 			break;
@@ -662,7 +674,7 @@ void ZCCCompiler::MessageV(ZCC_TreeNode *node, const char *txtcolor, const char 
 	composed.Format("%s%s, line %d: ", txtcolor, node->SourceName->GetChars(), node->SourceLoc);
 	composed.VAppendFormat(msg, argptr);
 	composed += '\n';
-	PrintString(PRINT_HIGH, composed);
+	PrintString(PRINT_HIGH, composed.GetChars());
 }
 
 //==========================================================================
@@ -792,8 +804,14 @@ void ZCCCompiler::CreateClassTypes()
 			PClass *parent;
 			auto ParentName = c->cls->ParentName;
 
-			if (ParentName != nullptr && ParentName->SiblingNext == ParentName) parent = PClass::FindClass(ParentName->Id);
-			else if (ParentName == nullptr) parent = RUNTIME_CLASS(DObject);
+			if (ParentName != nullptr && ParentName->SiblingNext == ParentName)
+			{
+				parent = PClass::FindClass(ParentName->Id);
+			}
+			else if (ParentName == nullptr)
+			{
+				parent = RUNTIME_CLASS(DObject);
+			}
 			else
 			{
 				// The parent is a dotted name which the type system currently does not handle.
@@ -813,6 +831,15 @@ void ZCCCompiler::CreateClassTypes()
 
 			if (parent != nullptr && (parent->VMType != nullptr || c->NodeName() == NAME_Object))
 			{
+				if(parent->bFinal)
+				{
+					Error(c->cls, "Class '%s' cannot extend final class '%s'", FName(c->NodeName()).GetChars(), parent->TypeName.GetChars());
+				}
+				else if(parent->bSealed && !parent->SealedRestriction.Contains(c->NodeName()))
+				{
+					Error(c->cls, "Class '%s' cannot extend sealed class '%s'", FName(c->NodeName()).GetChars(), parent->TypeName.GetChars());
+				}
+
 				// The parent exists, we may create a type for this class
 				if (c->cls->Flags & ZCC_Native)
 				{
@@ -873,6 +900,25 @@ void ZCCCompiler::CreateClassTypes()
 				if (c->cls->Flags & ZCC_Version)
 				{
 					c->Type()->mVersion = c->cls->Version;
+				}
+				
+
+				if (c->cls->Flags & ZCC_Final)
+				{
+					c->ClassType()->bFinal = true;
+				}
+
+				if (c->cls->Flags & ZCC_Sealed)
+				{
+					PClass * ccls = c->ClassType();
+					ccls->bSealed = true;
+					ZCC_Identifier * it = c->cls->Sealed;
+					if(it) do
+					{
+						ccls->SealedRestriction.Push(FName(it->Id));
+						it = (ZCC_Identifier*) it->SiblingNext;
+					}
+					while(it != c->cls->Sealed);
 				}
 				// 
 				if (mVersion >= MakeVersion(2, 4, 0))

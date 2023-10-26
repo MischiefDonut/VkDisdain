@@ -100,7 +100,6 @@ xx(SBIT,	sbit,	RPRII8,		NOP,	0, 0)		// *rA |= C if rB is true, *rA &= ~C otherwi
 xx(MOVE,	mov,	RIRI,		NOP,	0, 0)		// dA = dB
 xx(MOVEF,	mov,	RFRF,		NOP,	0, 0)		// fA = fB
 xx(MOVES,	mov,	RSRS,		NOP,	0, 0)		// sA = sB
-xx(MOVESA,	mov,	RPRP,		NOP,	0, 0)		// (*(string*)aA) = (*(string*)aB)
 xx(MOVEA,	mov,	RPRP,		NOP,	0, 0)		// aA = aB
 xx(MOVEV2,	mov2,	RFRF,		NOP,	0, 0)		// fA = fB (2 elements)
 xx(MOVEV3,	mov3,	RFRF,		NOP,	0, 0)		// fA = fB (3 elements)
@@ -290,13 +289,7 @@ xx(SUBA,		sub,	RIRPRP,		NOP,	0, 0)		// dA = pB - pC
 xx(EQA_R,		beq,	CPRR,		NOP,	0, 0)			// if ((pB == pkC) != A) then pc++
 xx(EQA_K,		beq,	CPRK,		EQA_R,	4, REGT_POINTER)
 
-// Memcpy
-xx(MEMCPY_RRK,	memcpy,	RPRPKI,		NOP,	0, 0) // call memcpy(A, B, C)
+// Null check
+xx(NULLCHECK, nullcheck, RP,	NOP, 0, 0) // EmitNullPointerThrow(pA)
 
-// Misc stuff for struct copies
-xx(COPY_NULLCHECK, copy_nullcheck, RPRP, NOP, 0, 0) // nullcheck_write(A), nullcheck_read(B)
-xx(MEMCPY_RRK_UNCHECKED,	memcpy,	RPRPKI,		NOP,	0, 0) // call memcpy(A, B, C), no null checks
-xx(OBJ_WBARRIER, obj_wbarrier, RP, NOP, 0, 0) // call GC::WriteBarrier(A)
-xx(CALL_NATIVE_RR, call, RPRPKP, NOP, 0, 0) // call ((void (*)(void*, const void*))C)(A, B)
-xx(JMP_LT, jl, RIRIKI, NOP, 0, 0) // if(rA < rB) pc = rkC;
 #undef xx

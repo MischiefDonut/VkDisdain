@@ -268,6 +268,8 @@ PFunction *FindBuiltinFunction(FName funcname)
 //
 //==========================================================================
 
+static bool AreCompatibleFnPtrTypes(PPrototype *to, PPrototype *from);
+
 bool AreCompatiblePointerTypes(PType *dest, PType *source, bool forcompare)
 {
 	if (dest->isPointer() && source->isPointer())
@@ -301,8 +303,9 @@ bool AreCompatiblePointerTypes(PType *dest, PType *source, bool forcompare)
 		{
 			auto from = static_cast<PFunctionPointer*>(source);
 			auto to = static_cast<PFunctionPointer*>(dest);
-			return to->PointedType == TypeVoid || (from->PointedType == to->PointedType && from->ArgFlags == to->ArgFlags && FScopeBarrier::CheckSidesForFunctionPointer(from->Scope, to->Scope));
-			// TODO allow narrowing argument types and widening return types via cast, ex.: Function<Actor(Object or Class<Object>)> to Function<Object(Actor or Class<Actor>)>
+			if(from->PointedType == TypeVoid) return false;
+
+			return to->PointedType == TypeVoid || (AreCompatibleFnPtrTypes((PPrototype *)to->PointedType, (PPrototype *)from->PointedType) && from->ArgFlags == to->ArgFlags && FScopeBarrier::CheckSidesForFunctionPointer(from->Scope, to->Scope));
 		}
 	}
 	return false;
@@ -1401,7 +1404,7 @@ FxExpression *FxColorCast::Resolve(FCompileContext &ctx)
 			}
 			else
 			{
-				FxExpression *x = new FxConstant(V_GetColor(constval.GetString(), &ScriptPosition), ScriptPosition);
+				FxExpression *x = new FxConstant(V_GetColor(constval.GetString().GetChars(), &ScriptPosition), ScriptPosition);
 				delete this;
 				return x;
 			}
@@ -1481,7 +1484,7 @@ FxExpression *FxSoundCast::Resolve(FCompileContext &ctx)
 		if (basex->isConstant())
 		{
 			ExpVal constval = static_cast<FxConstant *>(basex)->GetValue();
-			FxExpression *x = new FxConstant(S_FindSound(constval.GetString()), ScriptPosition);
+			FxExpression *x = new FxConstant(S_FindSound(constval.GetString().GetChars()), ScriptPosition);
 			delete this;
 			return x;
 		}
@@ -1559,7 +1562,7 @@ FxExpression *FxFontCast::Resolve(FCompileContext &ctx)
 	else if ((basex->ValueType == TypeString || basex->ValueType == TypeName) && basex->isConstant())
 	{
 		ExpVal constval = static_cast<FxConstant *>(basex)->GetValue();
-		FFont *font = V_GetFont(constval.GetString());
+		FFont *font = V_GetFont(constval.GetString().GetChars());
 		// Font must exist. Most internal functions working with fonts do not like null pointers.
 		// If checking is needed scripts will have to call Font.GetFont themselves.
 		if (font == nullptr)
@@ -1615,6 +1618,35 @@ FxTypeCast::~FxTypeCast()
 //
 //==========================================================================
 
+FxConstant * FxTypeCast::convertRawFunctionToFunctionPointer(FxExpression * in, FScriptPosition &ScriptPosition)
+{
+	assert(in->isConstant() && in->ValueType == TypeRawFunction);
+	FxConstant *val = static_cast<FxConstant*>(in);
+	PFunction * fn  = static_cast<PFunction*>(val->value.pointer);
+	if(fn && (fn->Variants[0].Flags & (VARF_Virtual | VARF_Action | VARF_Method)) == 0)
+	{
+		val->ValueType = val->value.Type = NewFunctionPointer(fn->Variants[0].Proto, TArray<uint32_t>(fn->Variants[0].ArgFlags), FScopeBarrier::SideFromFlags(fn->Variants[0].Flags));
+		return val;
+	}
+	else if(fn && (fn->Variants[0].Flags & (VARF_Virtual | VARF_Action | VARF_Method)) == VARF_Method)
+	{
+		TArray<uint32_t> flags(fn->Variants[0].ArgFlags);
+		flags[0] = 0;
+		val->ValueType = val->value.Type = NewFunctionPointer(fn->Variants[0].Proto, std::move(flags), FScopeBarrier::SideFromFlags(fn->Variants[0].Flags));
+		return val;
+	}
+	else if(!fn)
+	{
+		val->ValueType = val->value.Type = NewFunctionPointer(nullptr, {}, -1); // Function<void>
+		return val;
+	}
+	else
+	{
+		ScriptPosition.Message(MSG_ERROR, "virtual/action function pointers are not allowed");
+		return nullptr;
+	}
+}
+
 FxExpression *FxTypeCast::Resolve(FCompileContext &ctx)
 {
 	CHECKRESOLVED();
@@ -1624,6 +1656,22 @@ FxExpression *FxTypeCast::Resolve(FCompileContext &ctx)
 	{
 		auto result = compileEnvironment.SpecialTypeCast(this, ctx);
 		if (result != this) return result;
+	}
+
+	if (basex->isConstant() && basex->ValueType == TypeRawFunction && ValueType->isFunctionPointer())
+	{
+		FxConstant *val = convertRawFunctionToFunctionPointer(basex, ScriptPosition);
+		if(!val)
+		{
+			delete this;
+			return nullptr;
+		}
+	}
+	else if (basex->isConstant() && basex->ValueType == TypeRawFunction && ValueType == TypeVMFunction)
+	{
+		FxConstant *val = static_cast<FxConstant*>(basex);
+		val->ValueType = val->value.Type = TypeVMFunction;
+		val->value.pointer = static_cast<PFunction*>(val->value.pointer)->Variants[0].Implementation;
 	}
 
 	// first deal with the simple types
@@ -2422,11 +2470,6 @@ bool FxAssign::RequestAddress(FCompileContext &ctx, bool *writable)
 }
 */
 
-static bool IsStructAssignable(FCompileContext &ctx, PStruct *s)
-{
-	return s->isAssignable || s->isInternallyAssignable && fileSystem.GetFileContainer(ctx.Lump) == s->mDefFileNo;
-}
-
 FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 {
 	CHECKRESOLVED();
@@ -2498,18 +2541,10 @@ FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 					btype = p;
 				}
 			}
-			constexpr auto BETTER_ASSIGN_VER = MakeVersion(4, 11, 0);
 
 			if (btype->isDynArray())
 			{
-
-				if (IsModifyAssign)
-				{
-					ScriptPosition.Message(MSG_ERROR, "Invalid modify/assign operation with a DynArray operand");
-					delete this;
-					return nullptr;
-				}
-				else if(ctx.Version >= BETTER_ASSIGN_VER)
+				if(ctx.Version >= MakeVersion(4, 11, 1))
 				{
 					FArgumentList args;
 					args.Push(Right);
@@ -2522,12 +2557,14 @@ FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 				{
 					if(Base->ValueType->isRealPointer() && Right->ValueType->isRealPointer())
 					{
-						ScriptPosition.Message(MSG_WARNING, "Dynamic Array assignments not allowed in ZScript versions below 4.11, use the Copy() or Move() functions instead\n"
-											  TEXTCOLOR_RED "!! Assigning an out array pointer to another out array pointer does not alter either of the underlying arrays' values below ZScript version 4.11 !!");
+						ScriptPosition.Message(MSG_WARNING, "Dynamic Array assignments not allowed in ZScript versions below 4.11.1, use the Copy() or Move() functions instead\n"
+											  TEXTCOLOR_RED "  Assigning an out array pointer to another out array pointer\n"
+															"  does not alter either of the underlying arrays' values\n"
+															"  it only swaps the pointers below ZScript version 4.11.1!!");
 					}
 					else
 					{
-						ScriptPosition.Message(MSG_ERROR, "Dynamic Array assignments not allowed in ZScript versions below 4.11, use the Copy() or Move() functions instead");
+						ScriptPosition.Message(MSG_ERROR, "Dynamic Array assignments not allowed in ZScript versions below 4.11.1, use the Copy() or Move() functions instead");
 						delete this;
 						return nullptr;
 					}
@@ -2535,13 +2572,7 @@ FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 			}
 			else if (btype->isMap())
 			{
-				if (IsModifyAssign)
-				{
-					ScriptPosition.Message(MSG_ERROR, "Invalid modify/assign operation with a Map operand");
-					delete this;
-					return nullptr;
-				}
-				else if(ctx.Version >= BETTER_ASSIGN_VER)
+				if(ctx.Version >= MakeVersion(4, 11, 1))
 				{
 					FArgumentList args;
 					args.Push(Right);
@@ -2554,12 +2585,14 @@ FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 				{
 					if(Base->ValueType->isRealPointer() && Right->ValueType->isRealPointer())
 					{ // don't break existing code, but warn that it's a no-op
-						ScriptPosition.Message(MSG_WARNING, "Map assignments not allowed in ZScript versions below 4.11, use the Copy() or Move() functions instead\n"
-											  TEXTCOLOR_RED "!! Assigning an out map pointer to another out map pointer does not alter either of the underlying maps' values below ZScript version 4.11 !!");
+						ScriptPosition.Message(MSG_WARNING, "Map assignments not allowed in ZScript versions below 4.11.1, use the Copy() or Move() functions instead\n"
+											  TEXTCOLOR_RED "  Assigning an out map pointer to another out map pointer\n"
+															"  does not alter either of the underlying maps' values\n"
+															"  it only swaps the pointers below ZScript version 4.11.1!!");
 					}
 					else
 					{
-						ScriptPosition.Message(MSG_ERROR, "Map assignments not allowed in ZScript versions below 4.11, use the Copy() or Move() functions instead");
+						ScriptPosition.Message(MSG_ERROR, "Map assignments not allowed in ZScript versions below 4.11.1, use the Copy() or Move() functions instead");
 						delete this;
 						return nullptr;
 					}
@@ -2573,62 +2606,20 @@ FxExpression *FxAssign::Resolve(FCompileContext &ctx)
 			}
 			else if (btype->isStruct())
 			{
-				if (IsModifyAssign)
-				{
-					ScriptPosition.Message(MSG_ERROR, "Invalid modify/assign operation with a struct operand");
-					delete this;
-					return nullptr;
-				}
-				else if(ctx.Version < BETTER_ASSIGN_VER)
-				{
-					if(Base->ValueType->isRealPointer() && Right->ValueType->isRealPointer())
-					{ // don't break existing code, but warn that it's a no-op
-						ScriptPosition.Message(MSG_WARNING, "Struct assignments not allowed in zscript versions below 4.11\n"
-							TEXTCOLOR_RED "!! Assigning an out struct pointer to another out struct pointer does not alter either of the underlying structs' values !!");
-					}
-					else
-					{
-						ScriptPosition.Message(MSG_ERROR, "Struct assignments not allowed in zscript versions below 4.11");
-						delete this;
-						return nullptr;
-					}
+				if(Base->ValueType->isRealPointer() && Right->ValueType->isRealPointer())
+				{ // don't break existing code, but warn that it's a no-op
+					ScriptPosition.Message(MSG_WARNING, "Struct assignment not implemented yet\n"
+										  TEXTCOLOR_RED "  Assigning an out struct pointer to another out struct pointer\n"
+														"  does not alter either of the underlying structs' values\n"
+														"  it only swaps the pointers!!");
 				}
 				else
 				{
-                    PStruct * s = static_cast<PStruct*>(btype);
-					bool writable;
-					Base->RequestAddress(ctx, &writable);
-
-					if(!writable || !s->SizeKnown)
-					{
-						ScriptPosition.Message(MSG_ERROR, "Struct must be a modifiable value");
-						delete this;
-						return nullptr;
-					}
-
-					if(!IsStructAssignable(ctx, s))
-					{
-						ScriptPosition.Message(MSG_ERROR, "All Struct fields must be modifiable");
-						delete this;
-						return nullptr;
-					}
-
-                    if(s->isSimple)
-                    {
-						auto fx = new FxSimpleStructAssign(Base, Right, s);
-						Base = Right = nullptr;
-                        delete this;
-                        return fx->Resolve(ctx);
-                    }
-                    else
-                    {
-						auto fx = new FxComplexStructAssign(Base, Right, s);
-						Base = Right = nullptr;
-						delete this;
-						return fx->Resolve(ctx);
-                    }
-                }
-            }
+					ScriptPosition.Message(MSG_ERROR, "Struct assignment not implemented yet");
+					delete this;
+					return nullptr;
+				}
+			}
 		}
 
 		// Both types are the same so this is ok.
@@ -2731,467 +2722,6 @@ ExpEmit FxAssign::Emit(VMFunctionBuilder *build)
 
 //==========================================================================
 //
-//	FxSimpleStructAssign
-//
-//==========================================================================
-
-FxSimpleStructAssign::FxSimpleStructAssign(FxExpression *base, FxExpression *right, PStruct * type)
-	: FxExpression(EFX_SimpleStructAssign, base->ScriptPosition), Base(base) , Right(right), Type(type)
-{
-
-}
-
-FxExpression *FxSimpleStructAssign::Resolve(FCompileContext &ctx)
-{
-	Base->RequestAddress(ctx,nullptr);
-	Right->RequestAddress(ctx,nullptr);
-	return this;
-}
-
-ExpEmit FxSimpleStructAssign::Emit(VMFunctionBuilder *build)
-{
-	ExpEmit base = Base->Emit(build);
-	ExpEmit right = Right->Emit(build);
-	assert(base.RegType == REGT_POINTER && right.RegType == REGT_POINTER);
-
-	build->Emit(OP_MEMCPY_RRK, base.RegNum, right.RegNum, build->GetConstantInt(Type->Size));
-	base.Free(build);
-	return right;
-}
-
-//==========================================================================
-//
-//	FxComplexStructAssign
-//
-//==========================================================================
-
-FxComplexStructAssign::FxComplexStructAssign(FxExpression *base, FxExpression *right, PStruct * type)
-	: FxExpression(EFX_ComplexStructAssign, base->ScriptPosition), Base(base) , Right(right), Type(type), CopyOps(GetCopyOps(Type))
-{
-	assert(CopyOps);
-}
-
-FxExpression *FxComplexStructAssign::Resolve(FCompileContext &ctx)
-{
-	Base->RequestAddress(ctx,nullptr);
-	Right->RequestAddress(ctx,nullptr);
-
-	return this;
-}
-
-extern bool isComplexTypeForStruct(PType * fieldtype);
-
-TMap<const PStruct*,TArray<StructCopyOp>> FxComplexStructAssign::struct_copy_ops;
-
-void GenStructCopyOps(PStruct * s)
-{
-	TArray<PField*> sortedFields;
-
-	TArray<StructCopyOp> ops;
-
-	{
-		auto it = s->Symbols.GetIterator();
-		PSymbolTable::MapType::Pair *p;
-		while(it.NextPair(p))
-		{
-			if(PField * f; (f = dyn_cast<PField>(p->Value)) && !(f->Flags & VARF_Meta))
-			{ // store all fields
-				assert(f->Type->SizeKnown);
-				sortedFields.Push(f);
-			}
-		}
-	}
-
-	std::sort(sortedFields.begin(), sortedFields.end(),
-		[](const PField* a, const PField* b)
-		{
-			return a->Offset < b->Offset;
-		}
-	);
-
-	struct field_group
-	{
-		size_t start_index;
-		size_t end_index;
-	};
-
-	TArray<field_group> memcpys;
-
-	TArray<PField *> objects;
-
-	TArray<PField *> complex;
-
-	size_t simple_start = SIZE_MAX;
-
-	for(size_t i = 0; i < sortedFields.Size(); i++)
-	{
-		auto *t = sortedFields[i]->Type;
-		
-		auto * baseType = PType::underlyingArrayType(t);
-
-		//if(t->isStaticArray()) // this doesn't need to be checked, since it's only used for internal Array<@Type> arrays
-		if(isComplexTypeForStruct(baseType))
-		{
-			if(baseType->isObjectPointer())
-			{
-				objects.Push(sortedFields[i]);
-				if(simple_start == SIZE_MAX) simple_start = i;
-			}
-			else
-			{
-				complex.Push(sortedFields[i]);
-				if(simple_start != SIZE_MAX)
-				{
-					memcpys.Push({simple_start, i-1});
-					simple_start = SIZE_MAX;
-				}
-			}
-		}
-		else
-		{
-			if(simple_start == SIZE_MAX) simple_start = i;
-		}
-	}
-	{
-		TArray<StructCopyOp> memcpy_ops;
-		TArray<StructCopyOp> complex_ops; // array/dynarray/map copies
-		
-		for(PField * obj : objects)
-		{ // object barriers go before anything else
-			ops.Push({
-				obj->Type->isArray() ? StructCopyOpType::ObjArrayBarrier : StructCopyOpType::ObjBarrier,
-				unsigned(obj->Offset),
-				obj->Type->Size,
-				obj->Type
-			});
-		}
-
-		for(field_group mem : memcpys)
-		{ // place memcpy calls together
-			assert(mem.start_index != SIZE_MAX && mem.end_index != mem.start_index && mem.end_index >= mem.end_index);
-
-			PField * start = sortedFields[mem.start_index];
-			PField * end = sortedFields[mem.end_index];
-			// start = offset1 , end = offset2 + size2
-			memcpy_ops.Push({
-				StructCopyOpType::Memcpy,
-				unsigned(start->Offset),
-				unsigned((end->Offset + end->Type->Size) - start->Offset),
-				nullptr
-			});
-		}
-
-		for(PField * cmp : complex)
-		{
-			if(cmp->Type->isArray())
-			{
-				auto realType = PType::underlyingArrayType(cmp->Type);
-				complex_ops.Push({
-					realType->isStruct() ? StructCopyOpType::ArrayCopyStruct : cmp->Type == TypeString ? StructCopyOpType::ArrayCopyString : StructCopyOpType::ArrayCopyDynArrayMap,
-					unsigned(cmp->Offset),
-					cmp->Type->Size,
-					cmp->Type
-				});
-			}
-			else if(!cmp->Type->isStruct())
-			{
-				complex_ops.Push({
-					cmp->Type == TypeString ? StructCopyOpType::StringCopy : StructCopyOpType::DynArrayMapCopy,
-					unsigned(cmp->Offset),
-					cmp->Type->Size,
-					cmp->Type
-				});
-			}
-			else // if(cmp->Type->isStruct())
-			{ // flatten structs into existing op list
-			  // TODO optimization: fold memcpy ops in the start and end complex of complex struct into pre-existing memcpy ops
-				const TArray<StructCopyOp>& copyOps = *FxComplexStructAssign::GetCopyOps(static_cast<PStruct*>(cmp->Type));
-							   // this is guaranteed to exist, since copy ops are being generated in order of dependence during CompileAllFields
-				unsigned off = unsigned(cmp->Offset);
-				for(auto op : copyOps)
-				{
-					StructCopyOp newop {
-						op.op,
-						unsigned(op.offset) + off,
-						op.size,
-						op.type
-					};
-
-					if(op.op == StructCopyOpType::ObjArrayBarrier || op.op == StructCopyOpType::ObjBarrier)
-					{
-						ops.Push(newop);
-					}
-					else if(op.op == StructCopyOpType::Memcpy)
-					{
-						memcpy_ops.Push(newop);
-					}
-					else
-					{
-						complex_ops.Push(newop);
-					}
-				}
-			}
-		}
-
-		ops.Append(memcpy_ops);
-		ops.Append(complex_ops);
-	}
-
-	FxComplexStructAssign::struct_copy_ops.Insert(s,std::move(ops));
-}
-
-static PStruct * BackingTypeOfDynArrayOrMap(PType * t)
-{
-	return t->isDynArray() ? 
-					static_cast<PDynArray*>(t)->BackingType
-				  : t->isMap() ?
-						static_cast<PMap*>(t)->BackingType
-					  : nullptr;
-}
-
-static void * GetDynArrayOrMapCopyFn(PType * t)
-{
-	PStruct * backing = BackingTypeOfDynArrayOrMap(t);
-	PFunction * fn = dyn_cast<PFunction>(backing->Symbols.FindSymbol(NAME_Copy, false));
-	// Array::Copy and Map::Copy shouldn't ever be missing
-	assert(fn);
-	VMFunction * vfn = fn->Variants[0].Implementation;
-	// Copy's implementation shouldn't ever be missing, and should be a native function with a valid direct call pointer
-	assert(vfn && (vfn->VarFlags & VARF_Native) && static_cast<VMNativeFunction*>(vfn)->DirectNativeCall);
-	return static_cast<VMNativeFunction*>(vfn)->DirectNativeCall;
-}
-
-void FxComplexStructAssign::ApplyCopyOps(VMFunctionBuilder *build, const TArray<StructCopyOp>& ops, ExpEmit base_offset, ExpEmit reg_dest, ExpEmit reg_src)
-{
-	for(const auto &op : ops)
-	{
-		if(op.op >= StructCopyOpType::ObjArrayBarrier)
-		{ // array copy
-			PArray * t = static_cast<PArray*>(op.type);
-			if(t->ElementCount <= 4)
-			{ // inline small arrays
-				const TArray<StructCopyOp> * ops2 = nullptr;
-				if(op.op == StructCopyOpType::ArrayCopyStruct)
-				{
-					ops2 = GetCopyOps(static_cast<PStruct*>(PType::underlyingArrayType(op.type)));
-				}
-
-				if(base_offset.Konst)
-				{
-					for(unsigned i = 0; i < t->ElementCount; i++)
-					{
-						// int off2 = base_offset + op.offset + (t->ElementSize * i);
-						unsigned off2 = unsigned(build->ReadConstantInt(base_offset.RegNum)) + op.offset + (t->ElementSize * i);
-
-						if(op.op == StructCopyOpType::ArrayCopyStruct)
-						{ // inline struct copies
-							assert(ops2);
-							ApplyCopyOps(build, *ops2, build->EmitConstantInt(off2), reg_dest, reg_src);
-						}
-						else
-						{
-							// ptrdest = dest + off2;
-							if(op.op != StructCopyOpType::ObjArrayBarrier) build->Emit(OP_ADDA_RK, reg_ptrdest.RegNum, reg_dest.RegNum, build->GetConstantInt(off2)); 
-							// ptrsrc = src + off2;
-							build->Emit(OP_ADDA_RK, reg_ptrsrc.RegNum, reg_src.RegNum, build->GetConstantInt(off2));
-
-							switch(op.op)
-							{
-							case StructCopyOpType::ObjArrayBarrier:
-								// GC::WriteBarrier(ptrsrc);
-								// this doesn't copy, it only executes the barrier -- object copies are bundled with regular data in memcpy operations
-								build->Emit(OP_OBJ_WBARRIER, reg_ptrsrc.RegNum);
-								break;
-							case StructCopyOpType::ArrayCopyDynArrayMap:
-								// ptrdest->Copy(regptrsrc)
-								build->Emit(OP_CALL_NATIVE_RR, reg_ptrdest.RegNum, reg_ptrsrc.RegNum, build->GetConstantAddress(GetDynArrayOrMapCopyFn(PType::underlyingArrayType(op.type))));
-								break;
-							case StructCopyOpType::ArrayCopyString:
-								// (*(FString*)ptrdest) = (*(FString*)ptrsrc);
-								build->Emit(OP_MOVESA, reg_ptrdest.RegNum, reg_ptrsrc.RegNum);
-								break;
-							}
-						}
-					}
-				}
-				else
-				{
-					// int off2 = base_offset + op.offset;
-					ExpEmit off2(build, REGT_INT, 1);
-					build->Emit(OP_ADD_RK, off2.RegNum, base_offset.RegNum, build->GetConstantInt(op.offset));
-
-					for(unsigned i = 0; i < t->ElementCount; i++)
-					{ // inline struct copies
-						if(op.op == StructCopyOpType::ArrayCopyStruct)
-						{ // inline struct copies
-							assert(ops2);
-							ApplyCopyOps(build, *ops2, off2, reg_dest, reg_src);
-						}
-						else
-						{
-							// ptrdest = dest + off2;
-							if(op.op != StructCopyOpType::ObjArrayBarrier) build->Emit(OP_ADDA_RR, reg_ptrdest.RegNum, reg_dest.RegNum, off2.RegNum); 
-							// ptrsrc = src + off2;
-							build->Emit(OP_ADDA_RR, reg_ptrsrc.RegNum, reg_src.RegNum, off2.RegNum);
-
-							switch(op.op)
-							{
-							case StructCopyOpType::ObjArrayBarrier:
-								// GC::WriteBarrier(ptrsrc);
-								// this doesn't copy, it only executes the barrier -- object copies are bundled with regular data in memcpy operations
-								build->Emit(OP_OBJ_WBARRIER, reg_ptrsrc.RegNum);
-								break;
-							case StructCopyOpType::ArrayCopyDynArrayMap:
-								// ptrdest->Copy(regptrsrc)
-								build->Emit(OP_CALL_NATIVE_RR, reg_ptrdest.RegNum, reg_ptrsrc.RegNum, build->GetConstantAddress(GetDynArrayOrMapCopyFn(PType::underlyingArrayType(op.type))));
-								break;
-							case StructCopyOpType::ArrayCopyString:
-								// (*(FString*)ptrdest) = (*(FString*)ptrsrc);
-								build->Emit(OP_MOVESA, reg_ptrdest.RegNum, reg_ptrsrc.RegNum);
-								break;
-							}
-						}
-						if( i != (t->ElementCount - 1))
-						{
-							// off2 += t->ElementSize;
-							build->Emit(OP_ADD_RK, off2.RegNum, off2.RegNum, build->GetConstantInt(t->ElementSize));
-						}
-					}
-					off2.Free(build);
-				}
-			}
-			else
-			{ // loop for larger arrays
-				// int off2 = base_offset + op.offset;
-				ExpEmit off2(build, REGT_INT, 1);
-				if(base_offset.Konst)
-				{
-					build->Emit(OP_LK, off2.RegNum, build->GetConstantInt(unsigned(build->ReadConstantInt(base_offset.RegNum)) + op.offset));
-				}
-				else
-				{
-					build->Emit(OP_ADD_RK, off2.RegNum, base_offset.RegNum, build->GetConstantInt(op.offset));
-				}
-				//int endoff = off2 + (arr.count * arr.size);
-				ExpEmit endoff(build, REGT_INT, 1);
-				build->Emit(OP_ADD_RK, endoff.RegNum, off2.RegNum, build->GetConstantInt(t->ElementCount * t->ElementSize));
-
-				unsigned loop_addr = unsigned(build->GetAddress()); // this will break if addr > UINT32_MAX, but i don't think that should be much of a concern for now at least
-				/*
-				 * while(off2 < endoff)
-				 * {
-				 *     copy(dest + off2, src + off2);
-				 *     off2 += arr.elemsize;
-				 * }
-				*/
-
-				// copy(dest + off2, src + off2);
-				if(op.op == StructCopyOpType::ArrayCopyStruct)
-				{ // inline struct copies
-					ApplyCopyOps(build, *GetCopyOps(static_cast<PStruct*>(PType::underlyingArrayType(op.type))), off2, reg_dest, reg_src);
-				}
-				else
-				{
-					// ptrdest = dest + off2;
-					if(op.op != StructCopyOpType::ObjArrayBarrier) build->Emit(OP_ADDA_RR, reg_ptrdest.RegNum, reg_dest.RegNum, off2.RegNum); 
-					// ptrsrc = src + off2;
-					build->Emit(OP_ADDA_RR, reg_ptrsrc.RegNum, reg_src.RegNum, off2.RegNum);
-
-					switch(op.op)
-					{
-					case StructCopyOpType::ObjArrayBarrier:
-						// GC::WriteBarrier(ptrsrc);
-						// this doesn't copy, it only executes the barrier -- object copies are bundled with regular data in memcpy operations
-						build->Emit(OP_OBJ_WBARRIER, reg_ptrsrc.RegNum);
-						break;
-					case StructCopyOpType::ArrayCopyDynArrayMap:
-						// ptrdest->Copy(regptrsrc)
-						build->Emit(OP_CALL_NATIVE_RR, reg_ptrdest.RegNum, reg_ptrsrc.RegNum, build->GetConstantAddress(GetDynArrayOrMapCopyFn(PType::underlyingArrayType(op.type))));
-						break;
-					case StructCopyOpType::ArrayCopyString:
-						// (*(FString*)ptrdest) = (*(FString*)ptrsrc);
-						build->Emit(OP_MOVESA, reg_ptrdest.RegNum, reg_ptrsrc.RegNum);
-						break;
-					}
-				}
-				// off2 += arr.elemsize
-				build->Emit(OP_ADD_RK, off2.RegNum, off2.RegNum, build->GetConstantInt(t->ElementSize));
-				// (off2 < endoff)
-				build->Emit(OP_JMP_LT, off2.RegNum, endoff.RegNum, build->GetConstantInt(loop_addr));
-
-				off2.Free(build);
-			}
-		}
-		else
-		{
-			if(base_offset.Konst)
-			{
-				unsigned off2 = build->GetConstantInt(unsigned(build->ReadConstantInt(base_offset.RegNum)) + op.offset);
-				// ptrdest = dest + base_offset + op.offset;
-				if(op.op != StructCopyOpType::ObjBarrier) build->Emit(OP_ADDA_RK, reg_ptrdest.RegNum, reg_dest.RegNum, off2);
-				// ptrsrc = src + base_offset + op.offset;
-				build->Emit(OP_ADDA_RK, reg_ptrsrc.RegNum, reg_src.RegNum, off2);
-			}
-			else
-			{
-				// ptrdest = dest + base_offset;
-				// ptrdest += op.offset;
-				if(op.op != StructCopyOpType::ObjBarrier)
-				{
-					build->Emit(OP_ADDA_RR, reg_ptrdest.RegNum, reg_dest.RegNum, base_offset.RegNum);
-					build->Emit(OP_ADDA_RK, reg_ptrdest.RegNum, reg_ptrdest.RegNum, build->GetConstantInt(op.offset));
-				}
-				// ptrsrc = src + base_offset;
-				// ptrsrc += op.offset;
-				build->Emit(OP_ADDA_RR, reg_ptrsrc.RegNum, reg_src.RegNum,base_offset.RegNum);
-				build->Emit(OP_ADDA_RK, reg_ptrsrc.RegNum, reg_ptrsrc.RegNum, build->GetConstantInt(op.offset));
-			}
-			switch(op.op)
-			{
-			case StructCopyOpType::ObjBarrier:
-				// GC::WriteBarrier(ptrsrc);
-				// this doesn't copy, it only executes the barrier -- object copies are bundled with regular data in memcpy operations
-				build->Emit(OP_OBJ_WBARRIER, reg_ptrsrc.RegNum);
-				break;
-			case StructCopyOpType::Memcpy:
-				// memcpy(ptrdest, ptrsrc, op.size);
-				// NULL is already checked before this, so it's safe to use
-				build->Emit(OP_MEMCPY_RRK_UNCHECKED, reg_ptrdest.RegNum, reg_ptrsrc.RegNum, build->GetConstantInt(op.size));
-				break;
-			case StructCopyOpType::DynArrayMapCopy:
-				// ptrdest->Copy(regptrsrc)
-				build->Emit(OP_CALL_NATIVE_RR, reg_ptrdest.RegNum, reg_ptrsrc.RegNum, build->GetConstantAddress(GetDynArrayOrMapCopyFn(op.type)));
-				break;
-			case StructCopyOpType::StringCopy:
-				// (*(FString*)ptrdest) = (*(FString*)ptrsrc);
-				build->Emit(OP_MOVESA, reg_ptrdest.RegNum, reg_ptrsrc.RegNum);
-				break;
-			}
-		}
-	}
-}
-
-ExpEmit FxComplexStructAssign::Emit(VMFunctionBuilder *build)
-{
-	ExpEmit base = Base->Emit(build);
-	ExpEmit right = Right->Emit(build);
-	assert(base.RegType == REGT_POINTER && right.RegType == REGT_POINTER);
-
-	build->Emit(OP_COPY_NULLCHECK, base.RegNum, right.RegNum);
-	
-	reg_ptrdest = ExpEmit(build, REGT_POINTER, 1);
-	reg_ptrsrc = ExpEmit(build, REGT_POINTER, 1);
-	
-	ApplyCopyOps(build, *CopyOps, build->EmitConstantInt(0), base, right);
-
-	reg_ptrdest.Free(build);
-	reg_ptrsrc.Free(build);
-	base.Free(build);
-	return right;
-}
-
-//==========================================================================
-//
 //	FxAssignSelf
 //
 //==========================================================================
@@ -3216,7 +2746,6 @@ FxExpression *FxAssignSelf::Resolve(FCompileContext &ctx)
 
 ExpEmit FxAssignSelf::Emit(VMFunctionBuilder *build)
 {
-	assert(ValueType == Assignment->ValueType);
 	ExpEmit pointer = Assignment->Address; // FxAssign should have already emitted it
 	if (!pointer.Target)
 	{
@@ -6884,6 +6413,15 @@ FxExpression *FxIdentifier::Resolve(FCompileContext& ctx)
 			ABORT(newex);
 			goto foundit;
 		}
+		else if (sym->IsKindOf(RUNTIME_CLASS(PFunction)))
+		{
+			if (ctx.Version >= MakeVersion(4, 11, 100))
+			{
+				// VMFunction is only supported since 4.12 and Raze 1.8.
+				newex = new FxConstant(static_cast<PFunction*>(sym), ScriptPosition);
+				goto foundit;
+			}
+		}
 	}
 
 	// now check in the owning class.
@@ -6894,6 +6432,15 @@ FxExpression *FxIdentifier::Resolve(FCompileContext& ctx)
 			ScriptPosition.Message(MSG_DEBUGLOG, "Resolving name '%s' as class constant\n", Identifier.GetChars());
 			newex = FxConstant::MakeConstant(sym, ScriptPosition);
 			goto foundit;
+		}
+		else if (sym->IsKindOf(RUNTIME_CLASS(PFunction)))
+		{
+			if (ctx.Version >= MakeVersion(4, 11, 100))
+			{
+				// VMFunction is only supported since 4.12 and Raze 1.8.
+				newex = new FxConstant(static_cast<PFunction*>(sym), ScriptPosition);
+				goto foundit;
+			}
 		}
 		else if (ctx.Function == nullptr)
 		{
@@ -7038,7 +6585,6 @@ FxExpression *FxIdentifier::ResolveMember(FCompileContext &ctx, PContainerType *
 		auto result = compileEnvironment.ResolveSpecialIdentifier(this, object, objtype, ctx);
 		if (result != this) return result;
 	}
-
 
 	if (objtype != nullptr && (sym = objtype->Symbols.FindSymbolInTable(Identifier, symtbl)) != nullptr)
 	{
@@ -7255,7 +6801,7 @@ FxExpression *FxMemberIdentifier::Resolve(FCompileContext& ctx)
 
 	SAFE_RESOLVE(Object, ctx);
 
-	// check for class or struct constants if the left side is a type name.
+	// check for class or struct constants/functions if the left side is a type name.
 	if (Object->ValueType == TypeError)
 	{
 		if (ccls != nullptr)
@@ -7268,6 +6814,16 @@ FxExpression *FxMemberIdentifier::Resolve(FCompileContext& ctx)
 					ScriptPosition.Message(MSG_DEBUGLOG, "Resolving name '%s.%s' as constant\n", ccls->TypeName.GetChars(), Identifier.GetChars());
 					delete this;
 					return FxConstant::MakeConstant(sym, ScriptPosition);
+				}
+				else if(sym->IsKindOf(RUNTIME_CLASS(PFunction)))
+				{
+					if (ctx.Version >= MakeVersion(4, 11, 100))
+					{
+						// VMFunction is only supported since 4.12 and Raze 1.8.
+						auto x = new FxConstant(static_cast<PFunction*>(sym), ScriptPosition);
+						delete this;
+						return x->Resolve(ctx);
+					}
 				}
 				else
 				{
@@ -10104,6 +9660,7 @@ ExpEmit FxVMFunctionCall::Emit(VMFunctionBuilder *build)
 		assert(Self != nullptr);
 		selfemit = Self->Emit(build);
 		assert(selfemit.RegType == REGT_POINTER);
+		build->Emit(OP_NULLCHECK, selfemit.RegNum, 0, 0);
 		staticcall = false;
 	}
 	else staticcall = true;
@@ -11773,6 +11330,10 @@ FxExpression *FxReturnStatement::Resolve(FCompileContext &ctx)
 		{
 			mismatchSeverity = MSG_ERROR;
 		}
+		else if (protoRetCount > retCount)
+		{ // also warn when returning less values then the return count
+			mismatchSeverity = ctx.Version >= MakeVersion(4, 12) ? MSG_ERROR : MSG_WARNING;
+		}
 	}
 
 	if (mismatchSeverity != -1)
@@ -12204,10 +11765,117 @@ FxFunctionPtrCast::~FxFunctionPtrCast()
 //
 //==========================================================================
 
+static bool AreCompatibleFnPtrs(PFunctionPointer * to, PFunctionPointer * from);
+
+bool CanNarrowTo(PClass * from, PClass * to)
+{
+	return from->IsAncestorOf(to);
+}
+
+bool CanWidenTo(PClass * from, PClass * to)
+{
+	return to->IsAncestorOf(from);
+}
+
+static bool AreCompatibleFnPtrTypes(PPrototype *to, PPrototype *from)
+{
+	if(to->ArgumentTypes.Size() != from->ArgumentTypes.Size()
+	|| to->ReturnTypes.Size() != from->ReturnTypes.Size()) return false;
+	int n = to->ArgumentTypes.Size();
+
+	//allow narrowing of arguments
+	for(int i = 0; i < n; i++)
+	{
+		PType * fromType = from->ArgumentTypes[i];
+		PType * toType = to->ArgumentTypes[i];
+		if(fromType->isFunctionPointer() && toType->isFunctionPointer())
+		{
+			if(!AreCompatibleFnPtrs(static_cast<PFunctionPointer *>(toType), static_cast<PFunctionPointer *>(fromType))) return false;
+		}
+		else if(fromType->isClassPointer() && toType->isClassPointer())
+		{
+			PClassPointer * fromClass = static_cast<PClassPointer *>(fromType);
+			PClassPointer * toClass = static_cast<PClassPointer *>(toType);
+			//allow narrowing parameters
+			if(!CanNarrowTo(fromClass->ClassRestriction, toClass->ClassRestriction)) return false;
+		}
+		else if(fromType->isObjectPointer() && toType->isObjectPointer())
+		{
+			PObjectPointer * fromObj = static_cast<PObjectPointer *>(fromType);
+			PObjectPointer * toObj = static_cast<PObjectPointer *>(toType);
+			//allow narrowing parameters
+			if(!CanNarrowTo(fromObj->PointedClass(), toObj->PointedClass())) return false;
+		}
+		else if(fromType != toType)
+		{
+			return false;
+		}
+	}
+
+	n = to->ReturnTypes.Size();
+
+	for(int i = 0; i < n; i++)
+	{
+		PType * fromType = from->ReturnTypes[i];
+		PType * toType = to->ReturnTypes[i];
+		if(fromType->isFunctionPointer() && toType->isFunctionPointer())
+		{
+			if(!AreCompatibleFnPtrs(static_cast<PFunctionPointer *>(toType), static_cast<PFunctionPointer *>(fromType))) return false;
+		}
+		else if(fromType->isClassPointer() && toType->isClassPointer())
+		{
+			PClassPointer * fromClass = static_cast<PClassPointer *>(fromType);
+			PClassPointer * toClass = static_cast<PClassPointer *>(toType);
+			//allow widening returns
+			if(!CanWidenTo(fromClass->ClassRestriction, toClass->ClassRestriction)) return false;
+		}
+		else if(fromType->isObjectPointer() && toType->isObjectPointer())
+		{
+			PObjectPointer * fromObj = static_cast<PObjectPointer *>(fromType);
+			PObjectPointer * toObj = static_cast<PObjectPointer *>(toType);
+			//allow widening returns
+			if(!CanWidenTo(fromObj->PointedClass(), toObj->PointedClass())) return false;
+		}
+		else if(fromType != toType)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool AreCompatibleFnPtrs(PFunctionPointer * to, PFunctionPointer * from)
+{
+	if(to->PointedType == TypeVoid) return true;
+	else if(from->PointedType == TypeVoid) return false;
+
+	PPrototype * toProto = (PPrototype *)to->PointedType;
+	PPrototype * fromProto = (PPrototype *)from->PointedType;
+	return
+    (	FScopeBarrier::CheckSidesForFunctionPointer(from->Scope, to->Scope)
+		/*
+	 && toProto->ArgumentTypes == fromProto->ArgumentTypes
+	 && toProto->ReturnTypes == fromProto->ReturnTypes
+		*/
+	 && AreCompatibleFnPtrTypes(toProto, fromProto)
+	 && to->ArgFlags == from->ArgFlags
+	);
+}
+
 FxExpression *FxFunctionPtrCast::Resolve(FCompileContext &ctx)
 {
 	CHECKRESOLVED();
 	SAFE_RESOLVE(basex, ctx);
+
+	if (basex->isConstant() && basex->ValueType == TypeRawFunction)
+	{
+		FxConstant *val = FxTypeCast::convertRawFunctionToFunctionPointer(basex, ScriptPosition);
+		if(!val)
+		{
+			delete this;
+			return nullptr;
+		}
+	}
 
 	if (!(basex->ValueType && basex->ValueType->isFunctionPointer()))
 	{
@@ -12217,21 +11885,20 @@ FxExpression *FxFunctionPtrCast::Resolve(FCompileContext &ctx)
 	auto to = static_cast<PFunctionPointer *>(ValueType);
 	auto from = static_cast<PFunctionPointer *>(basex->ValueType);
 
-	if(to->PointedType == TypeVoid)
-	{	// no need to do anything for (Function<void)(...) casts
+	if(from->PointedType == TypeVoid)
+	{	// nothing to check at compile-time for casts from Function<void>
+		return this;
+	}
+	else if(AreCompatibleFnPtrs(to, from))
+	{	// no need to do anything for (Function<void>)(...) or compatible casts
 		basex->ValueType = ValueType;
 		auto x = basex;
 		basex = nullptr;
 		delete this;
 		return x;
 	}
-	else if(from->PointedType == TypeVoid)
-	{	// nothing to check at compile-time for casts from Function<void>
-		return this;
-	}
 	else
 	{
-		// TODO allow narrowing argument types and widening return types via cast, ex.: Function<Actor(Object or Class<Object>)> to Function<Object(Actor or Class<Actor>)>
 		ScriptPosition.Message(MSG_ERROR, "Cannot cast %s to %s. The types are incompatible.", basex->ValueType->DescriptiveName(), to->DescriptiveName());
 		delete this;
 		return nullptr;
@@ -12246,12 +11913,27 @@ FxExpression *FxFunctionPtrCast::Resolve(FCompileContext &ctx)
 
 PFunction *NativeFunctionPointerCast(PFunction *from, const PFunctionPointer *to)
 {
-	// TODO allow narrowing argument types and widening return types via cast, ex.: Function<Actor(Object or Class<Object>)> to Function<Object(Actor or Class<Actor>)>
-	return (to->PointedType == TypeVoid || (from &&
-				(  from->Variants[0].Proto == static_cast<PPrototype*>(to->PointedType)
-				&& from->Variants[0].ArgFlags == to->ArgFlags
-				&& FScopeBarrier::CheckSidesForFunctionPointer(FScopeBarrier::SideFromFlags(from->Variants[0].Flags), to->Scope)
-				))) ? from : nullptr;
+	if(to->PointedType == TypeVoid)
+	{
+		return from;
+	}
+	else if(from && ((from->Variants[0].Flags & (VARF_Virtual | VARF_Action)) == 0) && FScopeBarrier::CheckSidesForFunctionPointer(FScopeBarrier::SideFromFlags(from->Variants[0].Flags), to->Scope))
+	{
+		if(to->ArgFlags.Size() != from->Variants[0].ArgFlags.Size()) return nullptr;
+		int n = to->ArgFlags.Size();
+		for(int i = from->GetImplicitArgs(); i < n; i++) // skip checking flags for implicit self
+		{
+			if(from->Variants[0].ArgFlags[i] != to->ArgFlags[i])
+			{
+				return nullptr;
+			}
+		}
+		return AreCompatibleFnPtrTypes(static_cast<PPrototype*>(to->PointedType), from->Variants[0].Proto) ? from : nullptr;
+	}
+	else
+	{ // cannot cast virtual/action functions to anything
+		return nullptr;
+	}
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(DObject, BuiltinFunctionPtrCast, NativeFunctionPointerCast)
@@ -12341,6 +12023,17 @@ FxExpression *FxLocalVariableDeclaration::Resolve(FCompileContext &ctx)
 			return nullptr;
 		}
 		SAFE_RESOLVE(Init, ctx);
+
+		if(Init->isConstant() && Init->ValueType == TypeRawFunction)
+		{
+			FxConstant *val = FxTypeCast::convertRawFunctionToFunctionPointer(Init, ScriptPosition);
+			if(!val)
+			{
+				delete this;
+				return nullptr;
+			}
+		}
+
 		ValueType = Init->ValueType;
 		if (ValueType->RegType == REGT_NIL)
 		{

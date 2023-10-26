@@ -619,10 +619,6 @@ static int ExecScriptFunc(VMFrameStack *stack, VMReturn *ret, int numret)
 		ASSERTS(a); ASSERTS(B);
 		reg.s[a] = reg.s[B];
 		NEXTOP;
-	OP(MOVESA):
-		ASSERTA(a); ASSERTA(B);
-		(*static_cast<FString*>(reg.a[a])) = (*static_cast<FString*>(reg.a[B]));
-		NEXTOP;
 	OP(MOVEA):
 	{
 		ASSERTA(a); ASSERTA(B);
@@ -1941,55 +1937,15 @@ static int ExecScriptFunc(VMFrameStack *stack, VMReturn *ret, int numret)
 		CMPJMP(reg.a[B] == konsta[C].v);
 		NEXTOP;
 
-	OP(MEMCPY_RRK):
-		ASSERTA(a); ASSERTA(B); ASSERTKD(C);
-		if (PA == nullptr)
-		{
-			ThrowAbortException(X_WRITE_NIL, nullptr);
-			return 0;
-		}
-		else if (PB == nullptr)
-		{
-			ThrowAbortException(X_READ_NIL, nullptr);
-			return 0;
-		}
-		memcpy(PA, PB, KC);
-		NEXTOP;
-	OP(COPY_NULLCHECK):
-		ASSERTA(a); ASSERTA(B);
-		if (PA == nullptr)
-		{
-			ThrowAbortException(X_WRITE_NIL, nullptr);
-			return 0;
-		}
-		else if (PB == nullptr)
-		{
-			ThrowAbortException(X_READ_NIL, nullptr);
-			return 0;
-		}
-		NEXTOP;
-	OP(MEMCPY_RRK_UNCHECKED):
-		ASSERTA(a); ASSERTA(B); ASSERTKD(C);
-		memcpy(PA, PB, KC);
-		NEXTOP;
-	OP(OBJ_WBARRIER):
+	OP(NULLCHECK):
 		ASSERTA(a);
-		GC::WriteBarrier((DObject*)PA);
-		NEXTOP;
-	OP(CALL_NATIVE_RR):
-		ASSERTA(a); ASSERTA(B); ASSERTKA(C);
+		if (PA == nullptr)
 		{
-			typedef void(*CopyFn)(void*, const void*);
-			((const CopyFn)(konsta[C].v))(PA,PB);
+			ThrowAbortException(X_WRITE_NIL, nullptr);
+			return 0;
 		}
 		NEXTOP;
-	OP(JMP_LT):
-		ASSERTD(a); ASSERTD(B); ASSERTKD(C);
-		if(reg.d[a] < reg.d[B])
-		{
-			pc = (sfunc->Code + konstd[C]) - 1;
-		}
-		NEXTOP;
+
 	OP(NOP):
 		NEXTOP;
 	}
@@ -2170,7 +2126,7 @@ static void DoCast(const VMRegisters &reg, const VMFrame *f, int a, int b, int c
 
 	case CAST_S2Co:
 		ASSERTD(a); ASSERTS(b);
-		reg.d[a] = V_GetColor(reg.s[b]);
+		reg.d[a] = V_GetColor(reg.s[b].GetChars());
 		break;
 
 	case CAST_Co2S:

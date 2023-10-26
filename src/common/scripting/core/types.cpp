@@ -75,6 +75,8 @@ PStruct *TypeStringStruct;
 PStruct* TypeQuaternionStruct;
 PPointer *TypeNullPtr;
 PPointer *TypeVoidPtr;
+PPointer *TypeRawFunction;
+PPointer* TypeVMFunction;
 
 
 // CODE --------------------------------------------------------------------
@@ -322,6 +324,9 @@ void PType::StaticInit()
 	TypeTable.AddType(TypeTextureID = new PTextureID, NAME_TextureID);
 
 	TypeVoidPtr = NewPointer(TypeVoid, false);
+	TypeRawFunction = new PPointer;
+		TypeRawFunction->mDescriptiveName = "Raw Function Pointer";
+	TypeVMFunction = NewPointer(NewStruct("VMFunction", nullptr, true));
 	TypeColorStruct = NewStruct("@ColorStruct", nullptr);	//This name is intentionally obfuscated so that it cannot be used explicitly. The point of this type is to gain access to the single channels of a color value.
 	TypeStringStruct = NewStruct("Stringstruct", nullptr, true);
 	TypeQuaternionStruct = NewStruct("QuatStruct", nullptr, true);
@@ -348,8 +353,6 @@ void PType::StaticInit()
 	TypeVector2->RegType = REGT_FLOAT;
 	TypeVector2->RegCount = 2;
 	TypeVector2->isOrdered = true;
-	TypeVector2->isSimple = true;
-	TypeVector2->isAssignable = true;
 
 	TypeVector3 = new PStruct(NAME_Vector3, nullptr);
 	TypeVector3->AddField(NAME_X, TypeFloat64);
@@ -364,8 +367,6 @@ void PType::StaticInit()
 	TypeVector3->RegType = REGT_FLOAT;
 	TypeVector3->RegCount = 3;
 	TypeVector3->isOrdered = true;
-	TypeVector3->isSimple = true;
-	TypeVector3->isAssignable = true;
 
 	TypeVector4 = new PStruct(NAME_Vector4, nullptr);
 	TypeVector4->AddField(NAME_X, TypeFloat64);
@@ -382,8 +383,6 @@ void PType::StaticInit()
 	TypeVector4->RegType = REGT_FLOAT;
 	TypeVector4->RegCount = 4;
 	TypeVector4->isOrdered = true;
-	TypeVector4->isSimple = true;
-	TypeVector4->isAssignable = true;
 
 
 	TypeFVector2 = new PStruct(NAME_FVector2, nullptr);
@@ -396,8 +395,6 @@ void PType::StaticInit()
 	TypeFVector2->RegType = REGT_FLOAT;
 	TypeFVector2->RegCount = 2;
 	TypeFVector2->isOrdered = true;
-	TypeFVector2->isSimple = true;
-	TypeFVector2->isAssignable = true;
 
 	TypeFVector3 = new PStruct(NAME_FVector3, nullptr);
 	TypeFVector3->AddField(NAME_X, TypeFloat32);
@@ -412,8 +409,6 @@ void PType::StaticInit()
 	TypeFVector3->RegType = REGT_FLOAT;
 	TypeFVector3->RegCount = 3;
 	TypeFVector3->isOrdered = true;
-	TypeFVector3->isSimple = true;
-	TypeFVector3->isAssignable = true;
 
 	TypeFVector4 = new PStruct(NAME_FVector4, nullptr);
 	TypeFVector4->AddField(NAME_X, TypeFloat32);
@@ -430,8 +425,6 @@ void PType::StaticInit()
 	TypeFVector4->RegType = REGT_FLOAT;
 	TypeFVector4->RegCount = 4;
 	TypeFVector4->isOrdered = true;
-	TypeFVector4->isSimple = true;
-	TypeFVector4->isAssignable = true;
 
 
 	TypeQuaternion = new PStruct(NAME_Quat, nullptr);
@@ -449,8 +442,6 @@ void PType::StaticInit()
 	TypeQuaternion->RegType = REGT_FLOAT;
 	TypeQuaternion->RegCount = 4;
 	TypeQuaternion->isOrdered = true;
-	TypeQuaternion->isSimple = true;
-	TypeQuaternion->isAssignable = true;
 
 	TypeFQuaternion = new PStruct(NAME_FQuat, nullptr);
 	TypeFQuaternion->AddField(NAME_X, TypeFloat32);
@@ -467,8 +458,6 @@ void PType::StaticInit()
 	TypeFQuaternion->RegType = REGT_FLOAT;
 	TypeFQuaternion->RegCount = 4;
 	TypeFQuaternion->isOrdered = true;
-	TypeFQuaternion->isSimple = true;
-	TypeFQuaternion->isAssignable = true;
 
 
 	Namespaces.GlobalNamespace->Symbols.AddSymbol(Create<PSymbolType>(NAME_sByte, TypeSInt8));
@@ -497,11 +486,6 @@ void PType::StaticInit()
 	Namespaces.GlobalNamespace->Symbols.AddSymbol(Create<PSymbolType>(NAME_FQuat, TypeFQuaternion));
 }
 
-PType * PType::underlyingArrayType(PType *p)
-{
-	while(p->isArray()) p = static_cast<PArray*>(p)->ElementType;
-	return p;
-}
 
 /* PBasicType *************************************************************/
 
@@ -874,6 +858,7 @@ void PFloat::SetDoubleSymbols()
 		{ NAME_Min_Normal,		DBL_MIN },
 		{ NAME_Max,				DBL_MAX },
 		{ NAME_Epsilon,			DBL_EPSILON },
+		{ NAME_Equal_Epsilon,	EQUAL_EPSILON },
 		{ NAME_NaN,				std::numeric_limits<double>::quiet_NaN() },
 		{ NAME_Infinity,		std::numeric_limits<double>::infinity() },
 		{ NAME_Min_Denormal,	std::numeric_limits<double>::denorm_min() }
@@ -906,6 +891,7 @@ void PFloat::SetSingleSymbols()
 		{ NAME_Min_Normal,		FLT_MIN },
 		{ NAME_Max,				FLT_MAX },
 		{ NAME_Epsilon,			FLT_EPSILON },
+		{ NAME_Equal_Epsilon,	(float)EQUAL_EPSILON },
 		{ NAME_NaN,				std::numeric_limits<float>::quiet_NaN() },
 		{ NAME_Infinity,		std::numeric_limits<float>::infinity() },
 		{ NAME_Min_Denormal,	std::numeric_limits<float>::denorm_min() }
@@ -2993,7 +2979,7 @@ bool PFunctionPointer::ReadValue(FSerializer &ar, const char *key, void *addr) c
 		if(!p)
 		{
 			*fn = nullptr;
-			Printf(TEXTCOLOR_RED "Function Pointer (%s::%s): symbol '%s' in class '%s' is a variable, not a function\n",
+			Printf(TEXTCOLOR_RED "Function Pointer (%s::%s): '%s' in class '%s' is a variable, not a function\n",
 				val.ClassName.GetChars(),
 				val.FunctionName.GetChars(),
 				val.FunctionName.GetChars(),
@@ -3002,29 +2988,30 @@ bool PFunctionPointer::ReadValue(FSerializer &ar, const char *key, void *addr) c
 			ar.mErrors++;
 			return false;
 		}
-		else if(p->GetImplicitArgs() > 0)
-		{
-			*fn = nullptr;
-			Printf(TEXTCOLOR_RED "Function Pointer (%s::%s): function '%s' in class '%s' is %s, not a static function\n",
-				val.ClassName.GetChars(),
-				val.FunctionName.GetChars(),
-				val.FunctionName.GetChars(),
-				val.ClassName.GetChars(),
-				(p->GetImplicitArgs() == 1 ? "a method" : "an action function")
-			);
-			ar.mErrors++;
-			return false;
-		}
 		*fn = NativeFunctionPointerCast(p, this);
 		if(!*fn)
 		{
-			FString fn_name = MakeFunctionPointerDescriptiveName(p->Variants[0].Proto,p->Variants[0].ArgFlags, FScopeBarrier::SideFromFlags(p->Variants[0].Flags));
-			Printf(TEXTCOLOR_RED "Function Pointer (%s::%s) has incompatible type (Pointer is '%s', Function is '%s')\n",
-						val.ClassName.GetChars(),
-						val.FunctionName.GetChars(),
-						fn_name.GetChars(),
-						mDescriptiveName.GetChars()
-			);
+			if((p->Variants[0].Flags & (VARF_Action | VARF_Virtual)) != 0)
+			{
+				*fn = nullptr;
+				Printf(TEXTCOLOR_RED "Function Pointer (%s::%s): function '%s' in class '%s' is %s, not a static function\n",
+					val.ClassName.GetChars(),
+					val.FunctionName.GetChars(),
+					val.FunctionName.GetChars(),
+					val.ClassName.GetChars(),
+					(p->GetImplicitArgs() == 1 ? "a virtual function" : "an action function")
+				);
+			}
+			else
+			{
+				FString fn_name = MakeFunctionPointerDescriptiveName(p->Variants[0].Proto,p->Variants[0].ArgFlags, FScopeBarrier::SideFromFlags(p->Variants[0].Flags));
+				Printf(TEXTCOLOR_RED "Function Pointer (%s::%s) has incompatible type (Pointer is '%s', Function is '%s')\n",
+							val.ClassName.GetChars(),
+							val.FunctionName.GetChars(),
+							fn_name.GetChars(),
+							mDescriptiveName.GetChars()
+				);
+			}
 			ar.mErrors++;
 			return false;
 		}

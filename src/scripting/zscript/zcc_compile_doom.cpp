@@ -50,6 +50,7 @@ bool isActor(PContainerType *type);
 void AddActorInfo(PClass *cls);
 int GetIntConst(FxExpression* ex, FCompileContext& ctx);
 double GetFloatConst(FxExpression* ex, FCompileContext& ctx);
+VMFunction* GetFuncConst(FxExpression* ex, FCompileContext& ctx);
 
 //==========================================================================
 //
@@ -283,6 +284,10 @@ void ZCCDoomCompiler::DispatchProperty(FPropertyInfo *prop, ZCC_PropertyStmt *pr
 				conv.d = GetFloatConst(ex, ctx);
 				break;
 
+			case 'G':
+				conv.fu = GetFuncConst(ex, ctx);
+				break;
+
 			case 'Z':	// an optional string. Does not allow any numeric value.
 				if (ex->ValueType != TypeString)
 				{
@@ -412,7 +417,7 @@ void ZCCDoomCompiler::InitDefaultFunctionPointers()
 		PFunction * fn = FindFunctionPointer(d.cls, d.name.GetIndex());
 		if(!fn)
 		{
-			Error(d.prop, "Could not find static function '%s' in class '%s'",d.name.GetChars(), d.cls->TypeName.GetChars());
+			Error(d.prop, "Could not find function '%s' in class '%s'",d.name.GetChars(), d.cls->TypeName.GetChars());
 		}
 		else
 		{
@@ -656,7 +661,7 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 				TArray<FString> fn_info(FString(fn_str).Split("::", FString::TOK_SKIPEMPTY));
 				if(fn_info.Size() != 2)
 				{
-					Error(property, "Malformed function pointer property \"%s\", must be \"Class::Function\"",fn_info);
+					Error(property, "Malformed function pointer property \"%s\", must be \"Class::Function\"",fn_str);
 				}
 				PClass * cls = PClass::FindClass(fn_info[0]);
 				if(!cls)
@@ -729,7 +734,7 @@ void ZCCDoomCompiler::ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt 
 	}
 
 
-	FPropertyInfo *property = FindProperty(propname);
+	FPropertyInfo *property = FindProperty(propname.GetChars());
 
 	if (property != nullptr && property->category != CAT_INFO)
 	{
@@ -1066,7 +1071,7 @@ void ZCCDoomCompiler::CompileStates()
 				{
 					auto sl = static_cast<ZCC_StateLabel *>(st);
 					statename = FName(sl->Label).GetChars();
-					statedef.AddStateLabel(statename);
+					statedef.AddStateLabel(statename.GetChars());
 					break;
 				}
 				case AST_StateLine:
@@ -1125,7 +1130,7 @@ void ZCCDoomCompiler::CompileStates()
 						auto l = sl->Lights;
 						do
 						{
-							AddStateLight(&state, StringConstFromNode(l, c->Type()));
+							AddStateLight(&state, StringConstFromNode(l, c->Type()).GetChars());
 							l = static_cast<decltype(l)>(l->SiblingNext);
 						} while (l != sl->Lights);
 					}
@@ -1176,7 +1181,7 @@ void ZCCDoomCompiler::CompileStates()
 							statename.AppendFormat("+%d", offset);
 						}
 					}
-					if (!statedef.SetGotoLabel(statename))
+					if (!statedef.SetGotoLabel(statename.GetChars()))
 					{
 						Error(sg, "GOTO before first state");
 					}

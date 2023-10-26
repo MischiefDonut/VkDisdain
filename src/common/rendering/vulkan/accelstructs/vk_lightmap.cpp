@@ -8,6 +8,7 @@
 #include "zvulkan/vulkanbuilders.h"
 #include "halffloat.h"
 #include "filesystem.h"
+#include "cmdlib.h"
 
 #define USE_DRAWINDIRECT
 
@@ -94,7 +95,7 @@ void VkLightmap::BeginFrame()
 
 void VkLightmap::Raytrace(const TArray<LevelMeshSurface*>& surfaces)
 {
-	if (surfaces.Size())
+	if (mesh && surfaces.Size() > 0)
 	{
 		lightmapRaytraceLast.active = true;
 
@@ -126,13 +127,13 @@ void VkLightmap::SelectSurfaces(const TArray<LevelMeshSurface*>& surfaces)
 	selectedSurfaces.Clear();
 
 	const int spacing = 5; // Note: the spacing is here to avoid that the resolve sampler finds data from other surface tiles
-	RectPacker packer(bakeImageSize - 2, bakeImageSize - 2, RectPacker::Spacing(spacing));
+	RectPacker packer(bakeImageSize - spacing, bakeImageSize - spacing, RectPacker::Spacing(spacing));
 
 	for (int i = 0, count = surfaces.Size(); i < count; i++)
 	{
 		LevelMeshSurface* surface = surfaces[i];
 
-		if (!surface->needsUpdate)
+		if (!surface->NeedsUpdate)
 			continue;
 
 		// Only grab surfaces until our bake texture is full
@@ -148,7 +149,7 @@ void VkLightmap::SelectSurfaces(const TArray<LevelMeshSurface*>& surfaces)
 			bakeImage.maxX = std::max<uint16_t>(bakeImage.maxX, uint16_t(selected.X + surface->AtlasTile.Width + spacing));
 			bakeImage.maxY = std::max<uint16_t>(bakeImage.maxY, uint16_t(selected.Y + surface->AtlasTile.Height + spacing));
 
-			surface->needsUpdate = false;
+			surface->NeedsUpdate = false;
 		}
 	}
 }
@@ -272,7 +273,7 @@ void VkLightmap::Render()
 		{
 			while (i < count)
 			{
-				selectedSurfaces[i].Surface->needsUpdate = true;
+				selectedSurfaces[i].Surface->NeedsUpdate = true;
 				i++;
 			}
 			break;
@@ -656,8 +657,7 @@ FString VkLightmap::LoadPrivateShaderLump(const char* lumpname)
 {
 	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
 	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
-	FileData data = fileSystem.ReadFile(lump);
-	return data.GetString();
+	return GetStringFromLump(lump);
 }
 
 FString VkLightmap::LoadPublicShaderLump(const char* lumpname)
@@ -665,8 +665,7 @@ FString VkLightmap::LoadPublicShaderLump(const char* lumpname)
 	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
 	if (lump == -1) lump = fileSystem.CheckNumForFullName(lumpname);
 	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
-	FileData data = fileSystem.ReadFile(lump);
-	return data.GetString();
+	return GetStringFromLump(lump);
 }
 
 ShaderIncludeResult VkLightmap::OnInclude(FString headerName, FString includerName, size_t depth, bool system)
@@ -783,7 +782,7 @@ void VkLightmap::CreateRaytracePipeline()
 	{
 		raytrace.descriptorPool1 = DescriptorPoolBuilder()
 			.AddPoolSize(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1)
-			.AddPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1)
+			.AddPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2)
 			.MaxSets(1)
 			.DebugName("raytrace.descriptorPool1")
 			.Create(fb->GetDevice());
@@ -989,8 +988,9 @@ void VkLightmap::CreateCopyPipeline()
 		.Create(fb->GetDevice());
 
 	copy.descriptorPool = DescriptorPoolBuilder()
-		.AddPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256)
-		.MaxSets(256)
+		.AddPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1)
+		.AddPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1)
+		.MaxSets(1)
 		.DebugName("copy.descriptorPool")
 		.Create(fb->GetDevice());
 

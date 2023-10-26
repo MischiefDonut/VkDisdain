@@ -39,7 +39,7 @@ void MainWindow::Create(const FString& caption, int x, int y, int width, int hei
 	WndClass.hInstance = hInstance;
 	WndClass.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	WndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	WndClass.hbrBackground = NULL;
+	WndClass.hbrBackground = CreateSolidBrush(RGB(0,0,0));
 	WndClass.lpszMenuName = NULL;
 	WndClass.lpszClassName = WinClassName;
 
@@ -55,7 +55,7 @@ void MainWindow::Create(const FString& caption, int x, int y, int width, int hei
 		WS_EX_APPWINDOW,
 		WinClassName,
 		wcaption.c_str(),
-		WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
+		WS_OVERLAPPEDWINDOW/* | WS_VISIBLE*/ | WS_CLIPCHILDREN,
 		x, y, width, height,
 		(HWND)NULL,
 		(HMENU)NULL,
@@ -335,7 +335,7 @@ void MainWindow::SetNetStartProgress(int pos)
 	if (NetStartPane != 0 && NetStartMaxPos > 1)
 	{
 		char buf[16];
-		mysnprintf(buf, countof(buf), "%d/%d", pos, NetStartMaxPos);
+		mysnprintf(buf, sizeof(buf), "%d/%d", pos, NetStartMaxPos);
 		SetDlgItemTextA(NetStartPane, IDC_NETSTARTCOUNT, buf);
 		SendDlgItemMessage(NetStartPane, IDC_NETSTARTPROGRESS, PBM_SETPOS, min(pos, NetStartMaxPos), 0);
 	}
@@ -738,7 +738,7 @@ void MainWindow::FlushBufferedConsoleStuff()
 {
 	for (unsigned i = 0; i < bufferedConsoleStuff.Size(); i++)
 	{
-		DoPrintStr(bufferedConsoleStuff[i]);
+		DoPrintStr(bufferedConsoleStuff[i].GetChars());
 	}
 	bufferedConsoleStuff.Clear();
 }

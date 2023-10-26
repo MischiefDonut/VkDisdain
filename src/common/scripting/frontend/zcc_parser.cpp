@@ -233,6 +233,7 @@ static void InitTokenMap()
 	TOKENDEF (TK_Out,			ZCC_OUT);
 	TOKENDEF (TK_Super,			ZCC_SUPER);
 	TOKENDEF (TK_Null,			ZCC_NULLPTR);
+	TOKENDEF (TK_Sealed,		ZCC_SEALED);
 	TOKENDEF ('~',				ZCC_TILDE);
 	TOKENDEF ('!',				ZCC_BANG);
 	TOKENDEF (TK_SizeOf,		ZCC_SIZEOF);
@@ -408,8 +409,6 @@ PNamespace *ParseOneScript(const int baselump, ZCCParseState &state)
 	int lumpnum = baselump;
 	auto fileno = fileSystem.GetFileContainer(lumpnum);
 
-	FString file  = fileSystem.GetFileFullPath(lumpnum);
-
 	state.FileNo = fileno;
 
 	if (TokenMap.CountUsed() == 0)
@@ -474,7 +473,7 @@ PNamespace *ParseOneScript(const int baselump, ZCCParseState &state)
 	ParseSingleFile(&sc, nullptr, lumpnum, parser, state);
 	for (unsigned i = 0; i < Includes.Size(); i++)
 	{
-		lumpnum = fileSystem.CheckNumForFullName(Includes[i], true);
+		lumpnum = fileSystem.CheckNumForFullName(Includes[i].GetChars(), true);
 		if (lumpnum == -1)
 		{
 			IncludeLocs[i].Message(MSG_ERROR, "Include script lump %s not found", Includes[i].GetChars());
@@ -504,7 +503,7 @@ PNamespace *ParseOneScript(const int baselump, ZCCParseState &state)
 	// If the parser fails, there is no point starting the compiler, because it'd only flood the output with endless errors.
 	if (FScriptPosition::ErrorCounter > 0)
 	{
-		I_Error("%d errors while parsing %s", FScriptPosition::ErrorCounter, fileSystem.GetFileFullPath(baselump).GetChars());
+		I_Error("%d errors while parsing %s", FScriptPosition::ErrorCounter, fileSystem.GetFileFullPath(baselump).c_str());
 	}
 
 #ifndef NDEBUG
@@ -518,10 +517,10 @@ PNamespace *ParseOneScript(const int baselump, ZCCParseState &state)
 	if (Args->CheckParm("-dumpast"))
 	{
 		FString ast = ZCC_PrintAST(state.TopNode);
-		FString filename = fileSystem.GetFileFullPath(baselump);
+		FString filename = fileSystem.GetFileFullPath(baselump).c_str();
 		filename.ReplaceChars(":\\/?|", '.');
 		filename << ".ast";
-		FileWriter *ff = FileWriter::Open(filename);
+		FileWriter *ff = FileWriter::Open(filename.GetChars());
 		if (ff != NULL)
 		{
 			ff->Write(ast.GetChars(), ast.Len());
