@@ -1367,8 +1367,6 @@ ZCC_ExprTypeRef *ZCCCompiler::NodeFromSymbolType(PSymbolType *sym, ZCC_Expressio
 //
 //==========================================================================
 
-extern void GenStructCopyOps(PStruct * s);
-
 void ZCCCompiler::CompileAllFields()
 {
 	// Create copies of the arrays which can be altered
@@ -1404,8 +1402,6 @@ void ZCCCompiler::CompileAllFields()
 		{
 			if (CompileFields(Structs[i]->Type(), Structs[i]->Fields, Structs[i]->Outer, Structs[i]->Type() == 0? GlobalTreeNodes : &Structs[i]->TreeNodes, true))
 			{
-				// Generate copy ops for non-native structs
-				if(Structs[i]->Type() && !static_cast<PStruct*>(Structs[i]->Type())->isNative) GenStructCopyOps(static_cast<PStruct*>(Structs[i]->Type()));
 				// Remove from the list if all fields got compiled.
 				Structs.Delete(i--);
 				donesomething = true;
@@ -1463,43 +1459,14 @@ void ZCCCompiler::CompileAllFields()
 //
 //==========================================================================
 
-bool isComplexTypeForStruct(PType * fieldtype)
-{
-	return fieldtype->isDynArray()
-		|| fieldtype->isMap()
-		|| fieldtype->isMapIterator()
-		|| fieldtype->isObjectPointer()
-		|| fieldtype == TypeString
-		|| (  fieldtype->isStruct()
-			&& !static_cast<PStruct *>(fieldtype)->isNative
-			&& !static_cast<PStruct *>(fieldtype)->isSimple
-		   );
-}
-
 bool ZCCCompiler::CompileFields(PContainerType *type, TArray<ZCC_VarDeclarator *> &Fields, PClass *Outer, PSymbolTable *TreeNodes, bool forstruct, bool hasnativechildren)
 {
-	PStruct* selfStruct = type && type->isStruct() ? static_cast<PStruct*>(type) : nullptr;
-
-	if(selfStruct)
-	{
-		selfStruct->isSimple = true;
-		selfStruct->isAssignable = true;
-		selfStruct->isInternallyAssignable = true;
-	}
-
 	while (Fields.Size() > 0)
 	{
 		auto field = Fields[0];
 		FieldDesc *fd = nullptr;
 
 		PType *fieldtype = DetermineType(type, field, field->Names->Name, field->Type, true, true);
-
-		if(selfStruct && selfStruct->isSimple && isComplexTypeForStruct(PType::underlyingArrayType(fieldtype)) )
-		{ // mark and propagate complex structs:
-		  //   maps and dynarrays need a copy function to be called,
-		  //   native structs are pointers, so it's fine to copy even if they're complex
-			selfStruct->isSimple = false;
-		}
 
 		// For structs only allow 'deprecated', for classes exclude function qualifiers.
 		int notallowed = forstruct? 
@@ -1569,26 +1536,6 @@ bool ZCCCompiler::CompileFields(PContainerType *type, TArray<ZCC_VarDeclarator *
 		if (field->Flags & ZCC_Meta)
 		{
 			varflags |= VARF_Meta | VARF_Static | VARF_ReadOnly;	// metadata implies readonly
-		}
-		else if (selfStruct && (selfStruct->isAssignable || selfStruct->isInternallyAssignable))
-		{ // mark structs with readonly fields as non-assignable
-			if(varflags  & VARF_ReadOnly)
-			{
-				selfStruct->isAssignable = false;
-				if(!(varflags & VARF_InternalAccess))
-				{
-					selfStruct->isInternallyAssignable = false;
-				}
-			}
-
-			if(PStruct * other; fieldtype->isStruct() && !(other = static_cast<PStruct*>(fieldtype))->isNative && !other->isAssignable)
-			{
-				selfStruct->isAssignable = false;
-				if(selfStruct->isInternallyAssignable && (!other->isInternallyAssignable || other->mDefFileNo != selfStruct->mDefFileNo))
-				{
-					selfStruct->isInternallyAssignable = false;
-				}
-			}
 		}
 
 		if (field->Type->ArraySize != nullptr)

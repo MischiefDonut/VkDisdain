@@ -241,8 +241,6 @@ enum EFxType
 	EFX_PreIncrDecr,
 	EFX_PostIncrDecr,
 	EFX_Assign,
-	EFX_SimpleStructAssign,
-	EFX_ComplexStructAssign,
 	EFX_AssignSelf,
 	EFX_Binary,	// one token fits all, the operator is enough to distinguish them.
 	EFX_BinaryLogical,
@@ -906,72 +904,7 @@ public:
 
 //==========================================================================
 //
-//	FxSimpleStructAssign
-//
-//==========================================================================
-
-class FxSimpleStructAssign : public FxExpression
-{ // struct has no complex fields -- basically a memcpy
-	FxExpression *Base;
-	FxExpression *Right;
-	PStruct * Type;
-public:
-	FxSimpleStructAssign(FxExpression *base, FxExpression *right, PStruct *type);
-	FxExpression *Resolve(FCompileContext&);
-	ExpEmit Emit(VMFunctionBuilder *build);
-};
-
-//==========================================================================
-//
-//	FxSimpleStructAssign
-//
-//==========================================================================
-
-enum class StructCopyOpType
-{
-	ObjBarrier,
-
-	Memcpy,
-	DynArrayMapCopy,
-	StringCopy,
-
-	ObjArrayBarrier,
-
-	ArrayCopyDynArrayMap, // copy using the `X.Copy(Y)` function call
-	ArrayCopyString,
-	ArrayCopyStruct, // non-array structs are flattened into regular operations, so only this needs to be aware of them
-};
-
-struct StructCopyOp
-{
-	StructCopyOpType op;
-	unsigned offset;
-	unsigned size; // bytes for memcpy, unused otherwise
-	PType * type; // used for struct, dynarray, map and non-dynamic array copies, null for memcpy
-};
-
-class FxComplexStructAssign : public FxExpression
-{ // struct has complex fields
-	FxExpression *Base;
-	FxExpression *Right;
-	PStruct * Type;
-	const TArray<StructCopyOp> *CopyOps;
-	static TMap<const PStruct*,TArray<StructCopyOp>> struct_copy_ops;
-
-	ExpEmit reg_ptrdest, reg_ptrsrc;
-
-	friend void GenStructCopyOps(PStruct * s);
-	void ApplyCopyOps(VMFunctionBuilder *build, const TArray<StructCopyOp>& ops, ExpEmit base_offset, ExpEmit reg_dest, ExpEmit reg_source);
-public:
-	FxComplexStructAssign(FxExpression *base, FxExpression *right, PStruct *type);
-	FxExpression *Resolve(FCompileContext&);
-	ExpEmit Emit(VMFunctionBuilder *build);
-	static const TArray<StructCopyOp> * GetCopyOps(const PStruct *p) { return struct_copy_ops.CheckKey(p); }
-};
-
-//==========================================================================
-//
-//	FxMultiAssign
+//	FxAssign
 //
 //==========================================================================
 class FxCompoundStatement;
