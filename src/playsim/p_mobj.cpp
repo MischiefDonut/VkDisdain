@@ -2062,7 +2062,7 @@ static double P_XYMovement (AActor *mo, DVector2 scroll)
 
 				normMove = du;
 				move = normMove * lMove;
-				start = mo->Pos() - move * step / steps;
+				start = mo->Pos().XY() - move * step / steps;
 				mo->Vel.XY() = normMove * mo->Vel.XY().Length();
 			}
 			else if ((mo->flags2 & (MF2_SLIDE|MF2_BLASTED) || bForceSlide) && !(mo->flags&MF_MISSILE))
