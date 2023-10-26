@@ -321,7 +321,7 @@ FString VkShaderManager::LoadPrivateShaderLump(const char *lumpname)
 
 VkPPShader* VkShaderManager::GetVkShader(PPShader* shader)
 {
-	if (!shader->Backend || !static_cast<VkPPShader*>(shader->Backend.get())->VertexShader)
+	if (!shader->Backend)
 		shader->Backend = std::make_unique<VkPPShader>(fb, shader);
 	return static_cast<VkPPShader*>(shader->Backend.get());
 }
