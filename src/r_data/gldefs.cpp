@@ -2066,6 +2066,7 @@ void LoadGLDefs(const char *defsLump)
 	InitializeActorLights(LightAssociations);
 }
 
+
 //==========================================================================
 //
 //
@@ -2101,10 +2102,4 @@ void ParseGLDefs()
 	}
 	ParseVavoomSkybox();
 	LoadGLDefs(defsLump);
-}
-
-void ClearGLDefs()
-{
-	PostProcessShaders.Clear();
-	usershaders.Clear();
 }
