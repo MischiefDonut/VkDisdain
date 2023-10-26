@@ -314,12 +314,6 @@ void I_ShowFatalError(const char *msg)
 	}
 }
 
-void I_NetRestartShowConsole()
-{
-	I_ShutdownGraphics();
-	mainwindow.RestoreConView(true);
-}
-
 // Here is how the error logging system works.
 //
 // To catch exceptions that occur in secondary threads, CatchAllExceptions is

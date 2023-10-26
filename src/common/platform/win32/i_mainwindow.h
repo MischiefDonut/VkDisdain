@@ -17,7 +17,7 @@ public:
 	void Create(const FString& title, int x, int y, int width, int height);
 
 	void ShowGameView();
-	void RestoreConView(bool netgame_restart = false);
+	void RestoreConView();
 
 	void ShowErrorPane(const char* text);
 	void CheckForRestart();
