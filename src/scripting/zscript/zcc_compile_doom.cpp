@@ -44,7 +44,6 @@
 #include "v_text.h"
 #include "p_lnspec.h"
 #include "v_video.h"
-#include "maps.h"
 
 
 bool isActor(PContainerType *type);
@@ -129,11 +128,6 @@ bool ZCCDoomCompiler::CompileProperties(PClass *type, TArray<ZCC_Property *> &Pr
 				if (f == nullptr)
 				{
 					Error(id, "Variable %s not found in %s", FName(id->Id).GetChars(), type->TypeName.GetChars());
-				}
-				else if((f->Type->isMap() || f->Type->isDynArray()) && fields.Size() != 0)
-				{
-					Error(id, "Map/Array types cannot be multi-properites");
-					f = nullptr;
 				}
 				fields.Push(f);
 				id = (ZCC_Identifier*)id->SiblingNext;
@@ -437,7 +431,7 @@ void ZCCDoomCompiler::InitDefaultFunctionPointers()
 	DefaultFunctionPointers.Clear();
 }
 
-void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag, bool isClear)
+void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *property, AActor *defaults, Baggage &bag)
 {
 	ZCC_ExprConstant one;
 	unsigned parmcount = 1;
@@ -454,20 +448,6 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 			parmcount++;
 		}
 	}
-
-	int expectedSize = (prop->Variables.Size() == 1 && prop->Variables[0]->Type->isMap()) ? 2 : prop->Variables.Size();
-
-	if(isClear && !(prop->Variables[0]->Type->isMap() || prop->Variables[0]->Type->isDynArray()))
-	{
-		Error(property, "Property of type '%s' does not support Clearing", prop->Variables[0]->Type->DescriptiveName());
-		isClear = false;
-	}
-	else if(isClear)
-	{
-		expectedSize = 0;
-	}
-	
-
 	if (parmcount == 0 && prop->Variables.Size() == 1 && prop->Variables[0]->Type == TypeBool)
 	{
 		// allow boolean properties to have the parameter omitted
@@ -479,45 +459,15 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 		one.IntVal = 1;
 		property->Values = &one;
 	}
-	else if (parmcount != expectedSize)
+	else if (parmcount != prop->Variables.Size())
 	{
-		Error(x == nullptr? property : x, "Argument count mismatch: Got %u, expected %u", parmcount, expectedSize);
+		Error(x == nullptr? property : x, "Argument count mismatch: Got %u, expected %u", parmcount, prop->Variables.Size());
 		return;
 	}
 
 	auto exp = property->Values;
 	FCompileContext ctx(OutNamespace, bag.Info->VMType, false, mVersion);
-	
-	if(isClear)
-	{
-		auto f = prop->Variables[0];
-
-		void *addr;
-		if (f == nullptr)
-		{
-			// This variable was missing. The error had been reported for the property itself already.
-			return;
-		}
-
-		if (f->Flags & VARF_Meta)
-		{
-			addr = ((char*)bag.Info->Meta) + f->Offset;
-		}
-		else
-		{
-			addr = ((char*)defaults) + f->Offset;
-		}
-
-		if (f->Type->isDynArray())
-		{
-			static_cast<const PDynArray*>(f->Type)->ClearValue(addr);
-		}
-		else if(f->Type->isMap())
-		{
-			static_cast<const PMap*>(f->Type)->ClearValue(addr);
-		}
-	}
-	else for (auto f : prop->Variables)
+	for (auto f : prop->Variables)
 	{
 		void *addr;
 		if (f == nullptr)
@@ -536,13 +486,11 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 		}
 
 		FxExpression *ex = ConvertNode(exp);
-
 		ex = ex->Resolve(ctx);
 		if (ex == nullptr)
 		{
 			return;
 		}
-
 		else if (!ex->isConstant())
 		{
 			if (ex->ExprType == EFX_VectorValue && ex->ValueType == f->Type)
@@ -645,293 +593,8 @@ void ZCCDoomCompiler::DispatchScriptProperty(PProperty *prop, ZCC_PropertyStmt *
 			}
 			// If we get TypeError, there has already been a message from deeper down so do not print another one.
 		}
-		if (f->Type->isDynArray())
-		{
-			const PDynArray *arr = static_cast<const PDynArray*>(f->Type);
-			if(arr->ElementType == TypeSInt8 || arr->ElementType == TypeUInt8)
-			{
-				static_cast<TArray<uint8_t>*>(addr)->Push(GetIntConst(ex, ctx));
-			}
-			else if(arr->ElementType == TypeSInt16 || arr->ElementType == TypeUInt16)
-			{
-				static_cast<TArray<uint16_t>*>(addr)->Push(GetIntConst(ex, ctx));
-			}
-			else if(arr->ElementType == TypeSInt32 || arr->ElementType == TypeUInt32)
-			{
-				static_cast<TArray<uint32_t>*>(addr)->Push(GetIntConst(ex, ctx));
-			}
-			else if(arr->ElementType == TypeFloat32)
-			{
-				static_cast<TArray<float>*>(addr)->Push((float)GetFloatConst(ex, ctx));
-			}
-			else if(arr->ElementType == TypeFloat64)
-			{
-				static_cast<TArray<double>*>(addr)->Push(GetFloatConst(ex, ctx));
-			}
-			else if(arr->ElementType == TypeName)
-			{
-				static_cast<TArray<uint32_t>*>(addr)->Push(FName(GetStringConst(ex, ctx)).GetIndex());
-			}
-			else if(arr->ElementType == TypeSound)
-			{
-				static_cast<TArray<uint32_t>*>(addr)->Push(S_FindSound(GetStringConst(ex, ctx)).index());
-			}
-			else if(arr->ElementType == TypeColor)
-			{
-				if(ex->ValueType == TypeString)
-				{
-					static_cast<TArray<uint32_t>*>(addr)->Push(V_GetColor(GetStringConst(ex, ctx), &ex->ScriptPosition));
-				}
-				else
-				{
-					static_cast<TArray<uint32_t>*>(addr)->Push(GetIntConst(ex, ctx));
-				}
-			}
-			else if(arr->ElementType == TypeString)
-			{
-				static_cast<TArray<FString>*>(addr)->Push(GetStringConst(ex, ctx));
-			}
-			else if (arr->ElementType->isClassPointer())
-			{
-				auto clsname = GetStringConst(ex, ctx);
-				if (*clsname == 0 || !stricmp(clsname, "none"))
-				{
-					static_cast<TArray<void*>*>(addr)->Push(nullptr);
-				}
-				else
-				{
-					auto cls = PClass::FindClass(clsname);
-					auto cp = static_cast<PClassPointer*>(arr->ElementType);
-					if (cls == nullptr)
-					{
-						cls = cp->ClassRestriction->FindClassTentative(clsname);
-					}
-					else if (!cls->IsDescendantOf(cp->ClassRestriction))
-					{
-						Error(property, "class %s is not compatible with property type %s", clsname, cp->ClassRestriction->TypeName.GetChars());
-					}
 
-					static_cast<TArray<void*>*>(addr)->Push(cls);
-				}
-			}
-			else
-			{
-				Error(property, "Array type unsupported as a property");
-			}
-		}
-		else if(f->Type->isMap())
-		{
-			const PMap *map = static_cast<const PMap*>(f->Type);
-
-			//key
-			bool isIntKey;
-			uint32_t intKey;
-			FString strKey;
-
-			bool badkey = false;
-
-			if(map->KeyType == TypeString)
-			{
-				isIntKey = false;
-				strKey = GetStringConst(ex, ctx);
-			}
-			else if(map->KeyType == TypeSInt32 || map->KeyType == TypeUInt32)
-			{
-				isIntKey = true;
-				intKey = GetIntConst(ex, ctx);
-			}
-			else if(map->KeyType == TypeName)
-			{
-				isIntKey = true;
-				intKey = FName(GetStringConst(ex, ctx)).GetIndex();
-			}
-			else if(map->KeyType == TypeSound)
-			{
-				isIntKey = true;
-				intKey = S_FindSound(GetStringConst(ex, ctx)).index();
-			}
-			else if(map->KeyType == TypeColor)
-			{
-				isIntKey = true;
-				if(ex->ValueType == TypeString)
-				{
-					intKey = V_GetColor(GetStringConst(ex, ctx), &ex->ScriptPosition);
-				}
-				else
-				{
-					intKey = GetIntConst(ex, ctx);
-				}
-			}
-			else
-			{
-				Error(property, "Map key type unsupported as a property");
-				badkey = true;
-			}
-
-			//value
-
-			exp->ToErrorNode();	// invalidate after processing.
-			exp = static_cast<ZCC_Expression *>(exp->SiblingNext);
-
-			ex = ConvertNode(exp)->Resolve(ctx);
-			if (ex == nullptr)
-			{
-				return;
-			}
-
-			if(!badkey) // don't try to insert into map if the key isn't valid
-			{
-				if(map->ValueType == TypeSInt8 || map->ValueType == TypeUInt8)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,uint8_t>*>(addr)->Insert(intKey, GetIntConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,uint8_t>*>(addr)->Insert(strKey, GetIntConst(ex, ctx));
-					}
-				}
-				else if(map->ValueType == TypeSInt16 || map->ValueType == TypeUInt16)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,uint16_t>*>(addr)->Insert(intKey, GetIntConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,uint16_t>*>(addr)->Insert(strKey, GetIntConst(ex, ctx));
-					}
-				}
-				else if(map->ValueType == TypeSInt32 || map->ValueType == TypeUInt32)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,uint32_t>*>(addr)->Insert(intKey, GetIntConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,uint32_t>*>(addr)->Insert(strKey, GetIntConst(ex, ctx));
-					}
-				}
-				else if(map->ValueType == TypeFloat32)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,float>*>(addr)->Insert(intKey, (float)GetFloatConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,float>*>(addr)->Insert(strKey, (float)GetFloatConst(ex, ctx));
-					}
-				}
-				else if(map->ValueType == TypeFloat64)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,double>*>(addr)->Insert(intKey, GetFloatConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,double>*>(addr)->Insert(strKey, GetFloatConst(ex, ctx));
-					}
-				}
-				else if(map->ValueType == TypeName)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,uint32_t>*>(addr)->Insert(intKey, FName(GetStringConst(ex, ctx)).GetIndex());
-					}
-					else
-					{
-						static_cast<ZSMap<FString,uint32_t>*>(addr)->Insert(strKey, FName(GetStringConst(ex, ctx)).GetIndex());
-					}
-				}
-				else if(map->ValueType == TypeSound)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,uint32_t>*>(addr)->Insert(intKey, S_FindSound(GetStringConst(ex, ctx)).index());
-					}
-					else
-					{
-						static_cast<ZSMap<FString,uint32_t>*>(addr)->Insert(strKey, S_FindSound(GetStringConst(ex, ctx)).index());
-					}
-				}
-				else if(map->ValueType == TypeColor)
-				{
-					if(ex->ValueType == TypeString)
-					{
-						if(isIntKey)
-						{
-							static_cast<ZSMap<uint32_t,uint32_t>*>(addr)->Insert(intKey, V_GetColor(GetStringConst(ex, ctx), &ex->ScriptPosition));
-						}
-						else
-						{
-							static_cast<ZSMap<FString,uint32_t>*>(addr)->Insert(strKey, V_GetColor(GetStringConst(ex, ctx), &ex->ScriptPosition));
-						}
-					}
-					else
-					{
-						if(isIntKey)
-						{
-							static_cast<ZSMap<uint32_t,uint32_t>*>(addr)->Insert(intKey, GetIntConst(ex, ctx));
-						}
-						else
-						{
-							static_cast<ZSMap<FString,uint32_t>*>(addr)->Insert(strKey, GetIntConst(ex, ctx));
-						}
-					}
-				}
-				else if(map->ValueType == TypeString)
-				{
-					if(isIntKey)
-					{
-						static_cast<ZSMap<uint32_t,FString>*>(addr)->Insert(intKey, GetStringConst(ex, ctx));
-					}
-					else
-					{
-						static_cast<ZSMap<FString,FString>*>(addr)->Insert(strKey, GetStringConst(ex, ctx));
-					}
-				}
-				else if (map->ValueType->isClassPointer())
-				{
-					auto clsname = GetStringConst(ex, ctx);
-					if (*clsname == 0 || !stricmp(clsname, "none"))
-					{
-						static_cast<TArray<void*>*>(addr)->Push(nullptr);
-					}
-					else
-					{
-						auto cls = PClass::FindClass(clsname);
-						auto cp = static_cast<PClassPointer*>(map->ValueType);
-						if (cls == nullptr)
-						{
-							cls = cp->ClassRestriction->FindClassTentative(clsname);
-						}
-						else if (!cls->IsDescendantOf(cp->ClassRestriction))
-						{
-							Error(property, "class %s is not compatible with property type %s", clsname, cp->ClassRestriction->TypeName.GetChars());
-						}
-
-						if(isIntKey)
-						{
-							static_cast<ZSMap<uint32_t,void*>*>(addr)->Insert(intKey, cls);
-						}
-						else
-						{
-							static_cast<ZSMap<FString,void*>*>(addr)->Insert(strKey, cls);
-						}
-					}
-				}
-				else
-				{
-					Error(property, "Map value type unsupported as a property");
-				}
-			}
-
-		}
-		else if (f->Type == TypeBool)
+		if (f->Type == TypeBool)
 		{
 			static_cast<PBool*>(f->Type)->SetValue(addr, !!GetIntConst(ex, ctx));
 		}
@@ -1039,7 +702,6 @@ void ZCCDoomCompiler::ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt 
 {
 	auto namenode = prop->Prop;
 	FString propname;
-	bool isClearProp = false;
 
 	if (namenode->SiblingNext == namenode)
 	{
@@ -1060,11 +722,6 @@ void ZCCDoomCompiler::ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt 
 		// a two-name property
 		propname << FName(namenode->Id).GetChars() << "." << FName(static_cast<ZCC_Identifier *>(namenode->SiblingNext)->Id).GetChars();
 	}
-	else if (namenode->SiblingNext->SiblingNext->SiblingNext == namenode && stricmp(FName(static_cast<ZCC_Identifier *>(namenode->SiblingNext->SiblingNext)->Id).GetChars(),"Clear") == 0)
-	{
-		propname << FName(namenode->Id).GetChars() << "." << FName(static_cast<ZCC_Identifier *>(namenode->SiblingNext)->Id).GetChars();
-		isClearProp = true;
-	}
 	else
 	{
 		Error(prop, "Property name may at most contain two parts");
@@ -1076,10 +733,6 @@ void ZCCDoomCompiler::ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt 
 
 	if (property != nullptr && property->category != CAT_INFO)
 	{
-		if(isClearProp)
-		{
-			Error(prop, "property '%s' does not support Clear\n", propname.GetChars());
-		}
 		auto pcls = PClass::FindActor(property->clsname);
 		if (cls->IsDescendantOf(pcls))
 		{
@@ -1099,7 +752,7 @@ void ZCCDoomCompiler::ProcessDefaultProperty(PClassActor *cls, ZCC_PropertyStmt 
 			auto propp = dyn_cast<PProperty>(cls->FindSymbol(name, true));
 			if (propp != nullptr)
 			{
-				DispatchScriptProperty(propp, prop, (AActor *)bag.Info->Defaults, bag, isClearProp);
+				DispatchScriptProperty(propp, prop, (AActor *)bag.Info->Defaults, bag);
 				return;
 			}
 		}
