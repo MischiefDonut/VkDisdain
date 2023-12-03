@@ -45,6 +45,7 @@
 #include "printf.h"
 #include "c_cvars.h"
 #include "gamestate.h"
+#include "i_time.h"
 
 CVARD(Bool, snd_enabled, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG, "enables/disables sound effects")
 CVAR(Bool, i_soundinbackground, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -568,6 +569,11 @@ FSoundChan *SoundEngine::StartSound(int type, const void *source,
 	}
 
 	float pitch = spitch > 0 ? spitch : CalcPitch(sfx->PitchMask, defpitch, defpitchmax);
+
+	// [Disdain]
+	if (TimeScale < 1. && !(chanflags & CHANF_UI) && !(chanflags & CHANF_NOPAUSE))
+		pitch *= TimeScale;
+
 	if (chanflags & CHANF_EVICTED)
 	{
 		chan = NULL;
