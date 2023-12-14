@@ -40,12 +40,19 @@ struct LightBufferUBO
 	FVector4 lights[MAX_LIGHT_DATA];
 };
 
+#define MAX_FOGBALL_DATA ((int)(65536 / sizeof(Fogball)))
+
+struct FogballBufferUBO
+{
+	Fogball fogballs[MAX_FOGBALL_DATA];
+};
+
 struct PushConstants
 {
 	int uDataIndex; // streamdata index
 	int uLightIndex; // dynamic lights
 	int uBoneIndexBase; // bone animation
-	int padding;
+	int uFogballIndex; // fog balls
 };
 
 class VkShaderKey
@@ -72,7 +79,8 @@ public:
 			uint64_t SWLightBanded : 1; // SWLIGHT_BANDED
 			uint64_t LightMode : 2;     // LIGHTMODE_DEFAULT, LIGHTMODE_SOFTWARE, LIGHTMODE_VANILLA, LIGHTMODE_BUILD
 			uint64_t UseLevelMesh : 1;  // USE_LEVELMESH
-			uint64_t Unused : 44;
+			uint64_t FogBalls : 1;      // FOGBALLS
+			uint64_t Unused : 43;
 		};
 		uint64_t AsQWORD = 0;
 	};

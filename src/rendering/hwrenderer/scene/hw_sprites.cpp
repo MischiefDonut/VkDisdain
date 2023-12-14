@@ -748,9 +748,22 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	// [ZZ] allow CustomSprite-style direct picnum specification
 	bool isPicnumOverride = thing->picnum.isValid();
 
+	bool isFogball = thing->IsKindOf(NAME_Fogball);
+
 	// Don't waste time projecting sprites that are definitely not visible.
-	if ((thing->sprite == 0 && !isPicnumOverride) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
+	if ((thing->sprite == 0 && !isPicnumOverride && !isFogball) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
 	{
+		return;
+	}
+
+	if (isFogball)
+	{
+		Fogball fogball;
+		fogball.Position = FVector3(thing->Pos());
+		fogball.Radius = (float)thing->args[3];
+		fogball.Color = FVector3(thing->args[0] * (1.0f / 255.0f), thing->args[1] * (1.0f / 255.0f), thing->args[2] * (1.0f / 255.0f));
+		fogball.Fog = (float)thing->Alpha;
+		di->Fogballs.Push(fogball);
 		return;
 	}
 

@@ -125,6 +125,7 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 	for (int i = 0; i < GLDL_TYPES; i++) drawlists[i].Reset();
 	hudsprites.Clear();
 	Coronas.Clear();
+	Fogballs.Clear();
 	VisibleSurfaces.Clear();
 	vpIndex = 0;
 
@@ -409,6 +410,16 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 	HandleHackedSubsectors(state);	// open sector hacks for deep water
 	PrepareUnhandledMissingTextures(state);
 	DispatchRenderHacks(state);
+
+	// Sort fogballs by view order
+	FVector3 campos(vp.Pos);
+	std::sort(Fogballs.begin(), Fogballs.end(), [&](const Fogball& a, const Fogball& b) -> bool {
+		FVector3 rayA = a.Position - campos;
+		FVector3 rayB = b.Position - campos;
+		float distSqrA = rayA | rayA;
+		float distSqrB = rayB | rayB;
+		return distSqrA > distSqrB;
+		});
 
 	ProcessAll.Unclock();
 
@@ -810,6 +821,12 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 		CreateScene(false, state);
 	}
 
+	if (!outer) // Fogballs have no portal support. Always use the outermost scene's fogballs for now
+	{
+		int fogballIndex = state.UploadFogballs(Fogballs);
+		state.SetFogballIndex(fogballIndex);
+	}
+
 	state.SetDepthMask(true);
 	if (!gl_no_skyclear) drawctx->portalState.RenderFirstSkyPortal(recursion, this, state);
 
@@ -826,7 +843,13 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 	recursion++;
 	drawctx->portalState.EndFrame(this, state);
 	recursion--;
+
 	RenderTranslucent(state);
+
+	if (!outer)
+	{
+		state.SetFogballIndex(-1);
+	}
 }
 
 
