@@ -237,8 +237,8 @@ int DoMain (HINSTANCE hInstance)
 	HDC screenDC = GetDC(0);
 	int dpi = GetDeviceCaps(screenDC, LOGPIXELSX);
 	ReleaseDC(0, screenDC);
-	width = (720 * dpi + 96 / 2) / 96;
-	height = (400 * dpi + 96 / 2) / 96;
+	width = (512 * dpi + 96 / 2) / 96;
+	height = (384 * dpi + 96 / 2) / 96;
 
 	// Many Windows structures that specify their size do so with the first
 	// element. DEVMODE is not one of those structures.

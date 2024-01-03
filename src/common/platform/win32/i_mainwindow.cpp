@@ -113,8 +113,8 @@ void MainWindow::RestoreConView()
 	HDC screenDC = GetDC(0);
 	int dpi = GetDeviceCaps(screenDC, LOGPIXELSX);
 	ReleaseDC(0, screenDC);
-	int width = (720 * dpi + 96 / 2) / 96;
-	int height = (400 * dpi + 96 / 2) / 96;
+	int width = (512 * dpi + 96 / 2) / 96;
+	int height = (384 * dpi + 96 / 2) / 96;
 
 	// Make sure the window has a frame in case it was fullscreened.
 	SetWindowLongPtr(Window, GWL_STYLE, WS_VISIBLE | WS_OVERLAPPEDWINDOW);
@@ -567,8 +567,8 @@ LRESULT MainWindow::OnCreate(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	lf.lfHeight = -MulDiv(12, GetDeviceCaps(hdc, LOGPIXELSY), 72);
 	lf.lfCharSet = ANSI_CHARSET;
 	lf.lfWeight = FW_BOLD;
-	lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
-	wcscpy(lf.lfFaceName, L"Courier New");
+	lf.lfPitchAndFamily = VARIABLE_PITCH | FF_ROMAN;
+	wcscpy(lf.lfFaceName, L"Trebuchet MS");
 	GameTitleFont = CreateFontIndirect(&lf);
 
 	oldfont = SelectObject(hdc, GetStockObject(DEFAULT_GUI_FONT));
@@ -601,7 +601,7 @@ LRESULT MainWindow::OnCreate(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	SendMessage(view, EM_SETREADONLY, TRUE, 0);
 	SendMessage(view, EM_EXLIMITTEXT, 0, 0x7FFFFFFE);
-	SendMessage(view, EM_SETBKGNDCOLOR, 0, RGB(0, 0, 87));
+	SendMessage(view, EM_SETBKGNDCOLOR, 0, RGB(70, 70, 70));
 	// Setup default font for the log.
 	//SendMessage (view, WM_SETFONT, (WPARAM)GetStockObject (DEFAULT_GUI_FONT), FALSE);
 	format.cbSize = sizeof(format);
@@ -610,8 +610,8 @@ LRESULT MainWindow::OnCreate(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	format.yHeight = 200;
 	format.crTextColor = RGB(223, 223, 223);
 	format.bCharSet = ANSI_CHARSET;
-	format.bPitchAndFamily = FIXED_PITCH | FF_MODERN;
-	wcscpy(format.szFaceName, L"Courier New");
+	format.bPitchAndFamily = FF_SWISS | VARIABLE_PITCH;
+	wcscpy(format.szFaceName, L"DejaVu Sans");	// At least I have it. :p
 	SendMessageW(view, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&format);
 
 	ConWindow = view;
@@ -683,7 +683,7 @@ LRESULT MainWindow::OnDrawItem(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		drawitem = (LPDRAWITEMSTRUCT)lParam;
 
 		// This background color should match the edit control's.
-		hbr = CreateSolidBrush(RGB(0, 0, 87));
+		hbr = CreateSolidBrush(RGB(70, 70, 70));
 		FillRect(drawitem->hDC, &drawitem->rcItem, hbr);
 		DeleteObject(hbr);
 

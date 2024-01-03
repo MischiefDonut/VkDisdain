@@ -77,13 +77,13 @@ FConsoleWindow::FConsoleWindow()
 , m_netCurPos(0)
 , m_netMaxPos(0)
 {
-	const CGFloat initialWidth  = 720.0f;
-	const CGFloat initialHeight = 400.0f;
+	const CGFloat initialWidth  = 512.0f;
+	const CGFloat initialHeight = 384.0f;
 	const NSRect initialRect = NSMakeRect(0.0f, 0.0f, initialWidth, initialHeight);
 
 	[m_textView initWithFrame:initialRect];
 	[m_textView setEditable:NO];
-	[m_textView setBackgroundColor:RGB(0, 0, 87)];
+	[m_textView setBackgroundColor:RGB(70, 70, 70)];
 	[m_textView setMinSize:NSMakeSize(0.0f, initialHeight)];
 	[m_textView setMaxSize:NSMakeSize(FLT_MAX, FLT_MAX)];
 	[m_textView setVerticallyResizable:YES];
@@ -466,7 +466,7 @@ void FConsoleWindow::NetInit(const char* const message, const int playerCount)
 		[m_netAbortButton setAction:@selector(sendExitEvent:)];
 
 		// Panel for controls above
-		m_netView = [[NSView alloc] initWithFrame:NSMakeRect(0.0f, 0.0f, 720.0f, NET_VIEW_HEIGHT)];
+		m_netView = [[NSView alloc] initWithFrame:NSMakeRect(0.0f, 0.0f, 512.0f, NET_VIEW_HEIGHT)];
 		[m_netView setAutoresizingMask:NSViewWidthSizable];
 		[m_netView addSubview:m_netMessageText];
 		[m_netView addSubview:m_netCountText];
