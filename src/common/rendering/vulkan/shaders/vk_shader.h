@@ -26,11 +26,11 @@ struct MatricesUBO
 	VSMatrix TextureMatrix;
 };
 
-#define MAX_STREAM_DATA ((int)(65536 / sizeof(StreamData)))
+#define MAX_SURFACE_UNIFORMS ((int)(65536 / sizeof(SurfaceUniforms)))
 
-struct StreamUBO
+struct SurfaceUniformsUBO
 {
-	StreamData data[MAX_STREAM_DATA];
+	SurfaceUniforms data[MAX_SURFACE_UNIFORMS];
 };
 
 #define MAX_LIGHT_DATA ((int)(65536 / sizeof(FVector4)))
@@ -80,7 +80,8 @@ public:
 			uint64_t LightMode : 2;     // LIGHTMODE_DEFAULT, LIGHTMODE_SOFTWARE, LIGHTMODE_VANILLA, LIGHTMODE_BUILD
 			uint64_t UseLevelMesh : 1;  // USE_LEVELMESH
 			uint64_t FogBalls : 1;      // FOGBALLS
-			uint64_t Unused : 43;
+			uint64_t NoFragmentShader : 1;
+			uint64_t Unused : 42;
 		};
 		uint64_t AsQWORD = 0;
 	};

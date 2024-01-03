@@ -7,25 +7,26 @@
 
 class Mesh;
 
+struct MeshApplyData
+{
+	FRenderStyle RenderStyle;
+	int SpecialEffect;
+	int TextureEnabled;
+	float AlphaThreshold;
+	int DepthFunc;
+	int FogEnabled;
+	int FogColor;
+	int BrightmapEnabled;
+	int TextureClamp;
+	int TextureMode;
+	int TextureModeFlags;
+};
+
 class MeshApplyState
 {
 public:
-	struct ApplyData
-	{
-		FRenderStyle RenderStyle;
-		int SpecialEffect;
-		int TextureEnabled;
-		float AlphaThreshold;
-		int DepthFunc;
-		int FogEnabled;
-		int BrightmapEnabled;
-		int TextureClamp;
-		int TextureMode;
-		int TextureModeFlags;
-	};
-
-	ApplyData applyData;
-	StreamData streamData;
+	MeshApplyData applyData;
+	SurfaceUniforms surfaceUniforms;
 	FMaterialState material;
 	VSMatrix textureMatrix;
 
@@ -40,7 +41,7 @@ public:
 		if (material.mOverrideShader != other.material.mOverrideShader)
 			return material.mOverrideShader < other.material.mOverrideShader;
 
-		int result = memcmp(&applyData, &other.applyData, sizeof(ApplyData));
+		int result = memcmp(&applyData, &other.applyData, sizeof(MeshApplyData));
 		if (result != 0)
 			return result < 0;
 
@@ -48,7 +49,7 @@ public:
 		if (result != 0)
 			return result < 0;
 
-		result = memcmp(&streamData, &other.streamData, sizeof(StreamData));
+		result = memcmp(&surfaceUniforms, &other.surfaceUniforms, sizeof(SurfaceUniforms));
 		return result < 0;
 	}
 };
@@ -107,20 +108,20 @@ public:
 
 	std::unique_ptr<Mesh> Create();
 
-private:
-	void Apply();
-
 	struct DrawLists
 	{
 		TArray<MeshDrawCommand> mDraws;
 		TArray<MeshDrawCommand> mIndexedDraws;
 	};
 	std::map<MeshApplyState, DrawLists> mSortedLists;
-	DrawLists* mDrawLists = nullptr;
 
 	TArray<FFlatVertex> mVertices;
 	TArray<uint32_t> mIndexes;
-	int mDepthFunc = 0;
 
+private:
+	void Apply();
+
+	int mDepthFunc = 0;
 	VSMatrix mTextureMatrix = VSMatrix::identity();
+	DrawLists* mDrawLists = nullptr;
 };

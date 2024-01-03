@@ -324,6 +324,8 @@ if (HAVE_VULKAN)
 	list( APPEND PROJECT_LIBRARIES "zvulkan" )
 endif()
 
+list( APPEND PROJECT_LIBRARIES "zwidget" )
+
 # ZMUSIC
 
 if( MSVC )
@@ -587,6 +589,7 @@ file( GLOB HEADER_FILES
 	common/models/*.h
 	common/textures/*.h
 	common/startscreen/*.h
+	common/widgets/*.h
 	common/textures/hires/hqnx/*.h
 	common/textures/hires/hqnx_asm/*.h
 	common/textures/hires/xbr/*.h
@@ -594,6 +597,7 @@ file( GLOB HEADER_FILES
 	common/thirdparty/rapidjson/*.h
 	common/thirdparty/math/*h
 	common/thirdparty/libsmackerdec/include/*.h
+	common/thirdparty/utf8proc/*.h
 	common/rendering/*.h
 	common/rendering/hwrenderer/data/*.h
 	common/rendering/vulkan/*.h
@@ -605,7 +609,6 @@ file( GLOB HEADER_FILES
 	common/rendering/vulkan/samplers/*.h
 	common/rendering/vulkan/shaders/*.h
 	common/rendering/vulkan/textures/*.h
-	common/rendering/vulkan/accelstructs/*.h
 	common/scripting/core/*h
 	common/scripting/vm/*h
 	common/scripting/jit/*h
@@ -727,7 +730,6 @@ set( FASTMATH_SOURCES
 	rendering/hwrenderer/scene/hw_clipper.cpp
 	rendering/hwrenderer/scene/hw_flats.cpp
 	rendering/hwrenderer/scene/hw_portal.cpp
-	rendering/hwrenderer/scene/hw_meshportal.cpp
 	rendering/hwrenderer/scene/hw_renderhacks.cpp
 	rendering/hwrenderer/scene/hw_sky.cpp
 	rendering/hwrenderer/scene/hw_skyportal.cpp
@@ -745,6 +747,8 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/vk_renderstate.cpp
 	common/rendering/vulkan/vk_postprocess.cpp
 	common/rendering/vulkan/vk_pprenderstate.cpp
+	common/rendering/vulkan/vk_levelmesh.cpp
+	common/rendering/vulkan/vk_lightmapper.cpp
 	common/rendering/vulkan/commands/vk_commandbuffer.cpp
 	common/rendering/vulkan/buffers/vk_rsbuffers.cpp
 	common/rendering/vulkan/buffers/vk_hwbuffer.cpp
@@ -761,9 +765,6 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/textures/vk_renderbuffers.cpp
 	common/rendering/vulkan/textures/vk_texture.cpp
 	common/rendering/vulkan/framebuffers/vk_framebuffer.cpp
-	common/rendering/vulkan/accelstructs/vk_raytrace.cpp
-	common/rendering/vulkan/accelstructs/vk_lightmap.cpp
-	common/rendering/vulkan/accelstructs/halffloat.cpp
 )
 
 if (HAVE_VULKAN)
@@ -857,6 +858,7 @@ set (PCH_SOURCES
 	playsim/mapthinkers/a_pillar.cpp
 	playsim/mapthinkers/a_plats.cpp
 	playsim/mapthinkers/a_pusher.cpp
+	playsim/mapthinkers/a_thruster.cpp
 	playsim/mapthinkers/a_scroll.cpp
 	playsim/mapthinkers/dsectoreffect.cpp
 	playsim/a_pickups.cpp
@@ -891,12 +893,12 @@ set (PCH_SOURCES
 	rendering/hwrenderer/hw_vertexbuilder.cpp
 	rendering/hwrenderer/doom_aabbtree.cpp
 	rendering/hwrenderer/doom_levelmesh.cpp
+	rendering/hwrenderer/doom_levelsubmesh.cpp
 	rendering/hwrenderer/hw_models.cpp
 	rendering/hwrenderer/hw_precache.cpp
 	rendering/hwrenderer/scene/hw_lighting.cpp
 	rendering/hwrenderer/scene/hw_drawlistadd.cpp
 	rendering/hwrenderer/scene/hw_setcolor.cpp
-	rendering/hwrenderer/scene/hw_meshcache.cpp
 	maploader/edata.cpp
 	maploader/specials.cpp
 	maploader/maploader.cpp
@@ -979,6 +981,10 @@ set (PCH_SOURCES
 	common/startscreen/startscreen_strife.cpp
 	common/startscreen/startscreen_generic.cpp
 	common/startscreen/endoom.cpp
+	common/widgets/launcherwindow.cpp
+	common/widgets/errorwindow.cpp
+	common/widgets/netstartwindow.cpp
+	common/widgets/widgetresourcedata.cpp
 	common/fonts/singlelumpfont.cpp
 	common/fonts/singlepicfont.cpp
 	common/fonts/specialfont.cpp
@@ -1159,9 +1165,11 @@ set( GAME_SOURCES
 	${PCH_SOURCES}
 	common/utility/x86.cpp
 	common/thirdparty/strnatcmp.c
+	common/thirdparty/utf8proc/utf8proc.c
 	common/thirdparty/stb/stb_sprintf.c
 	common/utility/zstring.cpp
 	common/utility/findfile.cpp
+	common/utility/halffloat.cpp
 	common/thirdparty/math/asin.c
 	common/thirdparty/math/atan.c
 	common/thirdparty/math/const.c
@@ -1198,6 +1206,7 @@ set( GAME_SOURCES
 	common/filesystem/source/files_decompress.cpp
 	common/filesystem/source/fs_findfile.cpp
 	common/filesystem/source/fs_stringpool.cpp
+	common/filesystem/source/unicode.cpp
 
 )
 
@@ -1239,6 +1248,7 @@ include_directories(
 	common/thirdparty/libsmackerdec/include
 	common/thirdparty
 	common/thirdparty/stb
+	common/thirdparty/utf8proc
 	common/textures
 	common/textures/formats
 	common/textures/hires
@@ -1253,6 +1263,7 @@ include_directories(
 	common/fonts
 	common/objects
 	common/startscreen
+	common/widgets
 	common/rendering
 	common/rendering/hwrenderer/data
 	common/scripting/vm
@@ -1283,6 +1294,7 @@ include_directories(
 	scripting/zscript
 	rendering
 	../libraries/ZVulkan/include
+	../libraries/ZWidget/include
 	../libraries/dp_rect_pack
 	${SYSTEM_SOURCES_DIR}
 )
@@ -1443,6 +1455,8 @@ source_group("Common\\Fonts" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/co
 source_group("Common\\File System" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/filesystem/.+")
 source_group("Common\\File System\\Include" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/filesystem/include/.+")
 source_group("Common\\File System\\Source" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/filesystem/source/.+")
+source_group("Common\\Startscreen" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/startscreen/.+")
+source_group("Common\\Widgets" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/widgets/.+")
 source_group("Common\\Scripting" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/scripting/.+")
 source_group("Common\\Scripting\\Interface" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/scripting/interface/.+")
 source_group("Common\\Scripting\\Frontend" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/scripting/frontend/.+" FILES ${CMAKE_CURRENT_BINARY_DIR}/zcc-parse.c ${CMAKE_CURRENT_BINARY_DIR}/zcc-parse.h)
@@ -1468,7 +1482,6 @@ source_group("Common\\Rendering\\Vulkan Renderer\\Pipelines" REGULAR_EXPRESSION 
 source_group("Common\\Rendering\\Vulkan Renderer\\Samplers" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/samplers/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Shaders" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/shaders/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Textures" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/textures/.+")
-source_group("Common\\Rendering\\Vulkan Renderer\\Accelstructs" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/accelstructs/.+")
 source_group("Common\\Models" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/models/.+")
 source_group("Common\\Textures" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/textures/.+")
 source_group("Common\\Textures\\Hires" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/textures/hires/.+")
@@ -1481,6 +1494,7 @@ source_group("Common\\Third Party\\Math" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SO
 source_group("Common\\Third Party\\RapidJSON" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/rapidjson/.+")
 source_group("Common\\Third Party\\SFMT" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/sfmt/.+")
 source_group("Common\\Third Party\\stb" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/stb/.+")
+source_group("Common\\Third Party\\utf8proc" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/thirdparty/utf8proc/.+")
 source_group("Utility" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/utility/.+")
 source_group("Utility\\Node Builder" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/utility/nodebuilder/.+")
 source_group("Utility\\Smackerdec" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/smackerdec/.+")

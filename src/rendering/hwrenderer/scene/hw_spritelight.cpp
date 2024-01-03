@@ -52,7 +52,7 @@ class ActorTraceStaticLight
 public:
 	ActorTraceStaticLight(AActor* actor) : Actor(actor)
 	{
-		if (Actor && Actor->Pos() != Actor->StaticLightsTraceCache.Pos)
+		if (Actor && (Actor->Pos() != Actor->StaticLightsTraceCache.Pos || (Actor->Sector && (Actor->Sector->Flags & SECF_LM_DYNAMIC))))
 		{
 			Actor->StaticLightsTraceCache.Pos = Actor->Pos();
 			Actor->StaticLightsTraceCache.Bits = 0;
@@ -94,7 +94,7 @@ public:
 		}
 		else
 		{
-			bool traceResult = level.levelMesh->TraceSky(FVector3(x, y, z), level.SunDirection, 10000.0f);
+			bool traceResult = level.levelMesh->TraceSky(FVector3(x, y, z), level.SunDirection, 65536.0f);
 			Actor->StaticLightsTraceCache.Bits |= ((uint64_t)traceResult) << CurrentBit;
 			CurrentBit++;
 			return traceResult;

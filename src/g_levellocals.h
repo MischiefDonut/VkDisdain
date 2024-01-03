@@ -427,6 +427,8 @@ public:
 		DThinker *thinker = static_cast<DThinker*>(cls->CreateNew());
 		assert(thinker->IsKindOf(RUNTIME_CLASS(DThinker)));
 		thinker->ObjectFlags |= OF_JustSpawned;
+		if (thinker->IsKindOf(RUNTIME_CLASS(DVisualThinker))) // [MC] This absolutely must happen for this class!
+			statnum = STAT_VISUALTHINKER;
 		Thinkers.Link(thinker, statnum);
 		thinker->Level = this;
 		return thinker;
@@ -465,7 +467,7 @@ public:
 
 	// Lightmaps
 	bool lightmaps = false;
-	TArray<DoomLevelMeshSurface*> LMSurfaces;
+	TArray<DoomLevelMeshSurface*> Surfaces;
 	FVector3 SunDirection;
 	FVector3 SunColor;
 	uint16_t LightmapSampleDistance;
@@ -640,6 +642,7 @@ public:
 	double		sky1pos, sky2pos;
 	float		hw_sky1pos, hw_sky2pos;
 	bool		skystretch;
+	uint32_t	globalcolormap;
 
 	int			total_secrets;
 	int			found_secrets;
@@ -662,7 +665,7 @@ public:
 	DSeqNode *SequenceListHead;
 
 	// [RH] particle globals
-	uint32_t			OldestParticle; // [MC] Oldest particle for replacing with PS_REPLACE
+	uint32_t			OldestParticle; // [MC] Oldest particle for replacing with SPF_REPLACE
 	uint32_t			ActiveParticles;
 	uint32_t			InactiveParticles;
 	TArray<particle_t>	Particles;

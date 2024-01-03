@@ -32,6 +32,8 @@ struct HWDecal;
 struct FSection;
 enum area_t : int;
 class HWDrawContext;
+struct DoomLevelMeshSurface;
+struct HWFlatDispatcher;
 
 enum HWRenderStyle
 {
@@ -64,6 +66,16 @@ enum PortalTypes
 	PORTALTYPE_PLANEMIRROR,
 	PORTALTYPE_MIRROR,
 	PORTALTYPE_LINETOLINE,
+};
+
+enum DoomLevelMeshSurfaceType
+{
+	ST_NONE,
+	ST_MIDDLESIDE,
+	ST_UPPERSIDE,
+	ST_LOWERSIDE,
+	ST_CEILING,
+	ST_FLOOR
 };
 
 //==========================================================================
@@ -162,7 +174,7 @@ public:
 	vertex_t* vertexes[2];				// required for polygon splitting
 	FGameTexture* texture;
 	TArray<lightlist_t>* lightlist;
-	DoomLevelMeshSurface* lightmap;
+	DoomLevelMeshSurface* surface;
 
 	HWSeg glseg;
 	float ztop[2], zbottom[2];
@@ -202,7 +214,11 @@ public:
 		};
 	};
 
-
+	struct
+	{
+		DoomLevelMeshSurfaceType Type;
+		sector_t* ControlSector;
+	} LevelMeshInfo;
 
 	// these are not the same as ytop and ybottom!!!
 	float zceil[2];
@@ -332,16 +348,18 @@ public:
 
 	int dynlightindex;
 
-	void CreateSkyboxVertices(FFlatVertex *buffer);
-	void SetupLights(HWDrawInfo *di, FRenderState& state, FLightNode *head, FDynLightData &lightdata, int portalgroup);
+	F3DFloor* controlsector;
 
-	void PutFlat(HWDrawInfo *di, bool fog = false);
-	void Process(HWDrawInfo *di, FRenderState& state, sector_t * model, int whichplane, bool notexture);
+	void CreateSkyboxVertices(FFlatVertex *buffer);
+	void SetupLights(HWFlatDispatcher *di, FRenderState& state, FLightNode *head, FDynLightData &lightdata, int portalgroup);
+
+	void PutFlat(HWFlatDispatcher *di, bool fog = false);
+	void Process(HWFlatDispatcher *di, FRenderState& state, sector_t * model, int whichplane, bool notexture);
 	void SetFrom3DFloor(F3DFloor *rover, bool top, bool underside);
-	void ProcessSector(HWDrawInfo *di, FRenderState& state, sector_t * frontsector, int which = 7 /*SSRF_RENDERALL*/);	// cannot use constant due to circular dependencies.
+	void ProcessSector(HWFlatDispatcher *di, FRenderState& state, sector_t * frontsector, int which = 7 /*SSRF_RENDERALL*/);	// cannot use constant due to circular dependencies.
 	
-	void DrawSubsectors(HWDrawInfo *di, FRenderState &state);
-	void DrawFlat(HWDrawInfo *di, FRenderState &state, bool translucent);
+	void DrawSubsectors(HWFlatDispatcher *di, FRenderState &state);
+	void DrawFlat(HWFlatDispatcher *di, FRenderState &state, bool translucent);
     
     void DrawOtherPlanes(HWDrawInfo *di, FRenderState &state);
     void DrawFloodPlanes(HWDrawInfo *di, FRenderState &state);
@@ -368,7 +386,7 @@ public:
 	FRenderStyle RenderStyle;
 	int OverrideShader;
 
-	int translation;
+	FTranslationID translation;
 	int index;
 	float depth;
 	int vertexindex;
@@ -382,6 +400,7 @@ public:
 	float vt,vb;
 	float x1,y1,z1;
 	float x2,y2,z2;
+	float offx, offy;
 	float trans;
 	int dynlightindex;
 
@@ -402,6 +421,7 @@ public:
 	void PutSprite(HWDrawInfo *di, FRenderState& state, bool translucent);
 	void Process(HWDrawInfo *di, FRenderState& state, AActor* thing,sector_t * sector, area_t in_area, int thruportal = false, bool isSpriteShadow = false);
 	void ProcessParticle (HWDrawInfo *di, FRenderState& state, particle_t *particle, sector_t *sector);//, int shade, int fakeside)
+	void AdjustVisualThinker(HWDrawInfo *di, DVisualThinker *spr, sector_t *sector);
 
 	void DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent);
 };

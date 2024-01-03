@@ -153,7 +153,7 @@ struct HWDrawInfo
 	TArray<HUDSprite> hudsprites;	// These may just be stored by value.
 	TArray<AActor*> Coronas;
 	TArray<Fogball> Fogballs;
-	TArray<LevelMeshSurface*> VisibleSurfaces;
+	TArray<LightmapTile*> VisibleTiles;
 	uint64_t LastFrameTime = 0;
 
 	TArray<MissingTextureInfo> MissingUpperTextures;
@@ -181,8 +181,7 @@ struct HWDrawInfo
 	fixed_t viewx, viewy;	// since the nodes are still fixed point, keeping the view position  also fixed point for node traversal is faster.
 	bool multithread;
 
-	bool MeshBSP = false;
-	bool MeshBuilding = false;
+	TArray<bool> QueryResultsBuffer;
 
 	HWDrawInfo(HWDrawContext* drawctx) : drawctx(drawctx) { for (HWDrawList& list : drawlists) list.drawctx = drawctx; }
 
@@ -233,18 +232,22 @@ public:
 			return;
 		}
 
+		if (surface->LightmapTileIndex < 0)
+			return;
+
+		LightmapTile* tile = &surface->Submesh->LightmapTiles[surface->LightmapTileIndex];
 		if (lm_always_update || surface->AlwaysUpdate)
 		{
-			surface->NeedsUpdate = true;
+			tile->NeedsUpdate = true;
 		}
-		else if (VisibleSurfaces.Size() >= unsigned(lm_max_updates))
+		else if (VisibleTiles.Size() >= unsigned(lm_max_updates))
 		{
 			return;
 		}
 
-		if (surface->NeedsUpdate && !surface->portalIndex && !surface->bSky)
+		if (tile->NeedsUpdate)
 		{
-			VisibleSurfaces.Push(surface);
+			VisibleTiles.Push(tile);
 		}
 	}
 
@@ -261,6 +264,7 @@ public:
 
 	void DrawScene(int drawmode, FRenderState& state);
 	void CreateScene(bool drawpsprites, FRenderState& state);
+	void PutWallPortal(HWWall wall, FRenderState& state);
 	void RenderScene(FRenderState &state);
 	void RenderTranslucent(FRenderState &state);
 	void RenderPortal(HWPortal *p, FRenderState &state, bool usestencil);

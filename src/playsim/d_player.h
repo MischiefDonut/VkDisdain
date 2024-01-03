@@ -282,7 +282,7 @@ struct userinfo_t : TMap<FName,FBaseCVar *>
 		return *static_cast<FFloatCVar *>(*CheckKey(NAME_AimAssistPrecision));
 	}
 
-	void Reset();
+	void Reset(int pnum);
 	int TeamChanged(int team);
 	int SkinChanged(const char *skinname, int playerclass);
 	int SkinNumChanged(int skinnum);

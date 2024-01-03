@@ -162,6 +162,7 @@ void I_UpdateDiscordPresence(bool SendPresence, const char* curstatus, const cha
 bool M_SetSpecialMenu(FName& menu, int param);	// game specific checks
 
 const FIWADInfo *D_FindIWAD(TArray<FString> &wadfiles, const char *iwad, const char *basewad);
+void InitWidgetResources(const char* basewad);
 
 // PUBLIC FUNCTION PROTOTYPES ----------------------------------------------
 
@@ -592,6 +593,7 @@ CUSTOM_CVAR(Int, dmflags3, 0, CVAR_SERVERINFO | CVAR_NOINITCALL)
 }
 
 CVAR(Flag, sv_noplayerclip, dmflags3, DF3_NO_PLAYER_CLIP);
+CVAR(Flag, sv_coopsharekeys, dmflags3, DF3_COOP_SHARE_KEYS);
 
 //==========================================================================
 //
@@ -1953,7 +1955,7 @@ void GetReserved(LumpFilterInfo& lfi)
 {
 	lfi.reservedFolders = { "flats/", "textures/", "hires/", "sprites/", "voxels/", "colormaps/", "acs/", "maps/", "voices/", "patches/", "graphics/", "sounds/", "music/",
 	"materials/", "models/", "fonts/", "brightmaps/" };
-	lfi.requiredPrefixes = { "mapinfo", "zmapinfo", "umapinfo", "gameinfo", "sndinfo", "sndseq", "sbarinfo", "menudef", "gldefs", "animdefs", "decorate", "zscript", "iwadinfo", "maps/" };
+	lfi.requiredPrefixes = { "mapinfo", "zmapinfo", "umapinfo", "gameinfo", "sndinfo", "sndseq", "sbarinfo", "menudef", "gldefs", "animdefs", "decorate", "zscript", "iwadinfo", "complvl", "terrain", "maps/" };
 }
 
 static FString CheckGameInfo(std::vector<std::string> & pwads)
@@ -3307,7 +3309,7 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 	if (!batchrun) Printf ("ST_Init: Init startup screen.\n");
 	if (!restart)
 	{
-		StartWindow = FStartupScreen::CreateInstance (TexMan.GuesstimateNumTextures() + 5, StartScreen == nullptr);
+		StartWindow = FStartupScreen::CreateInstance (TexMan.GuesstimateNumTextures() + 5);
 	}
 	else
 	{
@@ -3686,8 +3688,9 @@ static int D_DoomMain_Internal (void)
 		OnMenuOpen,
 		System_LanguageChanged,
 		OkForLocalization,
-		[]() ->FConfigFile* { return GameConfig; }
-
+		[]() ->FConfigFile* { return GameConfig; },
+		nullptr, 
+		RemapUserTranslation
 	};
 
 	
@@ -3704,6 +3707,7 @@ static int D_DoomMain_Internal (void)
 		I_FatalError("Cannot find " BASEWAD);
 	}
 	LoadHexFont(wad);	// load hex font early so we have it during startup.
+	InitWidgetResources(wad);
 
 	C_InitConsole(80*8, 25*8, false);
 	I_DetectOS();

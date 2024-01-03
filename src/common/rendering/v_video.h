@@ -73,7 +73,7 @@ enum FTextureFormat : uint32_t;
 class FModelRenderer;
 struct SamplerUniform;
 struct FVertexBufferAttribute;
-struct HWViewpointUniforms;
+struct MeshApplyData;
 
 //
 // VIDEO
@@ -139,7 +139,7 @@ public:
 	virtual bool IsPoly() { return false; }
 	virtual bool CompileNextShader() { return true; }
 	virtual void SetLevelMesh(LevelMesh *mesh) { }
-	virtual void UpdateLightmaps(const TArray<LevelMeshSurface*>& surfaces) {}
+	virtual void UpdateLightmaps(const TArray<LightmapTile*>& tiles) {}
 
 	virtual DCanvas* GetCanvas() { return nullptr; }
 
@@ -226,7 +226,7 @@ public:
 
 	virtual void PostProcessScene(bool swscene, int fixedcm, float flash, const std::function<void()> &afterBloomDrawEndScene2D) { if (afterBloomDrawEndScene2D) afterBloomDrawEndScene2D(); }
 
-	virtual void DrawLevelMesh(const HWViewpointUniforms& viewpoint) { }
+	virtual int GetLevelMeshPipelineID(const MeshApplyData& applyData, const SurfaceUniforms& surfaceUniforms, const FMaterialState& material) { return 0; }
 
 	void ScaleCoordsFromWindow(int16_t &x, int16_t &y);
 

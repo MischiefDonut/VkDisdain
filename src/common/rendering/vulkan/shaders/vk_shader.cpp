@@ -71,11 +71,13 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 			{ "spheremap",    "shaders/scene/frag_main.glsl",        "shaders/scene/material_default.glsl", "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_normal.glsl", "#define SPHEREMAP\n#define NO_ALPHATEST\n" },
 			{ "burn",         "shaders/scene/frag_burn.glsl",        nullptr,                               nullptr,                                nullptr,                                "#define SIMPLE\n#define NO_ALPHATEST\n" },
 			{ "stencil",      "shaders/scene/frag_stencil.glsl",     nullptr,                               nullptr,                                nullptr,                                "#define SIMPLE\n#define NO_ALPHATEST\n" },
+			{ "portal",       "shaders/scene/frag_portal.glsl",      nullptr,                               nullptr,                                nullptr,                                "#define SIMPLE\n#define NO_ALPHATEST\n" },
 		};
 
 		const auto& desc = effectshaders[key.SpecialEffect];
 		program.vert = LoadVertShader(desc.ShaderName, mainvp, desc.defines, key.UseLevelMesh);
-		program.frag = LoadFragShader(desc.ShaderName, desc.fp1, desc.fp2, desc.fp3, desc.fp4, desc.defines, key);
+		if (!key.NoFragmentShader)
+			program.frag = LoadFragShader(desc.ShaderName, desc.fp1, desc.fp2, desc.fp3, desc.fp4, desc.defines, key);
 	}
 	else
 	{
@@ -113,7 +115,8 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 		{
 			const auto& desc = defaultshaders[key.EffectState];
 			program.vert = LoadVertShader(desc.ShaderName, mainvp, desc.Defines, key.UseLevelMesh);
-			program.frag = LoadFragShader(desc.ShaderName, mainfp, desc.material_lump, desc.mateffect_lump, desc.lightmodel_lump, desc.Defines, key);
+			if (!key.NoFragmentShader)
+				program.frag = LoadFragShader(desc.ShaderName, mainfp, desc.material_lump, desc.mateffect_lump, desc.lightmodel_lump, desc.Defines, key);
 		}
 		else
 		{
@@ -122,7 +125,8 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 			FString defines = defaultshaders[desc.shaderType].Defines + desc.defines;
 
 			program.vert = LoadVertShader(name, mainvp, defines.GetChars(), key.UseLevelMesh);
-			program.frag = LoadFragShader(name, mainfp, desc.shader.GetChars(), defaultshaders[desc.shaderType].mateffect_lump, defaultshaders[desc.shaderType].lightmodel_lump, defines.GetChars(), key);
+			if (!key.NoFragmentShader)
+				program.frag = LoadFragShader(name, mainfp, desc.shader.GetChars(), defaultshaders[desc.shaderType].mateffect_lump, defaultshaders[desc.shaderType].lightmodel_lump, defines.GetChars(), key);
 		}
 	}
 	return &program;
@@ -132,7 +136,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 {
 	FString definesBlock;
 	definesBlock << defines;
-	definesBlock << "\n#define MAX_STREAM_DATA " << std::to_string(MAX_STREAM_DATA).c_str() << "\n";
+	definesBlock << "\n#define MAX_SURFACE_UNIFORMS " << std::to_string(MAX_SURFACE_UNIFORMS).c_str() << "\n";
 	definesBlock << "#define MAX_LIGHT_DATA " << std::to_string(MAX_LIGHT_DATA).c_str() << "\n";
 	definesBlock << "#define MAX_FOGBALL_DATA " << std::to_string(MAX_FOGBALL_DATA).c_str() << "\n";
 #ifdef NPOT_EMULATION
@@ -170,7 +174,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	FString definesBlock;
 	if (fb->GetDevice()->SupportsExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME) && fb->GetDevice()->PhysicalDevice.Features.RayQuery.rayQuery) definesBlock << "\n#define SUPPORTS_RAYQUERY\n";
 	definesBlock << defines;
-	definesBlock << "\n#define MAX_STREAM_DATA " << std::to_string(MAX_STREAM_DATA).c_str() << "\n";
+	definesBlock << "\n#define MAX_SURFACE_UNIFORMS " << std::to_string(MAX_SURFACE_UNIFORMS).c_str() << "\n";
 	definesBlock << "#define MAX_LIGHT_DATA " << std::to_string(MAX_LIGHT_DATA).c_str() << "\n";
 	definesBlock << "#define MAX_FOGBALL_DATA " << std::to_string(MAX_FOGBALL_DATA).c_str() << "\n";
 #ifdef NPOT_EMULATION
@@ -321,6 +325,7 @@ FString VkShaderManager::GetVersionBlock()
 	}
 
 	versionBlock << "#extension GL_GOOGLE_include_directive : enable\n";
+	versionBlock << "#extension GL_EXT_nonuniform_qualifier : enable\r\n";
 
 	if (fb->GetDevice()->SupportsExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME) && fb->GetDevice()->PhysicalDevice.Features.RayQuery.rayQuery)
 	{

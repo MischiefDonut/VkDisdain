@@ -56,6 +56,14 @@ public:
 	void UpdateShadowData(unsigned int index, const FFlatVertex* vertices, unsigned int count) override;
 	void ResetVertices() override;
 
+	// Draw level mesh
+	void DrawLevelMeshSurfaces(bool noFragmentShader) override;
+	void DrawLevelMeshPortals(bool noFragmentShader) override;
+	int GetNextQueryIndex() override;
+	void BeginQuery() override;
+	void EndQuery() override;
+	void GetQueryResults(int start, int count, TArray<bool>& results) override;
+
 	// Worker threads
 	void FlushCommands() override { EndRenderPass(); }
 
@@ -71,7 +79,7 @@ protected:
 	void ApplyDepthBias();
 	void ApplyScissor();
 	void ApplyViewport();
-	void ApplyStreamData();
+	void ApplySurfaceUniforms();
 	void ApplyMatrices();
 	void ApplyPushConstants();
 	void ApplyBufferSets();
@@ -80,6 +88,9 @@ protected:
 
 	void BeginRenderPass(VulkanCommandBuffer *cmdbuffer);
 	void WaitForStreamBuffers();
+
+	void ApplyLevelMesh();
+	void DrawLevelMeshRange(VulkanCommandBuffer* cmdbuffer, VkPipelineKey pipelineKey, int start, int count, bool noFragmentShader);
 
 	VulkanRenderDevice* fb = nullptr;
 
@@ -113,7 +124,7 @@ protected:
 
 	uint32_t mLastViewpointOffset = 0xffffffff;
 	uint32_t mLastMatricesOffset = 0xffffffff;
-	uint32_t mLastStreamDataOffset = 0xffffffff;
+	uint32_t mLastSurfaceUniformsOffset = 0xffffffff;
 	uint32_t mLastLightsOffset = 0;
 	uint32_t mLastFogballsOffset = 0;
 	uint32_t mViewpointOffset = 0;
@@ -138,6 +149,8 @@ protected:
 		VkSampleCountFlagBits Samples = VK_SAMPLE_COUNT_1_BIT;
 		int DrawBuffers = 1;
 	} mRenderTarget;
+
+	TArray<uint32_t> mQueryResultsBuffer;
 };
 
 class VkRenderStateMolten : public VkRenderState

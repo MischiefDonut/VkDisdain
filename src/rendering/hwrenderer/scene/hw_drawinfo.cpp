@@ -35,6 +35,7 @@
 #include "hw_renderstate.h"
 #include "hw_drawinfo.h"
 #include "hw_drawcontext.h"
+#include "hw_walldispatcher.h"
 #include "po_man.h"
 #include "models.h"
 #include "hw_clock.h"
@@ -42,14 +43,16 @@
 #include "flatvertices.h"
 #include "hw_vrmodes.h"
 #include "hw_clipper.h"
-#include "hw_meshcache.h"
 #include "v_draw.h"
 #include "texturemanager.h"
 #include "actorinlines.h"
 #include "g_levellocals.h"
+#include "hw_lighting.h"
 
 EXTERN_CVAR(Float, r_visibility)
 EXTERN_CVAR(Int, lm_background_updates);
+EXTERN_CVAR(Float, r_actorspriteshadowdist)
+EXTERN_CVAR(Bool, gl_portals)
 
 CVAR(Bool, lm_always_update, false, 0)
 
@@ -64,7 +67,7 @@ CVAR(Float, gl_mask_sprite_threshold, 0.5f, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 CVAR(Bool, gl_coronas, true, CVAR_ARCHIVE);
 
-CVAR(Bool, gl_meshcache, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
+CVAR(Bool, gl_levelmesh, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
 
 sector_t * hw_FakeFlat(sector_t * sec, sector_t * dest, area_t in_area, bool back);
 
@@ -126,7 +129,7 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 	hudsprites.Clear();
 	Coronas.Clear();
 	Fogballs.Clear();
-	VisibleSurfaces.Clear();
+	VisibleTiles.Clear();
 	vpIndex = 0;
 
 	// Fullbright information needs to be propagated from the main view.
@@ -400,7 +403,99 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 
 	// clip the scene and fill the drawlists
 
-	RenderBSP(Level->HeadNode(), drawpsprites, state);
+	if (gl_levelmesh && !outer)
+	{
+		// Give the DrawInfo the viewpoint in fixed point because that's what the nodes are.
+		viewx = FLOAT2FIXED(Viewpoint.Pos.X);
+		viewy = FLOAT2FIXED(Viewpoint.Pos.Y);
+
+		validcount++;	// used for processing sidedefs only once by the renderer.
+
+		auto& portals = static_cast<DoomLevelSubmesh*>(level.levelMesh->StaticMesh.get())->Portals;
+
+		// draw level into depth buffer
+		state.SetColorMask(false);
+		state.SetCulling(Cull_CW);
+		state.DrawLevelMeshSurfaces(true);
+		if (gl_portals)
+		{
+			state.SetDepthBias(1, 128);
+			state.DrawLevelMeshPortals(true);
+			state.SetDepthBias(0, 0);
+		}
+
+		// use occlusion queries on all portals in level to decide which are visible
+		int queryStart = state.GetNextQueryIndex();
+		state.SetDepthMask(false);
+		state.EnableTexture(false);
+		state.SetEffect(EFF_PORTAL);
+		for (HWWall& wall : portals)
+		{
+			state.BeginQuery();
+
+			wall.MakeVertices(state, false);
+			wall.RenderWall(state, HWWall::RWF_BLANK);
+			wall.vertcount = 0;
+
+			state.EndQuery();
+		}
+		state.SetEffect(EFF_NONE);
+		state.EnableTexture(gl_texture);
+		state.SetColorMask(true);
+		state.SetDepthMask(true);
+		int queryEnd = state.GetNextQueryIndex();
+
+		// draw opaque level so the GPU has something to do while we examine the query results
+		state.DrawLevelMeshSurfaces(false);
+		if (!gl_portals)
+		{
+			state.SetDepthBias(1, 128);
+			state.DrawLevelMeshPortals(false);
+			state.SetDepthBias(0, 0);
+		}
+		state.SetCulling(Cull_None);
+
+		// retrieve the query results and use them to fill the portal manager with portals
+		state.GetQueryResults(queryStart, queryEnd - queryStart, QueryResultsBuffer);
+		for (unsigned int i = 0, count = QueryResultsBuffer.Size(); i < count; i++)
+		{
+			bool portalVisible = QueryResultsBuffer[i];
+			if (portalVisible)
+			{
+				PutWallPortal(portals[i], state);
+			}
+		}
+
+		// Draw sprites
+		auto it = level.GetThinkerIterator<AActor>();
+		AActor* thing;
+		while ((thing = it.Next()) != nullptr)
+		{
+			HWSprite sprite;
+
+			if (R_ShouldDrawSpriteShadow(thing))
+			{
+				double dist = (thing->Pos() - vp.Pos).LengthSquared();
+				double check = r_actorspriteshadowdist;
+				if (dist <= check * check)
+				{
+					sprite.Process(this, state, thing, thing->Sector, in_area, false, true);
+				}
+			}
+
+			sprite.Process(this, state, thing, thing->Sector, in_area, false);
+		}
+
+		// Process all the sprites on the current portal's back side which touch the portal.
+		if (mCurrentPortal != nullptr) mCurrentPortal->RenderAttached(this, state);
+
+		if (drawpsprites)
+			PreparePlayerSprites(Viewpoint.sector, in_area, state);
+	}
+	else
+	{
+		RenderBSP(Level->HeadNode(), drawpsprites, state);
+	}
 
 	// And now the crappy hacks that have to be done to avoid rendering anomalies.
 	// These cannot be multithreaded when the time comes because all these depend
@@ -425,22 +520,120 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 
 }
 
+void HWDrawInfo::PutWallPortal(HWWall wall, FRenderState& state)
+{
+	HWWallDispatcher ddi(this);
+
+	int portaltype = wall.portaltype;
+	int portalplane = wall.portalplane;
+
+	HWSkyInfo skyinfo;
+	if (portaltype == PORTALTYPE_SKY)
+	{
+		skyinfo.init(this, wall.frontsector, sector_t::ceiling, wall.frontsector->skytransfer, wall.Colormap.FadeColor);
+		wall.sky = &skyinfo;
+		wall.PutPortal(&ddi, state, portaltype, portalplane);
+	}
+	else if (portaltype == PORTALTYPE_SECTORSTACK)
+	{
+		// To do: this seems to need AddSubsectorToPortal?
+
+		//if (screen->instack[1 - portalplane])
+		//	return;
+		//wall.PutPortal(&ddi, state, portaltype, portalplane);
+	}
+	else if (portaltype == PORTALTYPE_PLANEMIRROR)
+	{
+		auto vpz = Viewpoint.Pos.Z;
+		if ((portalplane == sector_t::ceiling && vpz > wall.frontsector->ceilingplane.fD()) || (portalplane == sector_t::floor && vpz < -wall.frontsector->floorplane.fD()))
+			return;
+		wall.planemirror = (portalplane == sector_t::ceiling) ? &wall.frontsector->ceilingplane : &wall.frontsector->floorplane;
+		wall.PutPortal(&ddi, state, portaltype, portalplane);
+	}
+	else if (portaltype == PORTALTYPE_HORIZON)
+	{
+		HWHorizonInfo hi;
+		auto vpz = ddi.di->Viewpoint.Pos.Z;
+		if (vpz < wall.frontsector->GetPlaneTexZ(sector_t::ceiling))
+		{
+			if (vpz > wall.frontsector->GetPlaneTexZ(sector_t::floor))
+				wall.zbottom[1] = wall.zbottom[0] = vpz;
+
+			hi.plane.GetFromSector(wall.frontsector, sector_t::ceiling);
+			hi.lightlevel = hw_ClampLight(wall.frontsector->GetCeilingLight());
+			hi.colormap = wall.frontsector->Colormap;
+			hi.specialcolor = wall.frontsector->SpecialColors[sector_t::ceiling];
+			if (wall.frontsector->e->XFloor.ffloors.Size())
+			{
+				auto light = P_GetPlaneLight(wall.frontsector, &wall.frontsector->ceilingplane, true);
+
+				if (!(wall.frontsector->GetFlags(sector_t::ceiling) & PLANEF_ABSLIGHTING)) hi.lightlevel = hw_ClampLight(*light->p_lightlevel);
+				hi.colormap.CopyLight(light->extra_colormap);
+			}
+
+			if (ddi.isFullbrightScene()) hi.colormap.Clear();
+			wall.horizon = &hi;
+			wall.PutPortal(&ddi, state, portaltype, portalplane);
+		}
+		if (vpz > wall.frontsector->GetPlaneTexZ(sector_t::floor))
+		{
+			wall.zbottom[1] = wall.zbottom[0] = wall.frontsector->GetPlaneTexZ(sector_t::floor);
+
+			hi.plane.GetFromSector(wall.frontsector, sector_t::floor);
+			hi.lightlevel = hw_ClampLight(wall.frontsector->GetFloorLight());
+			hi.colormap = wall.frontsector->Colormap;
+			hi.specialcolor = wall.frontsector->SpecialColors[sector_t::floor];
+
+			if (wall.frontsector->e->XFloor.ffloors.Size())
+			{
+				auto light = P_GetPlaneLight(wall.frontsector, &wall.frontsector->floorplane, false);
+
+				if (!(wall.frontsector->GetFlags(sector_t::floor) & PLANEF_ABSLIGHTING)) hi.lightlevel = hw_ClampLight(*light->p_lightlevel);
+				hi.colormap.CopyLight(light->extra_colormap);
+			}
+
+			if (ddi.isFullbrightScene()) hi.colormap.Clear();
+			wall.horizon = &hi;
+			wall.PutPortal(&ddi, state, portaltype, portalplane);
+		}
+	}
+	else if (portaltype == PORTALTYPE_SKYBOX)
+	{
+		FSectorPortal* sportal = wall.frontsector->ValidatePortal(portalplane);
+		if (sportal != nullptr && sportal->mFlags & PORTSF_INSKYBOX) sportal = nullptr;	// no recursions, delete it here to simplify the following code
+		wall.secportal = sportal;
+		if (sportal)
+		{
+			wall.PutPortal(&ddi, state, portaltype, portalplane);
+		}
+	}
+	else if (portaltype == PORTALTYPE_MIRROR)
+	{
+		wall.PutPortal(&ddi, state, portaltype, portalplane);
+	}
+	else if (portaltype == PORTALTYPE_LINETOLINE)
+	{
+		wall.lineportal = wall.seg->linedef->getPortal()->mGroup;
+		wall.PutPortal(&ddi, state, portaltype, portalplane);
+	}
+}
+
 void HWDrawInfo::UpdateLightmaps()
 {
-	if (!outer && VisibleSurfaces.Size() < unsigned(lm_background_updates))
+	if (!outer && VisibleTiles.Size() < unsigned(lm_background_updates))
 	{
-		for (auto& e : static_cast<DoomLevelSubmesh*>(level.levelMesh->StaticMesh.get())->Surfaces)
+		for (auto& e : level.levelMesh->StaticMesh->LightmapTiles)
 		{
-			if (e.NeedsUpdate && !e.bSky && !e.portalIndex)
+			if (e.NeedsUpdate)
 			{
-				VisibleSurfaces.Push(&e);
+				VisibleTiles.Push(&e);
 
-				if (VisibleSurfaces.Size() >= unsigned(lm_background_updates))
+				if (VisibleTiles.Size() >= unsigned(lm_background_updates))
 					break;
 			}
 		}
 	}
-	screen->UpdateLightmaps(VisibleSurfaces);
+	screen->UpdateLightmaps(VisibleTiles);
 }
 
 //-----------------------------------------------------------------------------
@@ -484,33 +677,16 @@ void HWDrawInfo::RenderScene(FRenderState &state)
 	drawlists[GLDL_PLAINWALLS].DrawWalls(this, state, false);
 	drawlists[GLDL_PLAINFLATS].DrawFlats(this, state, false);
 
-	if (gl_meshcache && meshcache.Opaque)
-	{
-		meshcache.Opaque->Draw(state);
-	}
-
 	// Part 2: masked geometry. This is set up so that only pixels with alpha>gl_mask_threshold will show
 	state.AlphaFunc(Alpha_GEqual, gl_mask_threshold);
 	drawlists[GLDL_MASKEDWALLS].DrawWalls(this, state, false);
 	drawlists[GLDL_MASKEDFLATS].DrawFlats(this, state, false);
-
-	if (gl_meshcache && meshcache.Translucent)
-	{
-		meshcache.Translucent->Draw(state);
-	}
 
 	// Part 3: masked geometry with polygon offset. This list is empty most of the time so only waste time on it when in use.
 	if (drawlists[GLDL_MASKEDWALLSOFS].Size() > 0)
 	{
 		state.SetDepthBias(-1, -128);
 		drawlists[GLDL_MASKEDWALLSOFS].DrawWalls(this, state, false);
-		state.ClearDepthBias();
-	}
-
-	if (gl_meshcache && meshcache.TranslucentDepthBiased)
-	{
-		state.SetDepthBias(-1, -128);
-		meshcache.TranslucentDepthBiased->Draw(state);
 		state.ClearDepthBias();
 	}
 
@@ -828,7 +1004,7 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 	}
 
 	state.SetDepthMask(true);
-	if (!gl_no_skyclear) drawctx->portalState.RenderFirstSkyPortal(recursion, this, state);
+	if (!gl_no_skyclear && !gl_levelmesh) drawctx->portalState.RenderFirstSkyPortal(recursion, this, state);
 
 	RenderScene(state);
 
@@ -851,7 +1027,6 @@ void HWDrawInfo::DrawScene(int drawmode, FRenderState& state)
 		state.SetFogballIndex(-1);
 	}
 }
-
 
 //-----------------------------------------------------------------------------
 //
