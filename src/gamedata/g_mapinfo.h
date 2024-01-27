@@ -357,6 +357,7 @@ struct level_info_t
 	// [Disdain]
 	uint32_t	disflags;
 
+	FString		LightningSound = "world/thunder";
 	FString		Music;
 	FString		LevelName;
 	FString		AuthorName;
