@@ -6,6 +6,7 @@
 #include "p_trace.h"
 #include "p_linetracedata.h"
 #include "p_effect.h"
+#include "actorinlines.h"
 
 #include "g_levellocals.h"
 
