@@ -3,11 +3,11 @@ version: 1
 AppDir:
   path: ./AppDir
   app_info:
-    id: com.VKDoom.app
-    name: VKDoom
+    id: com.Disdain.app
+    name: Disdain
     icon: game_icon.png
     version: latest
-    exec: ./vkdoom
+    exec: ./disdain
     exec_args: $@
   apt:
     arch: amd64
