@@ -1391,6 +1391,8 @@ void DActorModelData::Serialize(FSerializer& arc)
 		("animationIDs", animationIDs)
 		("modelFrameGenerators", modelFrameGenerators)
 		("flags", flags)
+		("overrideFlagsSet", overrideFlagsSet)
+		("overrideFlagsClear", overrideFlagsClear)
 		("curAnim", curAnim)
 		("prevAnim", prevAnim);
 }
