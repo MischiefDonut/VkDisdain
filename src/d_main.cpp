@@ -212,26 +212,19 @@ extern FName MessageBoxClass;
 // [Disdain]
 void DoSetTimescale(double f)
 {
+	if (f < 0.05)
+	{
+		Printf("Time scale must be at least 0.05!\n");
+		return;
+	}
+
 	I_FreezeTime(true);
 	TimeScale = f;
 	I_FreezeTime(false);
 }
-CUSTOM_CVAR(Float, i_timescale, 1.0f, CVAR_NOINITCALL | CVAR_VIRTUAL)
+CUSTOM_CVAR(Float, i_timescale, 1.0f, CVAR_SERVERINFO | CVAR_NOSAVE | CVAR_NOINITCALL | CVAR_VIRTUAL)
 {
-	if (netgame)
-	{
-		Printf("Time scale cannot be changed in net games.\n");
-		self = 1.0f;
-	}
-	else if (self >= 0.05f)
-	{
-		// [Disdain]
-		DoSetTimescale((double)self);
-	}
-	else
-	{
-		Printf("Time scale must be at least 0.05!\n");
-	}
+	DoSetTimescale((double)self);
 }
 
 DEFINE_ACTION_FUNCTION(DObject, SetTimescale)

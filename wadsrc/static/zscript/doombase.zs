@@ -140,7 +140,7 @@ extend class Object
 
 	// [Disdain]
 	native static String GetVersionString();
-	native static void SetTimescale(double f);
+	native play static void SetTimescale(double f);
 }
 
 class Thinker : Object native play
