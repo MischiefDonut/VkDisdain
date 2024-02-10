@@ -205,7 +205,6 @@ void VkRenderState::Apply(int dt)
 	ApplyPushConstants();
 	ApplyVertexBuffers();
 	ApplyBufferSets();
-	ApplyMaterial();
 	mNeedApply = false;
 
 	drawcalls.Unclock();
@@ -236,8 +235,6 @@ void VkRenderState::ApplyRenderPass(int dt)
 	pipelineKey.StencilPassOp = mStencilOp;
 	pipelineKey.ColorMask = mColorMask;
 	pipelineKey.CullMode = mCullMode;
-	pipelineKey.NumTextureLayers = mMaterial.mMaterial ? mMaterial.mMaterial->NumLayers() : 0;
-	pipelineKey.NumTextureLayers = max(pipelineKey.NumTextureLayers, SHADER_MIN_REQUIRED_TEXTURE_LAYERS);// Always force minimum 8 textures as the shader requires it
 	if (mSpecialEffect > EFF_NONE)
 	{
 		pipelineKey.ShaderKey.SpecialEffect = mSpecialEffect;
@@ -404,10 +401,22 @@ void VkRenderState::ApplySurfaceUniforms()
 	else
 		mSurfaceUniforms.timer = 0.0f;
 
-	if (mMaterial.mMaterial)
+	if (mMaterial.mChanged)
 	{
-		auto source = mMaterial.mMaterial->Source();
-		mSurfaceUniforms.uSpecularMaterial = { source->GetGlossiness(), source->GetSpecularLevel() };
+		if (mMaterial.mMaterial)
+		{
+			auto source = mMaterial.mMaterial->Source();
+			if (source->isHardwareCanvas())
+				static_cast<FCanvasTexture*>(source->GetTexture())->NeedUpdate();
+
+			mSurfaceUniforms.uTextureIndex = static_cast<VkMaterial*>(mMaterial.mMaterial)->GetBindlessIndex(mMaterial);
+			mSurfaceUniforms.uSpecularMaterial = { source->GetGlossiness(), source->GetSpecularLevel() };
+		}
+		else
+		{
+			mSurfaceUniforms.uTextureIndex = 0;
+		}
+		mMaterial.mChanged = false;
 	}
 
 	if (!mRSBuffers->SurfaceUniformsBuffer->Write(mSurfaceUniforms))
@@ -424,7 +433,7 @@ void VkRenderState::ApplyPushConstants()
 	mPushConstants.uBoneIndexBase = mBoneIndexBase;
 	mPushConstants.uFogballIndex = mFogballIndex >= 0 ? (mFogballIndex % MAX_FOGBALL_DATA) : -1;
 
-	mCommandBuffer->pushConstants(fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.NumTextureLayers, mPipelineKey.ShaderKey.UseLevelMesh), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
+	mCommandBuffer->pushConstants(fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
 }
 
 void VkRenderState::ApplyMatrices()
@@ -481,24 +490,6 @@ void VkRenderState::ApplyVertexBuffers()
 	}
 }
 
-void VkRenderState::ApplyMaterial()
-{
-	if (mMaterial.mChanged)
-	{
-		auto descriptors = fb->GetDescriptorSetManager();
-		VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.NumTextureLayers, mPipelineKey.ShaderKey.UseLevelMesh);
-
-		if (mMaterial.mMaterial && mMaterial.mMaterial->Source()->isHardwareCanvas())
-			static_cast<FCanvasTexture*>(mMaterial.mMaterial->Source()->GetTexture())->NeedUpdate();
-
-		VulkanDescriptorSet* descriptorset = mMaterial.mMaterial ? static_cast<VkMaterial*>(mMaterial.mMaterial)->GetDescriptorSet(mMaterial) : descriptors->GetNullTextureSet();
-
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedSet());
-		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, descriptorset);
-		mMaterial.mChanged = false;
-	}
-}
-
 void VkRenderState::ApplyBufferSets()
 {
 	uint32_t matrixOffset = mRSBuffers->MatrixBuffer->Offset();
@@ -508,11 +499,12 @@ void VkRenderState::ApplyBufferSets()
 	if (mViewpointOffset != mLastViewpointOffset || matrixOffset != mLastMatricesOffset || surfaceUniformsOffset != mLastSurfaceUniformsOffset || lightsOffset != mLastLightsOffset || fogballsOffset != mLastFogballsOffset)
 	{
 		auto descriptors = fb->GetDescriptorSetManager();
-		VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.NumTextureLayers, mPipelineKey.ShaderKey.UseLevelMesh);
+		VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh);
 
 		uint32_t offsets[5] = { mViewpointOffset, matrixOffset, surfaceUniformsOffset, lightsOffset, fogballsOffset };
 		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedSet());
 		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, descriptors->GetRSBufferSet(), 5, offsets);
+		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, descriptors->GetBindlessSet());
 
 		mLastViewpointOffset = mViewpointOffset;
 		mLastMatricesOffset = matrixOffset;
@@ -930,7 +922,7 @@ void VkRenderState::DrawLevelMeshRange(VulkanCommandBuffer* cmdbuffer, VkPipelin
 	pushConstants.uLightIndex = -1;
 	pushConstants.uBoneIndexBase = -1;
 
-	VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(pipelineKey.NumTextureLayers, pipelineKey.ShaderKey.UseLevelMesh);
+	VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(pipelineKey.ShaderKey.UseLevelMesh);
 	uint32_t viewpointOffset = mViewpointOffset;
 	uint32_t matrixOffset = mRSBuffers->MatrixBuffer->Offset();
 	uint32_t lightsOffset = 0;
