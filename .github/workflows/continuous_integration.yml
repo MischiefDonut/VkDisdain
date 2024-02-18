@@ -121,30 +121,3 @@ jobs:
       run: |
         git status
         ls -lR build
-
-  deploy:
-    name: Update Latest successful build
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Visual Studio 2022 Release
-        path: build/disdain-prerelease
-
-    - name: Zip artifacts
-      shell: bash
-      run: |
-        cd build
-        zip -r disdain-prerelease.zip disdain-prerelease
-
-    - name: Update nightly release
-      uses: pyTooling/Actions/releaser@r0
-      with:
-        tag: nightly
-        rm: true
-        token: ${{ secrets.GITHUB_TOKEN }}
-        files: build/disdain-prerelease.zip
