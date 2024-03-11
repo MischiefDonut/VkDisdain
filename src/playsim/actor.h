@@ -444,9 +444,12 @@ enum ActorFlag9
 	MF9_DOSHADOWBLOCK			= 0x00000002,	// [inkoalawetrust] Should the monster look for SHADOWBLOCK actors ?
 	MF9_SHADOWBLOCK				= 0x00000004,	// [inkoalawetrust] Actors in the line of fire with this flag trigger the MF_SHADOW aiming penalty.
 	MF9_SHADOWAIMVERT			= 0x00000008,	// [inkoalawetrust] Monster aim is also offset vertically when aiming at shadow actors.
-	MF9_DECOUPLEDANIMATIONS	= 0x00000010,	// [RL0] Decouple model animations from states
-	MF9_SWIM = 0x00000020,			// [Disdain] Don't leave liquids when traversing
-	MF9_GLIDESONWALLS = 0x00000040,	// [Disdain] If the difference between the move and wall angle is small enough, glide along it instead of stopping.
+	MF9_DECOUPLEDANIMATIONS		= 0x00000010,	// [RL0] Decouple model animations from states
+	MF9_PATHING					= 0x00000020,	// [MC] Enables monsters to do pathfinding, such as A*.
+	MF9_KEEPPATH				= 0x00000040,	// [MC] Forces monsters to keep to the path when target's in sight.
+	MF9_NOPATHING				= 0x00000080,	// [MC] override the mapinfo "pathfinding"
+	MF9_SWIM					= 0x00000100,	// [Disdain] Don't leave liquids when traversing
+	MF9_GLIDESONWALLS			= 0x00000200,	// [Disdain] If the difference between the move and wall angle is small enough, glide along it instead of stopping.
 };
 
 // --- mobj.renderflags ---
@@ -502,6 +505,9 @@ enum ActorRenderFlag2
 	RF2_ONLYVISIBLEINMIRRORS	= 0x0002,	// [Nash] only renders in mirrors
 	RF2_BILLBOARDFACECAMERA		= 0x0004,	// Sprite billboard face camera (override gl_billboard_faces_camera)
 	RF2_BILLBOARDNOFACECAMERA	= 0x0008,	// Sprite billboard face camera angle (override gl_billboard_faces_camera)
+	RF2_FLIPSPRITEOFFSETX		= 0x0010,
+	RF2_FLIPSPRITEOFFSETY		= 0x0020,
+	RF2_CAMFOLLOWSPLAYER		= 0x0040,	// Matches the cam's base position and angles to the main viewpoint.
 };
 
 // This translucency value produces the closest match to Heretic's TINTTAB.
@@ -771,7 +777,7 @@ public:
 			Flags = f;
 	}
 
-	bool isZero()
+	bool isZero() const
 	{
 		return Offset.isZero();
 	}
@@ -795,6 +801,7 @@ public:
 	virtual void PostSerialize() override;
 	virtual void PostBeginPlay() override;		// Called immediately before the actor's first tick
 	virtual void Tick() override;
+	void EnableNetworking(const bool enable) override;
 
 	static AActor *StaticSpawn (FLevelLocals *Level, PClassActor *type, const DVector3 &pos, replace_t allowreplacement, bool SpawningMapThing = false);
 
@@ -903,6 +910,9 @@ public:
 
 	// Returns true if this view is considered "local" for the player.
 	bool CheckLocalView() const;
+	// Allows for enabling/disabling client-side rendering in a way the playsim can't access.
+	void DisableLocalRendering(const unsigned int pNum, const bool disable);
+	bool ShouldRenderLocally() const;
 
 	// Finds the first item of a particular type.
 	AActor *FindInventory (PClassActor *type, bool subclass=false);
@@ -1098,6 +1108,11 @@ public:
 	void AttachLight(unsigned int count, const FLightDefaults *lightdef);
 	void SetDynamicLights();
 
+	void ClearPath();
+	bool CanPathfind();
+	bool CallExcludeNode(AActor *node);
+	void CallReachedNode(AActor *node);
+
 // info for drawing
 // NOTE: The first member variable *must* be snext.
 	AActor			*snext, **sprev;	// links in sector (if needed)
@@ -1105,6 +1120,7 @@ public:
 
 	DAngle			SpriteAngle;
 	DAngle			SpriteRotation;
+	DVector2		AutomapOffsets;		// Offset the actors' sprite view on the automap by these coordinates.
 	DRotator		Angles;
 	DRotator		ViewAngles;			// Angle offsets for cameras
 	TObjPtr<DViewPosition*> ViewPos;			// Position offsets for cameras
@@ -1123,6 +1139,7 @@ public:
 	uint32_t			RenderRequired;		// current renderer must have this feature set
 	uint32_t			RenderHidden;		// current renderer must *not* have any of these features
 
+	bool				NoLocalRender;		// DO NOT EXPORT THIS! This is a way to disable rendering such that the playsim cannot access it.
 	ActorRenderFlags	renderflags;		// Different rendering flags
 	ActorRenderFlags2	renderflags2;		// More rendering flags...
 	ActorFlags		flags;
@@ -1152,6 +1169,7 @@ public:
 	TObjPtr<DBoneComponents*>		boneComponentData;
 
 // interaction info
+	TArray<TObjPtr<AActor*> > Path;
 	FBlockNode		*BlockNode;			// links in blocks (if needed)
 	struct sector_t	*Sector;
 	subsector_t *		subsector;
@@ -1361,6 +1379,7 @@ public:
 	int SpawnTime;
 	uint32_t SpawnOrder;
 
+	double SourceRadius = 5.0; // Light source radius
 
 	// ThingIDs
 	void SetTID (int newTID);
@@ -1481,6 +1500,11 @@ public:
 		result.Pitch = PrevAngles.Pitch + deltaangle(PrevAngles.Pitch, Angles.Pitch) * ticFrac;
 		result.Roll = PrevAngles.Roll + deltaangle(PrevAngles.Roll, Angles.Roll) * ticFrac;
 		return result;
+	}
+	float GetSpriteOffset(bool y) const
+	{
+		if (y)	return (float)(renderflags2 & RF2_FLIPSPRITEOFFSETY ? SpriteOffset.Y : -SpriteOffset.Y);
+		else	return (float)(renderflags2 & RF2_FLIPSPRITEOFFSETX ? SpriteOffset.X : -SpriteOffset.X);
 	}
 	DAngle GetSpriteAngle(DAngle viewangle, double ticFrac)
 	{
@@ -1736,8 +1760,8 @@ struct FTranslatedLineTarget
 	bool unlinked;	// found by a trace that went through an unlinked portal.
 };
 
-
-void StaticPointerSubstitution(AActor* old, AActor* notOld);
+void PlayerPointerSubstitution(AActor* oldPlayer, AActor* newPlayer);
+int MorphPointerSubstitution(AActor* from, AActor* to);
 
 #define S_FREETARGMOBJ	1
 

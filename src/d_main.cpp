@@ -587,6 +587,10 @@ CUSTOM_CVAR(Int, dmflags3, 0, CVAR_SERVERINFO | CVAR_NOINITCALL)
 
 CVAR(Flag, sv_noplayerclip, dmflags3, DF3_NO_PLAYER_CLIP);
 CVAR(Flag, sv_coopsharekeys, dmflags3, DF3_COOP_SHARE_KEYS);
+CVAR(Flag, sv_localitems, dmflags3, DF3_LOCAL_ITEMS);
+CVAR(Flag, sv_nolocaldrops, dmflags3, DF3_NO_LOCAL_DROPS);
+CVAR(Flag, sv_nocoopitems, dmflags3, DF3_NO_COOP_ONLY_ITEMS);
+CVAR(Flag, sv_nocoopthings, dmflags3, DF3_NO_COOP_ONLY_THINGS);
 
 //==========================================================================
 //
@@ -3122,6 +3126,8 @@ static int FileSystemPrintf(FSMessageLevel level, const char* fmt, ...)
 
 static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allwads, std::vector<std::string>& pwads)
 {
+	NetworkEntityManager::InitializeNetworkEntities();
+
 	if (!restart)
 	{
 		V_InitScreenSize();
@@ -3268,6 +3274,9 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 		delete exec;
 		exec = NULL;
 	}
+
+	if (!restart)
+		V_Init2();
 
 	// [RH] Initialize localizable strings. 
 	GStrings.LoadStrings(fileSystem, language);
