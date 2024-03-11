@@ -96,7 +96,7 @@ make -j $(nproc); rc=$?
 
 # -- If successful, show the build
 if [ $rc -eq 0 ]; then
-	if [ -f vkdoom ]; then
+	if [ -f disdain ]; then
 		xdg-open .
 	fi
 fi

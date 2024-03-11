@@ -101,12 +101,12 @@ jobs:
         cd build
         mkdir package
         if [[ "${{ runner.os }}" == 'Windows' ]]; then
-          cp ${{ matrix.config.build_type }}/vkdoom.exe ${{ matrix.config.build_type }}/*.pk3 package
+          cp ${{ matrix.config.build_type }}/disdain.exe ${{ matrix.config.build_type }}/*.pk3 package
         elif [[ "${{ runner.os }}" == 'macOS' ]]; then
-          cp -r vkdoom.app package
+          cp -r disdain.app package
         elif [[ "${{ runner.os }}" == 'Linux' ]]; then
-          cp vkdoom *.pk3 package
-          strip package/vkdoom
+          cp disdain *.pk3 package
+          strip package/disdain
         fi
 
     - name: Upload Package
@@ -122,38 +122,3 @@ jobs:
       run: |
         git status
         ls -lR build
-
-  deploy:
-    name: Update Latest successful build
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-
-    steps:
-    - name: Download Windows artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Visual Studio 2022 Release
-        path: build/vkdoom-windows-prerelease
-
-    - name: Download Linux artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Linux GCC 12 RelWithDebInfo
-        path: build/vkdoom-linux-prerelease
-
-    - name: Zip artifacts
-      shell: bash
-      run: |
-        cd build
-        zip -r vkdoom-windows-prerelease.zip vkdoom-windows-prerelease
-        zip -r vkdoom-linux-prerelease.zip vkdoom-linux-prerelease
-
-    - name: Update nightly release
-      uses: pyTooling/Actions/releaser@r0
-      with:
-        tag: nightly
-        rm: true
-        token: ${{ secrets.GITHUB_TOKEN }}
-        files: build/vkdoom-windows-prerelease.zip build/vkdoom-linux-prerelease.zip
-
