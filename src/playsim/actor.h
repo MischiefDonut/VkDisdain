@@ -448,8 +448,13 @@ enum ActorFlag9
 	MF9_PATHING					= 0x00000020,	// [MC] Enables monsters to do pathfinding, such as A*.
 	MF9_KEEPPATH				= 0x00000040,	// [MC] Forces monsters to keep to the path when target's in sight.
 	MF9_NOPATHING				= 0x00000080,	// [MC] override the mapinfo "pathfinding"
-	MF9_SWIM					= 0x00000100,	// [Disdain] Don't leave liquids when traversing
-	MF9_GLIDESONWALLS			= 0x00000200,	// [Disdain] If the difference between the move and wall angle is small enough, glide along it instead of stopping.
+};
+
+// For Disdain-specific features.
+enum DisdainActorFlag
+{
+	DF_SWIM				= 0x00000001,	// [Disdain] Don't leave liquids when traversing
+	DF_GLIDESONWALLS	= 0x00000002,	// [Disdain] If the difference between the move and wall angle is small enough, glide along it instead of stopping.
 };
 
 // --- mobj.renderflags ---
@@ -612,6 +617,7 @@ typedef TFlags<ActorFlag6> ActorFlags6;
 typedef TFlags<ActorFlag7> ActorFlags7;
 typedef TFlags<ActorFlag8> ActorFlags8;
 typedef TFlags<ActorFlag9> ActorFlags9;
+typedef TFlags<DisdainActorFlag> DisdainActorFlags;
 typedef TFlags<ActorRenderFlag> ActorRenderFlags;
 typedef TFlags<ActorRenderFlag2> ActorRenderFlags2;
 typedef TFlags<ActorBounceFlag> ActorBounceFlags;
@@ -625,6 +631,7 @@ DEFINE_TFLAGS_OPERATORS (ActorFlags6)
 DEFINE_TFLAGS_OPERATORS (ActorFlags7)
 DEFINE_TFLAGS_OPERATORS (ActorFlags8)
 DEFINE_TFLAGS_OPERATORS (ActorFlags9)
+DEFINE_TFLAGS_OPERATORS (DisdainActorFlags)
 DEFINE_TFLAGS_OPERATORS (ActorRenderFlags)
 DEFINE_TFLAGS_OPERATORS (ActorRenderFlags2)
 DEFINE_TFLAGS_OPERATORS (ActorBounceFlags)
@@ -1151,6 +1158,7 @@ public:
 	ActorFlags7		flags7;			// WHO WANTS TO BET ON 8!?
 	ActorFlags8		flags8;			// I see your 8, and raise you a bet for 9.
 	ActorFlags9		flags9;			// Happy ninth actor flag field GZDoom !
+	DisdainActorFlags DisdainFlags;
 	double			Floorclip;		// value to use for floor clipping
 	double			radius, Height;		// for movement checking
 

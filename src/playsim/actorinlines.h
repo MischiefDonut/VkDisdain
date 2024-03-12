@@ -287,7 +287,7 @@ inline bool CanJump(AActor* actor)
 
 inline bool ShouldFloat(AActor* actor)
 {
-	return !(actor->flags2 & MF2_DORMANT) && actor->target && (!(actor->flags9 & MF9_SWIM) || actor->waterlevel > 1)
+	return !(actor->flags2 & MF2_DORMANT) && actor->target && (!(actor->DisdainFlags & DF_SWIM) || actor->waterlevel > 1)
 			&& !(actor->flags & (MF_SKULLFLY | MF_INFLOAT));
 }
 

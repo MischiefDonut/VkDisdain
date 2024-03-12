@@ -2212,7 +2212,7 @@ void P_FakeZMovement(AActor *mo)
 		mo->SetZ(mo->ceilingz - mo->Height);
 	}
 
-	if ((mo->flags9 & MF9_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
+	if ((mo->DisdainFlags & DF_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		FWaterResults res;
 		P_UpdateWaterDepth(mo->Pos(), mo->Height, mo->Sector, mo->Height, false, res);
@@ -2513,7 +2513,7 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 		}
 
 		// Make sure the spot is a valid liquid
-		if ((thing->flags9 & MF9_SWIM) && CanSwim(thing)
+		if ((thing->DisdainFlags & DF_SWIM) && CanSwim(thing)
 			&& ((thing->waterlevel > 1 && thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed) || (thing->waterlevel <= 1 && tm.FromPMove)))
 		{
 			FWaterResults res;
@@ -2939,7 +2939,7 @@ bool P_CheckMove(AActor *thing, const DVector2 &pos, FCheckPosition& tm, int fla
 		}
 
 		// FIXME: Should monsters simply be allowed to get shoved out of water?
-		if ((thing->flags9 & MF9_SWIM) && thing->waterlevel > 1 && CanSwim(thing)
+		if ((thing->DisdainFlags & DF_SWIM) && thing->waterlevel > 1 && CanSwim(thing)
 			&& thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed)
 		{
 			FWaterResults res;

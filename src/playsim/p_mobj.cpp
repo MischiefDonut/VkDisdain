@@ -277,6 +277,7 @@ void AActor::Serialize(FSerializer &arc)
 		A("flags7", flags7)
 		A("flags8", flags8)
 		A("flags9", flags9)
+		A("disdainflags", DisdainFlags)
 		A("weaponspecial", weaponspecial)
 		A("special1", special1)
 		A("special2", special2)
@@ -2131,8 +2132,8 @@ static double P_XYMovement (AActor *mo, DVector2 scroll)
 				// Do nothing, relevant actions already done in the condition.
 				// This allows to avoid setting velocities to 0 in the final else of this series.
 			}
-			else if (DVector2 du = 0;
-					(mo->flags9 & MF9_GLIDESONWALLS) && mo->BlockingLine != nullptr && abs(normMove | (du = mo->BlockingLine->delta.Unit())) >= mo->MaxWallGlideAngle)
+			else if (DVector2 du = {};
+					(mo->DisdainFlags & DF_GLIDESONWALLS) && mo->BlockingLine != nullptr && abs(normMove | (du = mo->BlockingLine->delta.Unit())) >= mo->MaxWallGlideAngle)
 			{
 				// Glide along the wall instead of stopping.
 				if ((normMove | du) < 0)
@@ -2533,7 +2534,7 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 			mo->Vel.Z *= FRICTION_FLY;
 		}
 	}
-	if ((mo->flags9 & MF9_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
+	if ((mo->DisdainFlags & DF_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		double newz = clamp(mo->Z(), mo->floorz, mo->ceilingz - mo->Height);
 

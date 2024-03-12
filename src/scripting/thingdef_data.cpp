@@ -358,8 +358,8 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(MF9, KEEPPATH, AActor, flags9),
 	DEFINE_FLAG(MF9, NOPATHING, AActor, flags9),
 
-	DEFINE_FLAG(MF9, SWIM, AActor, flags9),
-	DEFINE_FLAG(MF9, GLIDESONWALLS, AActor, flags9),
+	DEFINE_FLAG(DF, SWIM, AActor, DisdainFlags),
+	DEFINE_FLAG(DF, GLIDESONWALLS, AActor, DisdainFlags),
 
 	// Effect flags
 	DEFINE_FLAG(FX, VISIBILITYPULSE, AActor, effects),
