@@ -996,6 +996,10 @@ void D_Display ()
 			case GS_FORCEWIPEMELT:
 				wipe_type = wipe_Melt;
 				break;
+
+			case GS_FORCEWIPEFIZZLEFADE:
+				wipe_type = wipe_Fizzlefade;
+				break;
 			}
 		}
 
@@ -3022,7 +3026,25 @@ static void System_StartCutscene(bool blockui)
 
 static void System_SetTransition(int type)
 {
-	if (type != wipe_None) wipegamestate = type == wipe_Burn? GS_FORCEWIPEBURN : type == wipe_Fade? GS_FORCEWIPEFADE : GS_FORCEWIPEMELT;
+	if (type != wipe_None)
+	{
+		switch (type)
+		{
+		case wipe_Burn:
+			wipegamestate = GS_FORCEWIPEBURN;
+			break;
+		case wipe_Fizzlefade:
+			wipegamestate = GS_FORCEWIPEFIZZLEFADE;
+			break;
+		case wipe_Fade:
+			wipegamestate = GS_FORCEWIPEFADE;
+			break;
+		default:
+		case wipe_Melt:
+			wipegamestate = GS_FORCEWIPEMELT;
+			break;
+		}
+	}
 }
 
 static void System_HudScaleChanged()
@@ -3274,9 +3296,6 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 		delete exec;
 		exec = NULL;
 	}
-
-	if (!restart)
-		V_Init2();
 
 	// [RH] Initialize localizable strings. 
 	GStrings.LoadStrings(fileSystem, language);
