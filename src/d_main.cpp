@@ -270,7 +270,7 @@ CUSTOM_CVAR (Int, fraglimit, 0, CVAR_SERVERINFO)
 		{
 			if (playeringame[i] && self <= D_GetFragCount(&players[i]))
 			{
-				Printf ("%s\n", GStrings("TXT_FRAGLIMIT"));
+				Printf ("%s\n", GStrings.GetString("TXT_FRAGLIMIT"));
 				primaryLevel->ExitLevel (0, false);
 				break;
 			}
@@ -591,6 +591,8 @@ CVAR(Flag, sv_localitems, dmflags3, DF3_LOCAL_ITEMS);
 CVAR(Flag, sv_nolocaldrops, dmflags3, DF3_NO_LOCAL_DROPS);
 CVAR(Flag, sv_nocoopitems, dmflags3, DF3_NO_COOP_ONLY_ITEMS);
 CVAR(Flag, sv_nocoopthings, dmflags3, DF3_NO_COOP_ONLY_THINGS);
+CVAR(Flag, sv_rememberlastweapon, dmflags3, DF3_REMEMBER_LAST_WEAP);
+CVAR(Flag, sv_pistolstart, dmflags3, DF3_PISTOL_START);
 
 //==========================================================================
 //
@@ -1125,7 +1127,7 @@ void D_Display ()
 				if (paused && multiplayer)
 				{
 					FFont *font = generic_ui? NewSmallFont : SmallFont;
-					FString pstring = GStrings("TXT_BY");
+					FString pstring = GStrings.GetString("TXT_BY");
 					pstring.Substitute("%s", players[paused - 1].userinfo.GetName());
 					DrawText(twod, font, CR_RED,
 						(twod->GetWidth() - font->StringWidth(pstring)*CleanXfac) / 2,
@@ -1225,6 +1227,8 @@ void D_DoomLoop ()
 	{
 		try
 		{
+			GStrings.SetDefaultGender(players[consoleplayer].userinfo.GetGender()); // cannot be done when the CVAR changes because we don't know if it's for the consoleplayer.
+
 			// frame syncronous IO operations
 			if (gametic > lasttic)
 			{
@@ -1323,7 +1327,7 @@ void D_PageDrawer (void)
 	if (Subtitle != nullptr)
 	{
 		FFont* font = generic_ui ? NewSmallFont : SmallFont;
-		DrawFullscreenSubtitle(font, GStrings[Subtitle]);
+		DrawFullscreenSubtitle(font, GStrings.CheckString(Subtitle));
 	}
 	if (Advisory.isValid())
 	{
@@ -2190,7 +2194,7 @@ static void CheckCmdLine()
 
 	if (devparm)
 	{
-		Printf ("%s", GStrings("D_DEVSTR"));
+		Printf ("%s", GStrings.GetString("D_DEVSTR"));
 	}
 
 	// turbo option  // [RH] (now a cvar)
@@ -2665,11 +2669,6 @@ void Mlook_ReleaseHandler()
 	{
 		Net_WriteInt8(DEM_CENTERVIEW);
 	}
-}
-
-int StrTable_GetGender()
-{
-	return players[consoleplayer].userinfo.GetGender();
 }
 
 bool StrTable_ValidFilter(const char* str)
@@ -3505,7 +3504,7 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 		for (int p = 0; p < 5; ++p)
 		{
 			// At this point we cannot use the player's gender info yet so force 'male' here.
-			const char *str = GStrings.GetString(startupString[p], nullptr, 0);
+			const char *str = GStrings.CheckString(startupString[p], nullptr, 0);
 			if (str != NULL && str[0] != '\0')
 			{
 				Printf("%s\n", str);
@@ -3705,7 +3704,6 @@ static int D_DoomMain_Internal (void)
 		System_GetPlayerName,
 		System_DispatchEvent,
 		StrTable_ValidFilter,
-		StrTable_GetGender,
 		nullptr,
 		CheckSkipGameOptionBlock,
 		System_ConsoleToggled,
