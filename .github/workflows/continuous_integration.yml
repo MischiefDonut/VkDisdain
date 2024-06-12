@@ -13,7 +13,7 @@ jobs:
         - name: Visual Studio 2022
           os: windows-2022
           extra_options: -DCMAKE_TOOLCHAIN_FILE=build/vcpkg/scripts/buildsystems/vcpkg.cmake
-          build_type: Release
+          build_type: RelWithDebInfo
 
         - name: Visual Studio 2022
           os: windows-2022
@@ -95,19 +95,20 @@ jobs:
         cmake --build build --config ${{ matrix.config.build_type }} --parallel 3
 
     - name: Create Package
-      if: runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12'
+      if: (runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12') && matrix.config.build_type == 'RelWithDebInfo'
       shell: bash
       run: |
         cd build
         mkdir package
         if [[ "${{ runner.os }}" == 'Windows' ]]; then
-          cp -r ${{ matrix.config.build_type }}/disdain.exe ${{ matrix.config.build_type }}/*.pk3 ${{ matrix.config.build_type }}/fm_banks ${{ matrix.config.build_type }}/soundfonts package
+          cp -r ${{ matrix.config.build_type }}/vkdoom.exe ${{ matrix.config.build_type }}/*.pk3 ${{ matrix.config.build_type }}/fm_banks ${{ matrix.config.build_type }}/soundfonts package
           cp ../bin/licenses.zip ../bin/windows/libsndfile/64bit/libsndfile-1.dll ../bin/windows/openal/64bit/openal32.dll ../bin/windows/zmusic/64bit/zmusic.dll package
+          cp ${{ matrix.config.build_type }}/vkdoom-stripped.pdb package/vkdoom.pdb
         elif [[ "${{ runner.os }}" == 'macOS' ]]; then
-          cp -r disdain.app package
+          cp -r vkdoom.app package
         elif [[ "${{ runner.os }}" == 'Linux' ]]; then
-          cp disdain *.pk3 package
-          strip package/disdain
+          cp vkdoom *.pk3 package
+          strip package/vkdoom
         fi
 
     - name: Upload Package
