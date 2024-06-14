@@ -93,34 +93,3 @@ jobs:
       run: |
         export MAKEFLAGS=--keep-going
         cmake --build build --config ${{ matrix.config.build_type }} --parallel 3
-
-    - name: Create Package
-      if: (runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12') && matrix.config.build_type == 'RelWithDebInfo'
-      shell: bash
-      run: |
-        cd build
-        mkdir package
-        if [[ "${{ runner.os }}" == 'Windows' ]]; then
-          cp -r ${{ matrix.config.build_type }}/disdain.exe ${{ matrix.config.build_type }}/*.pk3 ${{ matrix.config.build_type }}/fm_banks ${{ matrix.config.build_type }}/soundfonts package
-          cp ../bin/licenses.zip ../bin/windows/libsndfile/64bit/libsndfile-1.dll ../bin/windows/openal/64bit/openal32.dll ../bin/windows/zmusic/64bit/zmusic.dll package
-          cp ${{ matrix.config.build_type }}/disdain-stripped.pdb package/disdain.pdb
-        elif [[ "${{ runner.os }}" == 'macOS' ]]; then
-          cp -r disdain.app package
-        elif [[ "${{ runner.os }}" == 'Linux' ]]; then
-          cp disdain *.pk3 package
-          strip package/disdain
-        fi
-
-    - name: Upload Package
-      if: runner.os == 'Windows' || matrix.config.name == 'Linux GCC 12'
-      uses: actions/upload-artifact@v4
-      with:
-        path: build/package
-        name: ${{ matrix.config.name }} ${{ matrix.config.build_type }}
-
-    - name: List Build Directory
-      if: always()
-      shell: bash
-      run: |
-        git status
-        ls -lR build
