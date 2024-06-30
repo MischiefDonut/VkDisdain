@@ -251,7 +251,7 @@ void level_info_t::Reset()
 		flags2 = LEVEL2_LAXMONSTERACTIVATION;
 	flags3 = 0;
 	vkdflags = 0;
-	disflags = 0; // [Disdain]
+	disdflags = 0; // [Disdain]
 	LightningSound = "world/thunder";
 	Music = "";
 	LevelName = "";
@@ -1720,9 +1720,9 @@ enum EMIType
 	MITYPE_CLRVKDFLAG,
 	MITYPE_SCVKDFLAGS,
 	// [Disdain]
-	MITYPE_SETFLAG666,
-	MITYPE_CLRFLAG666,
-	MITYPE_SCDISFLAGS,
+	MITYPE_SETDISDFLAG,
+	MITYPE_CLRDISDFLAG,
+	MITYPE_SCDISDFLAGS,
 	MITYPE_COMPATFLAG,
 	MITYPE_CLRCOMPATFLAG,
 };
@@ -1833,7 +1833,7 @@ MapFlagHandlers[] =
 	{ "nousersave",						MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOUSERSAVE, 0 },
 	{ "noautomap",						MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOAUTOMAP, 0 },
 	{ "noautosaveonenter",				MITYPE_SETVKDFLAG,	VKDLEVELFLAG_NOAUTOSAVEONENTER, 0 },
-	{ "nomaptitle",						MITYPE_SETFLAG666,	DISLEVELFLAG_NOMAPTITLE, 0 }, // [Disdain]
+	{ "nomaptitle",						MITYPE_SETDISDFLAG,	DISDLEVELFLAG_NOMAPTITLE, 0 }, // [Disdain]
 	{ "nobotnodes",						MITYPE_IGNORE,	0, 0 },		// Skulltag option: nobotnodes
 	{ "nopassover",						MITYPE_COMPATFLAG, COMPATF_NO_PASSMOBJ, 0 },
 	{ "passover",						MITYPE_CLRCOMPATFLAG, COMPATF_NO_PASSMOBJ, 0 },
@@ -2050,29 +2050,29 @@ void FMapInfoParser::ParseMapDefinition(level_info_t &info)
 			break;
 
 			// [Disdain]
-			case MITYPE_SETFLAG666:
+			case MITYPE_SETDISDFLAG:
 				if (!CheckAssign())
 				{
-					info.disflags |= handler->data1;
+					info.disdflags |= handler->data1;
 				}
 				else
 				{
 					sc.MustGetNumber();
-					if (sc.Number) info.disflags |= handler->data1;
-					else info.disflags &= ~handler->data1;
+					if (sc.Number) info.disdflags |= handler->data1;
+					else info.disdflags &= ~handler->data1;
 				}
-				info.disflags |= handler->data2;
+				info.disdflags |= handler->data2;
 				break;
 
 			// [Disdain]
-			case MITYPE_CLRFLAG666:
-				info.disflags &= ~handler->data1;
-				info.disflags |= handler->data2;
+			case MITYPE_CLRDISDFLAG:
+				info.disdflags &= ~handler->data1;
+				info.disdflags |= handler->data2;
 				break;
 
 			// [Disdain]
-			case MITYPE_SCDISFLAGS:
-				info.disflags = (info.disflags & handler->data2) | handler->data1;
+			case MITYPE_SCDISDFLAGS:
+				info.disdflags = (info.disdflags & handler->data2) | handler->data1;
 				break;
 
 			default:

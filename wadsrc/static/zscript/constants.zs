@@ -1405,7 +1405,7 @@ enum ELevelFlags
 	VKDLEVELFLAG_NOAUTOSAVEONENTER	= 0x00000004,	// don't make an autosave when entering a map
 
 	// [Disdain]
-	DISLEVELFLAG_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
+	DISDLEVELFLAG_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
 };
 
 // [RH] Compatibility flags.

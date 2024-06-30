@@ -345,7 +345,7 @@ struct LevelInfo native
 	native readonly int flags2;
 	native readonly int flags3;
 	native readonly int vkdflags;
-	native readonly int disflags; // [Disdain]
+	native readonly int disdflags; // [Disdain]
 	native readonly String LightningSound;
 	native readonly String Music;
 	native readonly String LevelName;

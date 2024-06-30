@@ -277,7 +277,7 @@ enum ELevelFlags : unsigned int
 	VKDLEVELFLAG_NOAUTOSAVEONENTER	= 0x00000004,	// don't make an autosave when entering a map
 
 	// [Disdain]
-	DISLEVELFLAG_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
+	DISDLEVELFLAG_NOMAPTITLE			= 0x00000001,	// don't draw map title (read by DrawMapTitle and TickMapTitle in ZScript)
 };
 
 
@@ -355,7 +355,7 @@ struct level_info_t
 	uint32_t	vkdflags;
 
 	// [Disdain]
-	uint32_t	disflags;
+	uint32_t	disdflags;
 
 	FString		LightningSound = "world/thunder";
 	FString		Music;
