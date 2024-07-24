@@ -107,8 +107,11 @@ const char *GetVersionString();
 #define GAMENAME "Disdain"
 #define WGAMENAME L"Disdain"
 #define GAMENAMELOWERCASE "disdain"
+#define QUERYIWADDEFAULT false
 #define FORUM_URL "http://disdainfps.com/"
 #define BUGS_FORUM_URL	"http://forum.disdainfps.com/"
+// For QUERYIWADDEFAULT: Set to 'true' to always show dialog box on startup by default, 'false' to disable
+// Should set to 'false' for standalone games, and set to 'true' for regular source port forks that are meant to run any game.
 
 #if defined(__APPLE__) || defined(_WIN32)
 #define GAME_DIR GAMENAME
