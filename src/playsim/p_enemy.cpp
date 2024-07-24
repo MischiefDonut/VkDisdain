@@ -659,7 +659,7 @@ static int P_Move (AActor *actor)
 
 	if (!try_ok)
 	{
-		if (tm.floatok && (CanJump(actor) || ((actor->flags & MF_FLOAT) && (!(actor->DisdainFlags & DF_SWIM) || actor->waterlevel > 1))))
+		if (tm.floatok && (CanJump(actor) || ((actor->flags & MF_FLOAT) && (!(actor->DisdainFlags & DF_SWIM) || actor->waterlevel > 2))))
 		{ // must adjust height
 			// This can happen when swimming since the check still fails
 			if (!(actor->flags & MF_INFLOAT))
@@ -675,7 +675,7 @@ static int P_Move (AActor *actor)
 				{
 					FWaterResults res;
 					P_UpdateWaterDepth(actor->Pos(), actor->Height, actor->Sector, actor->Height, false, res);
-					if (res.level < 2)
+					if (res.level <= 2)
 						ClampWaterHeight(actor, actor->Z(), res);
 				}
 

@@ -2581,13 +2581,13 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 			mo->Vel.Z *= FRICTION_FLY;
 		}
 	}
-	if ((mo->DisdainFlags & DF_SWIM) && mo->waterlevel > 1 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
+	if ((mo->DisdainFlags & DF_SWIM) && mo->waterlevel > 2 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		double newz = clamp(mo->Z(), mo->floorz, mo->ceilingz - mo->Height);
 
 		FWaterResults res;
 		P_UpdateWaterDepth(DVector3(mo->Pos().XY(), newz), mo->Height, mo->Sector, mo->Height, false, res);
-		if (res.level < 2)
+		if (res.level <= 2)
 		{
 			ClampWaterHeight(mo, newz, res);
 			mo->Vel.Z = 0.0;
