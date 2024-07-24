@@ -104,8 +104,8 @@ const char *GetVersionString();
 #define VR3D_ENABLED
 
 // More stuff that needs to be different for derivatives.
-#define GAMENAME "Disdain"
-#define WGAMENAME L"Disdain"
+#define GAMENAME "DISDAIN"
+#define WGAMENAME L"DISDAIN"
 #define GAMENAMELOWERCASE "disdain"
 #define QUERYIWADDEFAULT false
 #define FORUM_URL "http://disdainfps.com/"

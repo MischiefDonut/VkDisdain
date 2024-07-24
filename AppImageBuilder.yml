@@ -3,11 +3,11 @@ version: 1
 AppDir:
   path: ./AppDir
   app_info:
-    id: com.Disdain.app
-    name: Disdain
+    id: com.DISDAIN.app
+    name: DISDAIN
     icon: game_icon.png
     version: latest
-    exec: ./disdain
+    exec: ./DISDAIN
     exec_args: $@
   apt:
     arch: amd64
