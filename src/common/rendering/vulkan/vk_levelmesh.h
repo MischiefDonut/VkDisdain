@@ -64,12 +64,6 @@ struct LightInfo
 
 static_assert(sizeof(LightInfo) == sizeof(float) * 20);
 
-struct MeshBufferRange
-{
-	int Offset = 0;
-	int Size = 0;
-};
-
 class VkLevelMesh
 {
 public:
@@ -103,12 +97,10 @@ private:
 	void Reset();
 	void CreateVulkanObjects();
 	void CreateBuffers();
-	void CreateStaticBLAS();
-	void CreateDynamicBLAS();
 	void CreateTLASInstanceBuffer();
 	void CreateTopLevelAS(int instanceCount);
 
-	void UploadMeshes(bool dynamicOnly);
+	void UploadMeshes();
 	void UploadTLASInstanceBuffer();
 	void UpdateTopLevelAS(int instanceCount);
 
@@ -120,20 +112,6 @@ private:
 
 	LevelMesh NullMesh;
 	LevelMesh* Mesh = nullptr;
-
-	struct
-	{
-		TArray<MeshBufferRange> Vertex;
-		TArray<MeshBufferRange> Index;
-		TArray<MeshBufferRange> Node;
-		TArray<MeshBufferRange> SurfaceIndex;
-		TArray<MeshBufferRange> Surface;
-		TArray<MeshBufferRange> UniformIndexes;
-		TArray<MeshBufferRange> Uniforms;
-		TArray<MeshBufferRange> Portals;
-		TArray<MeshBufferRange> Light;
-		TArray<MeshBufferRange> LightIndex;
-	} Locations;
 
 	std::unique_ptr<VulkanBuffer> VertexBuffer;
 	std::unique_ptr<VulkanBuffer> UniformIndexBuffer;
@@ -147,7 +125,6 @@ private:
 
 	std::unique_ptr<VulkanBuffer> NodeBuffer;
 
-	BLAS StaticBLAS;
 	BLAS DynamicBLAS;
 
 	struct

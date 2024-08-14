@@ -2989,23 +2989,24 @@ void MapLoader::InitLevelMesh(MapData* map)
 	for (unsigned int i = 0; i < Level->subsectors.Size(); i++)
 		allSurfaces += 2 + Level->subsectors[i].sector->e->XFloor.ffloors.Size() * 2;
 
-	Level->Surfaces.Resize(allSurfaces);
-	memset(Level->Surfaces.Data(), 0, sizeof(DoomLevelMeshSurface*) * allSurfaces);
+	Level->LightmapTiles.Resize(allSurfaces);
+	for (int& value : Level->LightmapTiles)
+		value = -1;
 
 	unsigned int offset = 0;
 	for (unsigned int i = 0; i < Level->sides.Size(); i++)
 	{
 		auto& side = Level->sides[i];
 		int count = 4 + side.sector->e->XFloor.ffloors.Size();
-		side.surface = TArrayView<DoomLevelMeshSurface*>(&Level->Surfaces[offset], count);
+		side.LightmapTiles = TArrayView<int>(&Level->LightmapTiles[offset], count);
 		offset += count;
 	}
 	for (unsigned int i = 0; i < Level->subsectors.Size(); i++)
 	{
 		auto& subsector = Level->subsectors[i];
 		unsigned int count = 1 + subsector.sector->e->XFloor.ffloors.Size();
-		subsector.surface[0] = TArrayView<DoomLevelMeshSurface*>(&Level->Surfaces[offset], count);
-		subsector.surface[1] = TArrayView<DoomLevelMeshSurface*>(&Level->Surfaces[offset + count], count);
+		subsector.LightmapTiles[0] = TArrayView<int>(&Level->LightmapTiles[offset], count);
+		subsector.LightmapTiles[1] = TArrayView<int>(&Level->LightmapTiles[offset + count], count);
 		offset += count * 2;
 	}
 
@@ -3202,6 +3203,8 @@ bool MapLoader::LoadLightmap(MapData* map)
 
 void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 {
+	SetNullLevelMeshUpdater();
+
 	const int *oldvertextable  = nullptr;
 
 	// Reset defaults for lightmapping
@@ -3524,4 +3527,25 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 	}
 
 	Level->aabbTree = new DoomLevelAABBTree(Level);
+
+	// [DVR] Populate subsector->bbox for alternative space culling in orthographic projection with no fog of war
+	subsector_t* sub = &Level->subsectors[0];
+	seg_t* seg;
+	for (unsigned int kk = 0; kk < Level->subsectors.Size(); kk++)
+	{
+		sub[kk].bbox.ClearBox();
+		unsigned int count = sub[kk].numlines;
+		seg = sub[kk].firstline;
+		while(count--)
+		{
+			if((seg->v1 != nullptr) && (seg->v2 != nullptr))
+			{
+				sub[kk].bbox.AddToBox(seg->v1->fPos());
+				sub[kk].bbox.AddToBox(seg->v2->fPos());
+			}
+			seg++;
+		}
+	}
+
+	LevelMeshUpdater = Level->levelMesh; // Start tracking level changes
 }
