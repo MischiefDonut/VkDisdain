@@ -4,6 +4,13 @@
 
 LevelMesh::LevelMesh()
 {
+	LevelMeshLimits limits;
+	limits.MaxVertices = 12;
+	limits.MaxIndexes = 3 * 4;
+	limits.MaxSurfaces = 1;
+	limits.MaxUniforms = 1;
+	Reset(limits);
+
 	// Default portal
 	LevelMeshPortal portal;
 	Portals.Push(portal);
@@ -11,38 +18,35 @@ LevelMesh::LevelMesh()
 	AddEmptyMesh();
 	UpdateCollision();
 
-	Mesh.MaxVertices = std::max(Mesh.Vertices.Size() * 2, (unsigned int)10000);
-	Mesh.MaxIndexes = std::max(Mesh.Indexes.Size() * 2, (unsigned int)10000);
-	Mesh.MaxSurfaces = std::max(Mesh.SurfaceIndexes.Size() * 2, (unsigned int)10000);
-	Mesh.MaxUniforms = std::max(Mesh.Uniforms.Size() * 2, (unsigned int)10000);
-	Mesh.MaxSurfaceIndexes = std::max(Mesh.SurfaceIndexes.Size() * 2, (unsigned int)10000);
 	Mesh.MaxNodes = (int)std::max(Collision->get_nodes().size() * 2, (size_t)10000);
-	Mesh.MaxLights = 100'000;
-	Mesh.MaxLightIndexes = 4 * 1024 * 1024;
 }
 
 void LevelMesh::AddEmptyMesh()
 {
+	GeometryAllocInfo ginfo = AllocGeometry(12, 3 * 4);
+
 	// Default empty mesh (we can't make it completely empty since vulkan doesn't like that)
 	float minval = -100001.0f;
 	float maxval = -100000.0f;
-	Mesh.Vertices.Push({ minval, minval, minval });
-	Mesh.Vertices.Push({ maxval, minval, minval });
-	Mesh.Vertices.Push({ maxval, maxval, minval });
-	Mesh.Vertices.Push({ minval, minval, minval });
-	Mesh.Vertices.Push({ minval, maxval, minval });
-	Mesh.Vertices.Push({ maxval, maxval, minval });
-	Mesh.Vertices.Push({ minval, minval, maxval });
-	Mesh.Vertices.Push({ maxval, minval, maxval });
-	Mesh.Vertices.Push({ maxval, maxval, maxval });
-	Mesh.Vertices.Push({ minval, minval, maxval });
-	Mesh.Vertices.Push({ minval, maxval, maxval });
-	Mesh.Vertices.Push({ maxval, maxval, maxval });
+	ginfo.Vertices[0] = { minval, minval, minval };
+	ginfo.Vertices[1] = { maxval, minval, minval };
+	ginfo.Vertices[2] = { maxval, maxval, minval };
+	ginfo.Vertices[3] = { minval, minval, minval };
+	ginfo.Vertices[4] = { minval, maxval, minval };
+	ginfo.Vertices[5] = { maxval, maxval, minval };
+	ginfo.Vertices[6] = { minval, minval, maxval };
+	ginfo.Vertices[7] = { maxval, minval, maxval };
+	ginfo.Vertices[8] = { maxval, maxval, maxval };
+	ginfo.Vertices[9] = { minval, minval, maxval };
+	ginfo.Vertices[10] = { minval, maxval, maxval };
+	ginfo.Vertices[11] = { maxval, maxval, maxval };
 
 	for (int i = 0; i < 3 * 4; i++)
-		Mesh.Indexes.Push(i);
+		ginfo.Indexes[i] = i;
 
-	UploadAll();
+	Mesh.IndexCount = ginfo.IndexCount;
+
+	UploadPortals();
 }
 
 LevelMeshSurface* LevelMesh::Trace(const FVector3& start, FVector3 direction, float maxDist)
@@ -64,7 +68,7 @@ LevelMeshSurface* LevelMesh::Trace(const FVector3& start, FVector3 direction, fl
 			return nullptr;
 		}
 
-		hitSurface = GetSurface(Mesh.SurfaceIndexes[hit.triangle]);
+		hitSurface = &Mesh.Surfaces[Mesh.SurfaceIndexes[hit.triangle]];
 
 		int portal = hitSurface->PortalIndex;
 		if (!portal)
@@ -91,7 +95,6 @@ LevelMeshSurface* LevelMesh::Trace(const FVector3& start, FVector3 direction, fl
 LevelMeshTileStats LevelMesh::GatherTilePixelStats()
 {
 	LevelMeshTileStats stats;
-	int count = GetSurfaceCount();
 	for (const LightmapTile& tile : LightmapTiles)
 	{
 		auto area = tile.AtlasLocation.Area();
@@ -110,7 +113,7 @@ LevelMeshTileStats LevelMesh::GatherTilePixelStats()
 
 void LevelMesh::UpdateCollision()
 {
-	Collision = std::make_unique<TriangleMeshShape>(Mesh.Vertices.Data(), Mesh.Vertices.Size(), Mesh.Indexes.Data(), Mesh.Indexes.Size());
+	Collision = std::make_unique<TriangleMeshShape>(Mesh.Vertices.Data(), Mesh.Vertices.Size(), Mesh.Indexes.Data(), Mesh.IndexCount);
 	UploadCollision();
 }
 
@@ -125,11 +128,11 @@ void LevelMesh::BuildTileSurfaceLists()
 {
 	// Plane group surface is to be rendered with
 	TArray<LevelMeshPlaneGroup> PlaneGroups;
-	TArray<int> PlaneGroupIndexes(GetSurfaceCount());
+	TArray<int> PlaneGroupIndexes(Mesh.Surfaces.Size());
 
-	for (int i = 0, count = GetSurfaceCount(); i < count; i++)
+	for (int i = 0, count = Mesh.Surfaces.Size(); i < count; i++)
 	{
-		auto surface = GetSurface(i);
+		auto surface = &Mesh.Surfaces[i];
 
 		// Is this surface in the same plane as an existing plane group?
 		int planeGroupIndex = -1;
@@ -172,9 +175,9 @@ void LevelMesh::BuildTileSurfaceLists()
 	for (auto& tile : LightmapTiles)
 		tile.Surfaces.Clear();
 
-	for (int i = 0, count = GetSurfaceCount(); i < count; i++)
+	for (int i = 0, count = Mesh.Surfaces.Size(); i < count; i++)
 	{
-		LevelMeshSurface* targetSurface = GetSurface(i);
+		LevelMeshSurface* targetSurface = &Mesh.Surfaces[i];
 		if (targetSurface->LightmapTileIndex < 0)
 			continue;
 		LightmapTile* tile = &LightmapTiles[targetSurface->LightmapTileIndex];
@@ -185,7 +188,7 @@ void LevelMesh::BuildTileSurfaceLists()
 			if (surface != targetSurface && (maxUV.X < 0.0f || maxUV.Y < 0.0f || minUV.X > 1.0f || minUV.Y > 1.0f))
 				continue; // Bounding box not visible
 
-			tile->Surfaces.Push(GetSurfaceIndex(surface));
+			tile->Surfaces.Push((unsigned int)(ptrdiff_t)(surface - Mesh.Surfaces.Data()));
 		}
 	}
 }
@@ -224,9 +227,9 @@ void LevelMesh::PackLightmapAtlas(int lightmapStartIndex)
 	LMTextureCount = (int)packer.getNumPages();
 
 	// Calculate final texture coordinates
-	for (int i = 0, count = GetSurfaceCount(); i < count; i++)
+	for (int i = 0, count = Mesh.Surfaces.Size(); i < count; i++)
 	{
-		auto surface = GetSurface(i);
+		auto surface = &Mesh.Surfaces[i];
 		if (surface->LightmapTileIndex >= 0)
 		{
 			const LightmapTile& tile = LightmapTiles[surface->LightmapTileIndex];
