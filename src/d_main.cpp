@@ -1035,8 +1035,6 @@ void D_Display ()
 	screen->FrameTimeNS = I_nsTime();
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
-	if (level.levelMesh) level.levelMesh->BeginFrame(level);
-	screen->BeginFrame();
 	twod->ClearClipRect();
 	if ((gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL) && gametic != 0)
 	{
@@ -1046,6 +1044,9 @@ void D_Display ()
 		
 		D_Render([&]()
 		{
+			if (level.levelMesh) level.levelMesh->BeginFrame(level);
+			screen->BeginFrame();
+
 			viewsec = RenderView(&players[consoleplayer]);
 		}, true);
 
@@ -1096,6 +1097,9 @@ void D_Display ()
 	}
 	else
 	{
+		if (level.levelMesh) level.levelMesh->BeginFrame(level);
+		screen->BeginFrame();
+
 		twod->Begin(screen->GetWidth(), screen->GetHeight());
 		switch (gamestate)
 		{
