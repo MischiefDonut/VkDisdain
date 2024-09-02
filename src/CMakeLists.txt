@@ -27,10 +27,12 @@ if( APPLE )
     option( OSX_COCOA_BACKEND "Use native Cocoa backend instead of SDL" ON )
 endif()
 
-option( ZDOOM_ENABLE_SWR "Enable software renderer" ON )
-if( NOT ZDOOM_ENABLE_SWR )
-	add_definitions( -DNO_SWRENDERER )
-endif()
+#option( ZDOOM_ENABLE_SWR "Enable software renderer" ON )
+#if( NOT ZDOOM_ENABLE_SWR )
+#	add_definitions( -DNO_SWRENDERER )
+#endif()
+# [Disdain] no software renderer, ever
+add_definitions( -DNO_SWRENDERER )
 
 target_architecture(TARGET_ARCHITECTURE)
 message(STATUS "Architecture is ${TARGET_ARCHITECTURE}")
