@@ -193,6 +193,7 @@ public:
 		mSurfaceUniforms.uLightFactor = 0.0f;
 		mSurfaceUniforms.uFogDensity = 0.0f;
 		mSurfaceUniforms.uLightLevel = -1.0f;
+		mSurfaceUniforms.uDepthFadeThreshold = 0.0f;
 		mSpecialEffect = EFF_NONE;
 		mLightIndex = -1;
 		mBoneIndexBase = -1;

@@ -258,6 +258,8 @@ void VkRenderState::ApplyRenderPass(int dt)
 	pipelineKey.ShaderKey.Detailmap = (uTextureMode & TEXF_Detailmap) != 0;
 	pipelineKey.ShaderKey.Glowmap = (uTextureMode & TEXF_Glowmap) != 0;
 
+	pipelineKey.ShaderKey.DepthFadeThreshold = mSurfaceUniforms.uDepthFadeThreshold > 0.0f;
+
 	// The way GZDoom handles state is just plain insanity!
 	int fogset = 0;
 	if (mFogEnabled)
@@ -411,9 +413,11 @@ void VkRenderState::ApplySurfaceUniforms()
 
 			mSurfaceUniforms.uTextureIndex = static_cast<VkMaterial*>(mMaterial.mMaterial)->GetBindlessIndex(mMaterial);
 			mSurfaceUniforms.uSpecularMaterial = { source->GetGlossiness(), source->GetSpecularLevel() };
+			mSurfaceUniforms.uDepthFadeThreshold = source->GetDepthFadeThreshold();
 		}
 		else
 		{
+			mSurfaceUniforms.uDepthFadeThreshold = 0.f;
 			mSurfaceUniforms.uTextureIndex = 0;
 		}
 		mMaterial.mChanged = false;
@@ -937,21 +941,19 @@ void VkRenderState::ApplyLevelMeshPipeline(VulkanCommandBuffer* cmdbuffer, VkPip
 	mPipelineKey = pipelineKey;
 
 	PushConstants pushConstants = {};
-	pushConstants.uDataIndex = 0;
-	pushConstants.uLightIndex = -1;
 	pushConstants.uBoneIndexBase = -1;
+	pushConstants.uFogballIndex = -1;
 
 	VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(pipelineKey.ShaderKey.UseLevelMesh);
 	uint32_t viewpointOffset = mViewpointOffset;
 	uint32_t matrixOffset = mRSBuffers->MatrixBuffer->Offset();
-	uint32_t lightsOffset = 0;
 	uint32_t fogballsOffset = 0;
-	uint32_t offsets[] = { viewpointOffset, matrixOffset, lightsOffset, fogballsOffset };
+	uint32_t offsets[] = { viewpointOffset, matrixOffset, fogballsOffset };
 
 	auto descriptors = fb->GetDescriptorSetManager();
 	cmdbuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, mPassSetup->GetPipeline(pipelineKey));
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedSet());
-	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, descriptors->GetLevelMeshSet(), 4, offsets);
+	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, descriptors->GetLevelMeshSet(), 3, offsets);
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, descriptors->GetBindlessSet());
 	cmdbuffer->pushConstants(layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &pushConstants);
 }
