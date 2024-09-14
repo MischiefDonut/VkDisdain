@@ -127,6 +127,6 @@ const int VID_MIN_WIDTH = 320;
 const int VID_MIN_HEIGHT = 200;
 
 // [Disdain]
-#define DISDAINVERSION "14"
+#define DISDAINVERSION "99"
 
 #endif //__VERSION_H__
