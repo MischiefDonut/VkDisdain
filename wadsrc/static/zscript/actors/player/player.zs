@@ -172,10 +172,10 @@ class PlayerPawn : Actor
 		}
 
 		Super.Tick();
-		if(player != NULL && player.mo == self)
-		{
+
+		// aim assist
+		if (player != NULL && player.mo == self && !player.IsTotallyFrozen() && Vel.XY.Length() > 0.)
 			RunAimAssist();
-		}
 	}
 
 	//===========================================================================

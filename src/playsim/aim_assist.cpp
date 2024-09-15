@@ -176,7 +176,16 @@ static void RunAimAssist(AActor * self)
             deltaangle(self->Angles.Yaw, target_angle.X),
             deltaangle(self->Angles.Pitch, target_angle.Y)
         );
-        
+
+        /*
+        Printf("Self: ( %.2f, %.2f ), Target: ( [%s] %.2f, %.2f ), Diff: ( %.2f, %.2f )\n",
+            self->Angles.Yaw, self->Angles.Pitch,
+            closest->GetTag(),
+            target_angle.X, target_angle.Y,
+            angle_diff.X, angle_diff.Y
+        );
+        */
+
         self->SetAngle((abs(angle_diff.X) <= rot_speed) ? target_angle.X : self->Angles.Yaw + (angle_diff.X.Degrees() > 0.0 ? rot_speed : -rot_speed), SPF_INTERPOLATE);
         self->SetPitch((abs(angle_diff.Y) <= rot_speed) ? target_angle.Y : self->Angles.Pitch + (angle_diff.Y.Degrees() > 0.0 ? rot_speed : -rot_speed), SPF_INTERPOLATE);
     }
