@@ -460,9 +460,10 @@ void FIWadManager::CollectSearchPaths()
 			}
 		}
 	}
-	mSearchPaths.Append(I_GetGogPaths());
-	mSearchPaths.Append(I_GetSteamPath());
-	mSearchPaths.Append(I_GetBethesdaPath());
+	// [Disdain] no need to look for other IWADs
+	//mSearchPaths.Append(I_GetGogPaths());
+	//mSearchPaths.Append(I_GetSteamPath());
+	//mSearchPaths.Append(I_GetBethesdaPath());
 
 	// Unify and remove trailing slashes
 	for (auto &str : mSearchPaths)
