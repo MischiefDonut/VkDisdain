@@ -57,6 +57,7 @@ public:
 	void ResetVertices() override;
 
 	// Draw level mesh
+	void DispatchLightTiles(const VSMatrix& worldToView, float m5) override;
 	void DrawLevelMesh(LevelMeshDrawType drawType, bool noFragmentShader) override;
 	int GetNextQueryIndex() override;
 	void BeginQuery() override;
@@ -89,8 +90,9 @@ protected:
 	void BeginRenderPass(VulkanCommandBuffer *cmdbuffer);
 	void WaitForStreamBuffers();
 
+	void RunZMinMaxPass();
 	void ApplyLevelMesh();
-	void ApplyLevelMeshPipeline(VulkanCommandBuffer* cmdbuffer, VkPipelineKey pipelineKey, bool noFragmentShader);
+	void ApplyLevelMeshPipeline(VulkanCommandBuffer* cmdbuffer, VkPipelineKey pipelineKey, LevelMeshDrawType drawType, bool noFragmentShader);
 
 	VulkanRenderDevice* fb = nullptr;
 

@@ -32,6 +32,41 @@
 
 VkShaderManager::VkShaderManager(VulkanRenderDevice* fb) : fb(fb)
 {
+	ZMinMax.vert = ShaderBuilder()
+		.Type(ShaderType::Vertex)
+		.DebugName("ZMinMax.vert")
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("shaders/scene/vert_zminmax.glsl", LoadPrivateShaderLump("shaders/scene/vert_zminmax.glsl").GetChars())
+		.Create("ZMinMax.vert", fb->GetDevice());
+
+	ZMinMax.frag[0] = ShaderBuilder()
+		.Type(ShaderType::Fragment)
+		.DebugName("ZMinMax0.frag")
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
+		.Create("ZMinMax0.frag", fb->GetDevice());
+
+	ZMinMax.frag[1] = ShaderBuilder()
+		.Type(ShaderType::Fragment)
+		.DebugName("ZMinMax0.frag")
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("DefinesBlock", "#define MULTISAMPLE\n")
+		.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
+		.Create("ZMinMax0.frag", fb->GetDevice());
+
+	ZMinMax.frag[2] = ShaderBuilder()
+		.Type(ShaderType::Fragment)
+		.DebugName("ZMinMax1.frag")
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("shaders/scene/frag_zminmax1.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax1.glsl").GetChars())
+		.Create("ZMinMax1.frag", fb->GetDevice());
+
+	LightTiles = ShaderBuilder()
+		.Type(ShaderType::Compute)
+		.DebugName("LightTiles.comp")
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("shaders/scene/comp_lighttiles.glsl", LoadPrivateShaderLump("shaders/scene/comp_lighttiles.glsl").GetChars())
+		.Create("LightTiles.comp", fb->GetDevice());
 }
 
 VkShaderManager::~VkShaderManager()
@@ -184,6 +219,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	if (!fb->GetDevice()->EnabledFeatures.Features.shaderClipDistance) definesBlock << "#define NO_CLIPDISTANCE_SUPPORT\n";
 	if (!key.AlphaTest) definesBlock << "#define NO_ALPHATEST\n";
 	if (key.GBufferPass) definesBlock << "#define GBUFFER_PASS\n";
+	if (key.AlphaTestOnly) definesBlock << "#define ALPHATEST_ONLY\n";
 
 	if (key.DepthFadeThreshold) definesBlock << "#define USE_DEPTHFADETHRESHOLD\n";
 

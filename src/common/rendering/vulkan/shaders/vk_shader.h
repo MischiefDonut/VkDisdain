@@ -53,6 +53,23 @@ struct PushConstants
 	int uFogballIndex; // fog balls
 };
 
+struct ZMinMaxPushConstants
+{
+	float LinearizeDepthA;
+	float LinearizeDepthB;
+	float InverseDepthRangeA;
+	float InverseDepthRangeB;
+};
+
+struct LightTilesPushConstants
+{
+	FVector2 posToViewA;
+	FVector2 posToViewB;
+	FVector2 viewportPos;
+	FVector2 padding1;
+	VSMatrix worldToView;
+};
+
 class VkShaderKey
 {
 public:
@@ -80,7 +97,8 @@ public:
 			uint64_t FogBalls : 1;      // FOGBALLS
 			uint64_t NoFragmentShader : 1;
 			uint64_t DepthFadeThreshold : 1;
-			uint64_t Unused : 41;
+			uint64_t AlphaTestOnly : 1; // ALPHATEST_ONLY
+			uint64_t Unused : 40;
 		};
 		uint64_t AsQWORD = 0;
 	};
@@ -119,6 +137,10 @@ public:
 	void AddVkPPShader(VkPPShader* shader);
 	void RemoveVkPPShader(VkPPShader* shader);
 
+	VulkanShader* GetZMinMaxVertexShader() { return ZMinMax.vert.get(); }
+	VulkanShader* GetZMinMaxFragmentShader(int index) { return ZMinMax.frag[index].get(); }
+	VulkanShader* GetLightTilesShader() { return LightTiles.get(); }
+
 private:
 	std::unique_ptr<VulkanShader> LoadVertShader(FString shadername, const char *vert_lump, const char *defines, bool levelmesh);
 	std::unique_ptr<VulkanShader> LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *lightmodel_lump, const char *defines, const VkShaderKey& key);
@@ -134,4 +156,12 @@ private:
 	std::map<VkShaderKey, VkShaderProgram> programs;
 
 	std::list<VkPPShader*> PPShaders;
+
+	struct
+	{
+		std::unique_ptr<VulkanShader> vert;
+		std::unique_ptr<VulkanShader> frag[3];
+	} ZMinMax;
+
+	std::unique_ptr<VulkanShader> LightTiles;
 };

@@ -114,6 +114,7 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 		VPUniforms.mViewOffsetX = -screen->mSceneViewport.left;
 		VPUniforms.mViewOffsetY = -screen->mSceneViewport.top;
 		VPUniforms.mViewHeight = viewheight;
+		VPUniforms.mLightTilesWidth = (screen->mScreenViewport.width + 63) / 64;
 		if (lightmode == ELightMode::Build)
 		{
 			VPUniforms.mGlobVis = 1 / 64.f;
@@ -442,7 +443,7 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 		state.SetColorMask(false);
 		state.SetCulling(Cull_CW);
 		state.DrawLevelMesh(LevelMeshDrawType::Opaque, true);
-		state.DrawLevelMesh(LevelMeshDrawType::Masked, false); // To do: properly mark wall top/bottom as opaque so we don't need this
+		state.DrawLevelMesh(LevelMeshDrawType::Masked, true);
 		if (gl_portals)
 		{
 			state.SetDepthBias(1, 128);
@@ -478,6 +479,8 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 		state.SetColorMask(true);
 		state.SetDepthMask(true);
 		int queryEnd = state.GetNextQueryIndex();
+
+		state.DispatchLightTiles(VPUniforms.mViewMatrix, VPUniforms.mProjectionMatrix.get()[5]);
 
 		// draw opaque level so the GPU has something to do while we examine the query results
 		state.DrawLevelMesh(LevelMeshDrawType::Opaque, false);
@@ -522,6 +525,16 @@ void HWDrawInfo::CreateScene(bool drawpsprites, FRenderState& state)
 			}
 
 			sprite.Process(this, state, thing, thing->Sector, in_area, false);
+		}
+
+		// Draw particles
+		for (uint16_t i = level.ActiveParticles; i != NO_PARTICLE; i = level.Particles[i].tnext)
+		{
+			if (Level->Particles[i].subsector)
+			{
+				HWSprite sprite;
+				sprite.ProcessParticle(this, state, &Level->Particles[i], Level->Particles[i].subsector->sector, nullptr);
+			}
 		}
 
 		// Process all the sprites on the current portal's back side which touch the portal.
@@ -835,6 +848,9 @@ void HWDrawInfo::DrawCorona(FRenderState& state, AActor* corona, float coronaFad
 	state.SetTextureMode(TM_NORMAL); // This is needed because the next line doesn't always set the mode...
 	state.SetTextureMode(corona->RenderStyle);
 
+	// no need for alpha test, coronas are meant to be translucent
+	state.AlphaFunc(Alpha_GEqual, 0.f);
+
 	state.SetMaterial(tex, UF_Sprite, CTF_Expand, CLAMP_XY_NOMIP, 0, 0);
 
 	float scale = screen->GetHeight() / 1000.0f;
@@ -1027,6 +1043,7 @@ void HWDrawInfo::DrawCoronas(FRenderState& state)
 			DrawCorona(state, corona, (float)coronaFade, dist);
 	}
 
+	state.AlphaFunc(Alpha_Greater, 0.f);
 	state.SetTextureMode(TM_NORMAL);
 	state.SetViewpoint(vpIndex);
 	state.EnableDepthTest(true);
