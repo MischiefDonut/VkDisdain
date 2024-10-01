@@ -2967,7 +2967,7 @@ void MapLoader::InitLevelMesh(MapData* map)
 	if (map->Size(ML_LIGHTMAP))
 	{
 		// Arbitrary ZDRay limit. This will break lightmap lump loading if not enforced.
-		Level->LightmapSampleDistance = Level->LightmapSampleDistance < 8 ? 8 : Level->LightmapSampleDistance;
+		Level->LightmapSampleDistance = std::clamp((int)Level->LightmapSampleDistance, LIGHTMAP_GLOBAL_SAMPLE_DISTANCE_MIN, LIGHTMAP_GLOBAL_SAMPLE_DISTANCE_MAX);
 
 		if (!Level->lightmaps) // We are unfortunately missing ZDRayInfo
 		{
@@ -3210,7 +3210,7 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 	// Reset defaults for lightmapping
 	Level->SunColor = FVector3(1.f, 1.f, 1.f);
 	Level->SunDirection = FVector3(0.45f, 0.3f, 0.9f);
-	Level->LightmapSampleDistance = 16;
+	Level->LightmapSampleDistance = 8;
 	Level->lightmaps = false;
 
 	// note: most of this ordering is important 
