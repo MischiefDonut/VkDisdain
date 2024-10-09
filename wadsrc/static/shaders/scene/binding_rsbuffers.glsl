@@ -17,8 +17,6 @@ layout(set = 1, binding = 0, std140) uniform ViewpointUBO
 	float uClipHeight;
 	float uClipHeightDirection;
 	int uShadowmapFilter;
-		
-	int uLightBlendMode;
 
 	int uLightTilesWidth;	// Levelmesh light tiles
 };

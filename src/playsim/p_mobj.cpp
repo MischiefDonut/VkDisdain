@@ -6216,8 +6216,6 @@ AActor *FLevelLocals::SpawnMapThing (FMapThing *mthing, int position)
 	if (mthing->fillcolor)
 		mobj->fillcolor = (mthing->fillcolor & 0xffffff) | (ColorMatcher.Pick((mthing->fillcolor & 0xff0000) >> 16,
 			(mthing->fillcolor & 0xff00) >> 8, (mthing->fillcolor & 0xff)) << 24);
-	if (mthing->SoftShadowRadius >= 0.0)
-		mobj->SoftShadowRadius = mthing->SoftShadowRadius;
 
 	// allow color strings for lights and reshuffle the args for spot lights
 	if (i->IsDescendantOf(NAME_DynamicLight))
@@ -6240,6 +6238,35 @@ AActor *FLevelLocals::SpawnMapThing (FMapThing *mthing, int position)
 		{
 			mobj->AngleVar(NAME_SpotInnerAngle) = DAngle::fromDeg(mthing->args[1]);
 			mobj->AngleVar(NAME_SpotOuterAngle) = DAngle::fromDeg(mthing->args[2]);
+		}
+
+		if (mthing->SoftShadowRadius >= 0.0)
+		{
+			mobj->FloatVar(NAME_SoftShadowRadius) = mthing->SoftShadowRadius;
+		}
+		else
+		{
+			mobj->FloatVar(NAME_SoftShadowRadius) = 5.0;
+		}
+
+		if (mthing->LightStrength > 0.0)
+		{
+			mobj->FloatVar(NAME_LightStrength) = mthing->LightStrength;
+		}
+
+		if (mthing->LightNoShadowMap)
+		{
+			mobj->IntVar(NAME_lightflags) |= LF_NOSHADOWMAP;
+		}
+
+		if (mthing->LightDontLightActors)
+		{
+			mobj->IntVar(NAME_lightflags) |= LF_DONTLIGHTACTORS;
+		}
+
+		if (mthing->LightDontLightMap)
+		{
+			mobj->IntVar(NAME_lightflags) |= LF_DONTLIGHTMAP;
 		}
 	}
 

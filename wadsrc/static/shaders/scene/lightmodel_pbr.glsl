@@ -1,4 +1,3 @@
-
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
@@ -45,22 +44,6 @@ vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-float linearDistanceAttenuation(vec4 lightpos)
-{
-	float lightdistance = distance(lightpos.xyz, pixelpos.xyz);
-	return clamp((lightpos.w - lightdistance) / lightpos.w, 0.0, 1.0);
-}
-
-float inverseSquareDistanceAttenuation(vec4 lightpos)
-{
-	float strength = 1500.0;
-	float d = distance(lightpos.xyz, pixelpos.xyz);
-	float r = lightpos.w;
-	float a = d / r;
-	float b = clamp(1.0 - a * a * a * a, 0.0, 1.0);
-	return (b * b) / (d * d + 1.0) * strength;
-}
-
 vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 {
 	vec3 worldpos = pixelpos.xyz;
@@ -96,7 +79,7 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 				vec3 L = normalize(lightpos.xyz - worldpos);
 				vec3 H = normalize(V + L);
 
-				float attenuation = inverseSquareDistanceAttenuation(lightpos);
+				float attenuation = distanceAttenuation(distance(lightpos.xyz, pixelpos.xyz), lightpos.w, lightspot2.w);
 				if (lightspot1.w == 1.0)
 					attenuation *= spotLightAttenuation(lightpos, lightspot1.xyz, lightspot2.x, lightspot2.y);
 				if (lightcolor.a < 0.0)
@@ -136,7 +119,7 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 				vec3 L = normalize(lightpos.xyz - worldpos);
 				vec3 H = normalize(V + L);
 
-				float attenuation = linearDistanceAttenuation(lightpos);
+				float attenuation = distanceAttenuation(distance(lightpos.xyz, pixelpos.xyz), lightpos.w, lightspot2.w);
 				if (lightspot1.w == 1.0)
 					attenuation *= spotLightAttenuation(lightpos, lightspot1.xyz, lightspot2.x, lightspot2.y);
 				if (lightcolor.a < 0.0)

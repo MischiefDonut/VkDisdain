@@ -1,4 +1,3 @@
-
 vec3 lightContribution(int i, vec3 normal)
 {
 	vec4 lightpos = lights[i];
@@ -14,7 +13,7 @@ vec3 lightContribution(int i, vec3 normal)
 	float dotprod = dot(normal, lightdir);
 	if (dotprod < -0.0001) return vec3(0.0);	// light hits from the backside. This can happen with full sector light lists and must be rejected for all cases. Note that this can cause precision issues.
 
-	float attenuation = clamp((lightpos.w - lightdistance) / lightpos.w, 0.0, 1.0);
+	float attenuation = distanceAttenuation(lightdistance, lightpos.w, lightspot2.w);
 
 	if (lightspot1.w == 1.0)
 		attenuation *= spotLightAttenuation(lightpos, lightspot1.xyz, lightspot2.x, lightspot2.y);
@@ -58,22 +57,22 @@ vec3 ProcessMaterialLight(Material material, vec3 color)
 			}
 		}
 	}
+    
+    #ifdef LIGHT_BLEND_CLAMPED
+        
+		vec3 frag = material.Base.rgb * clamp(color + desaturate(dynlight).rgb, 0.0, 1.4);
+        
+    #elif defined(LIGHT_BLEND_COLORED_CLAMP)
+        
+		vec3 frag = color + desaturate(dynlight).rgb;
+		frag = material.Base.rgb * ((frag / max(max(max(frag.r, frag.g), frag.b), 1.4) * 1.4));
+        
+    #else // elif defined(LIGHT_BLEND_UNCLAMPED)
+        
+		vec3 frag = material.Base.rgb * (color + desaturate(dynlight).rgb);
+        
+    #endif
 
-	vec3 frag;
-
-	if ( uLightBlendMode == 1 )
-	{	// COLOR_CORRECT_CLAMPING 
-		vec3 lightcolor = color + desaturate(dynlight).rgb;
-		frag = material.Base.rgb * ((lightcolor / max(max(max(lightcolor.r, lightcolor.g), lightcolor.b), 1.4) * 1.4));
-	}
-	else if ( uLightBlendMode == 2 )
-	{	// UNCLAMPED 
-		frag = material.Base.rgb * (color + desaturate(dynlight).rgb);
-	}
-	else
-	{
-		frag = material.Base.rgb * clamp(color + desaturate(dynlight).rgb, 0.0, 1.4);
-	}
 
 	if (uLightIndex >= 0)
 	{

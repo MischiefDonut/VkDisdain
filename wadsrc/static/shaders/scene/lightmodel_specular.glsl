@@ -1,4 +1,3 @@
-
 vec2 lightAttenuation(int i, vec3 normal, vec3 viewdir, float lightcolorA, float glossiness, float specularLevel)
 {
 	vec4 lightpos = lights[i];
@@ -9,7 +8,7 @@ vec2 lightAttenuation(int i, vec3 normal, vec3 viewdir, float lightcolorA, float
 	if (lightpos.w < lightdistance)
 		return vec2(0.0); // Early out lights touching surface but not this fragment
 
-	float attenuation = clamp((lightpos.w - lightdistance) / lightpos.w, 0.0, 1.0);
+	float attenuation = distanceAttenuation(lightdistance, lightpos.w, lightspot2.w);
 
 	if (lightspot1.w == 1.0)
 		attenuation *= spotLightAttenuation(lightpos, lightspot1.xyz, lightspot2.x, lightspot2.y);
@@ -63,25 +62,26 @@ vec3 ProcessMaterialLight(Material material, vec3 color)
 			}
 		}
 	}
-	
-	if ( uLightBlendMode == 1 )
-	{	// COLOR_CORRECT_CLAMPING 
+    
+    #if defined(LIGHT_BLEND_CLAMPED)
+        
+		dynlight.rgb = clamp(color + desaturate(dynlight).rgb, 0.0, 1.4);
+		specular.rgb = clamp(desaturate(specular).rgb, 0.0, 1.4);
+        
+    #elif defined(LIGHT_BLEND_COLORED_CLAMP)
+        
 		dynlight.rgb = color + desaturate(dynlight).rgb;
 		specular.rgb = desaturate(specular).rgb;
 
 		dynlight.rgb = ((dynlight.rgb / max(max(max(dynlight.r, dynlight.g), dynlight.b), 1.4) * 1.4));
 		specular.rgb = ((specular.rgb / max(max(max(specular.r, specular.g), specular.b), 1.4) * 1.4));
-	}
-	else if ( uLightBlendMode == 2 )
-	{	// UNCLAMPED 
+        
+    #else // elif defined(LIGHT_BLEND_UNCLAMPED)
+        
 		dynlight.rgb = color + desaturate(dynlight).rgb;
 		specular.rgb = desaturate(specular).rgb;
-	}
-	else
-	{
-		dynlight.rgb = clamp(color + desaturate(dynlight).rgb, 0.0, 1.4);
-		specular.rgb = clamp(desaturate(specular).rgb, 0.0, 1.4);
-	}
+        
+    #endif
 
 	vec3 frag = material.Base.rgb * dynlight.rgb + material.Specular * specular.rgb;
 
