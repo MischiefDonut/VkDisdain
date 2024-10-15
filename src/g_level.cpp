@@ -1870,6 +1870,7 @@ void FLevelLocals::Init()
 	musicorder = info->musicorder;
 	MusicVolume = 1.f;
 	HasHeightSecs = false;
+	SecCorrelations.Clear();
 
 	LevelName = info->LookupLevelName();
 	NextMap = info->NextMap;

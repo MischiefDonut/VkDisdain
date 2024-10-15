@@ -4492,7 +4492,7 @@ void AActor::Tick ()
 		if (ObjectFlags & OF_EuthanizeMe) return;
 	}
 	//[inkoalawetrust] Genericized level damage handling that makes sector, 3D floor, and TERRAIN flat damage affect monsters and other NPCs too.
-	if (!(flags9 & MF9_NOSECTORDAMAGE) && (player || (player == nullptr && Sector->MoreFlags & SECMF_HURTMONSTERS)))
+	if ((!(flags9 & MF9_NOSECTORDAMAGE) || flags9 & MF9_FORCESECTORDAMAGE) && (player || (player == nullptr && (Sector->MoreFlags & SECMF_HURTMONSTERS || flags9 & MF9_FORCESECTORDAMAGE))))
 	{
 		P_ActorOnSpecial3DFloor(this);
 		P_ActorInSpecialSector(this,Sector);
@@ -6249,9 +6249,9 @@ AActor *FLevelLocals::SpawnMapThing (FMapThing *mthing, int position)
 			mobj->FloatVar(NAME_SoftShadowRadius) = 5.0;
 		}
 
-		if (mthing->LightStrength > 0.0)
+		if (mthing->LightLinearity > 0.0)
 		{
-			mobj->FloatVar(NAME_LightStrength) = mthing->LightStrength;
+			mobj->FloatVar(NAME_LightLinearity) = mthing->LightLinearity;
 		}
 
 		if (mthing->LightNoShadowMap)

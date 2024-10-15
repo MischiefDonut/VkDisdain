@@ -354,6 +354,7 @@ static FFlagDef ActorFlagDefs[]=
 	DEFINE_FLAG(MF9, DECOUPLEDANIMATIONS, AActor, flags9),
 	DEFINE_FLAG(MF9, NOSECTORDAMAGE, AActor, flags9),
 	DEFINE_PROTECTED_FLAG(MF9, ISPUFF, AActor, flags9), //[AA] was spawned by SpawnPuff
+	DEFINE_FLAG(MF9, FORCESECTORDAMAGE, AActor, flags9),
 
 	DEFINE_FLAG(DF, SWIM, AActor, DisdainFlags),
 	DEFINE_FLAG(DF, GLIDESONWALLS, AActor, DisdainFlags),
