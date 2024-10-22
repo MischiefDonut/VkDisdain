@@ -22,6 +22,7 @@
 
 #include "hw_collision.h"
 #include "hw_levelmesh.h"
+#include "v_video.h"
 #include <algorithm>
 #include <functional>
 #include <cfloat>
@@ -128,7 +129,8 @@ static FVector3 SwapYZ(const FVector3& v)
 
 void CPUAccelStruct::Upload()
 {
-	// To do: don't bother with this if rayquery is available as it won't be used
+	if (screen->IsRayQueryEnabled())
+		return;
 
 	unsigned int count = (unsigned int)TLAS.Nodes.size();
 	for (auto& blas : DynamicBLAS)
@@ -165,9 +167,9 @@ void CPUAccelStruct::Upload()
 				CollisionNode& info = destnodes[offset];
 				info.center = SwapYZ(node.aabb.Center);
 				info.extents = SwapYZ(node.aabb.Extents);
-				info.left = blasStart + node.left;
-				info.right = blasStart + node.right;
-				info.element_index = indexStart + node.element_index;
+				info.left = node.left != -1 ? blasStart + node.left : -1;
+				info.right = node.right != -1 ? blasStart + node.right : -1;
+				info.element_index = node.element_index != -1 ? indexStart + node.element_index : -1;
 				offset++;
 			}
 			instance++;
@@ -184,7 +186,8 @@ void CPUAccelStruct::Upload()
 
 		if (node.left != -1 && TLAS.Nodes[node.left].blas_index != -1)
 		{
-			info.left = blasOffsets[TLAS.Nodes[node.left].blas_index];
+			int blas_index = TLAS.Nodes[node.left].blas_index;
+			info.left = blasOffsets[blas_index] + DynamicBLAS[blas_index]->GetRoot();
 		}
 		else
 		{
@@ -193,7 +196,8 @@ void CPUAccelStruct::Upload()
 
 		if (node.right != -1 && TLAS.Nodes[node.right].blas_index != -1)
 		{
-			info.right = blasOffsets[TLAS.Nodes[node.right].blas_index];
+			int blas_index = TLAS.Nodes[node.right].blas_index;
+			info.right = blasOffsets[blas_index] + DynamicBLAS[blas_index]->GetRoot();
 		}
 		else
 		{
