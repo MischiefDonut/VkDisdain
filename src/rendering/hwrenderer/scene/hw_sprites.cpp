@@ -59,6 +59,8 @@
 #include "hw_drawcontext.h"
 #include "quaternion.h"
 
+#include "p_visualthinker.h"
+
 extern TArray<spritedef_t> sprites;
 extern TArray<spriteframe_t> SpriteFrames;
 extern uint32_t r_renderercaps;
@@ -823,7 +825,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	bool isFogball = thing->IsKindOf(NAME_Fogball);
 
 	// Don't waste time projecting sprites that are definitely not visible.
-	if ((thing->sprite == 0 && !isPicnumOverride && !isFogball) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
+	if ((thing->sprite == 0 && !isPicnumOverride && !isFogball && !r_showhitbox) || !thing->IsVisibleToPlayer() || ((thing->renderflags & RF_MASKROTATION) && !thing->IsInsideVisibleAngles()))
 	{
 		return;
 	}
@@ -848,10 +850,13 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	const auto &vp = di->Viewpoint;
 	AActor *camera = vp.camera;
 
-	if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->Alpha))
+	if (!r_showhitbox)
 	{
-		if (!(thing->flags & MF_STEALTH) || !di->isStealthVision() || thing == camera)
-			return;
+		if (thing->renderflags & RF_INVISIBLE || !thing->RenderStyle.IsVisible(thing->Alpha))
+		{
+			if (!(thing->flags & MF_STEALTH) || !di->isStealthVision() || thing == camera)
+				return;
+		}
 	}
 
 	// check renderrequired vs ~r_rendercaps, if anything matches we don't support that feature,
@@ -878,15 +883,19 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	}
 
 	// [Nash] filter visibility in mirrors
-	bool isInMirror = di->mCurrentPortal && (di->mCurrentPortal->mState->MirrorFlag > 0 || di->mCurrentPortal->mState->PlaneMirrorFlag > 0);
-	if (thing->renderflags2 & RF2_INVISIBLEINMIRRORS && isInMirror)
+	if (!r_showhitbox)
 	{
-		return;
+		bool isInMirror = di->mCurrentPortal && (di->mCurrentPortal->mState->MirrorFlag > 0 || di->mCurrentPortal->mState->PlaneMirrorFlag > 0);
+		if (thing->renderflags2 & RF2_INVISIBLEINMIRRORS && isInMirror)
+		{
+			return;
+		}
+		else if (thing->renderflags2 & RF2_ONLYVISIBLEINMIRRORS && !isInMirror)
+		{
+			return;
+		}
 	}
-	else if (thing->renderflags2 & RF2_ONLYVISIBLEINMIRRORS && !isInMirror)
-	{
-		return;
-	}
+
 	// Some added checks if the camera actor is not supposed to be seen. It can happen that some portal setup has this actor in view in which case it may not be skipped here
 	if (viewmaster == camera && !vp.showviewer)
 	{
@@ -933,7 +942,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 			if (speed >= thing->target->radius / 2)
 			{
 				double clipdist = clamp(thing->Speed, thing->target->radius, thing->target->radius * 2);
-				if ((thingpos - vp.Pos).LengthSquared() < clipdist * clipdist) return;
+				if ((thingpos - vp.Pos).LengthSquared() < clipdist * clipdist && !r_showhitbox) return;
 			}
 		}
 		thing->flags7 |= MF7_FLYCHEAT;	// do this only once for the very first frame, but not if it gets into range again.
@@ -997,7 +1006,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 		{
 			// Animate picnum overrides.
 			auto tex = TexMan.GetGameTexture(thing->picnum, true);
-			if (tex == nullptr) return;
+			if (tex == nullptr && !r_showhitbox) return;
 
 			if (tex->GetRotations() != 0xFFFF)
 			{
@@ -1046,10 +1055,10 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 			patch = sprites[spritenum].GetSpriteFrame(thing->frame, rot, sprangle, &mirror, !!(thing->renderflags & RF_SPRITEFLIP));
 		}
 
-		if (!patch.isValid()) return;
+		if (!patch.isValid() && !r_showhitbox) return;
 		int type = thing->renderflags & RF_SPRITETYPEMASK;
 		auto tex = TexMan.GetGameTexture(patch, false);
-		if (!tex || !tex->isValid()) return;
+		if ((!tex || !tex->isValid()) && !r_showhitbox) return;
 		auto& spi = tex->GetSpritePositioning(type == RF_FACESPRITE);
 
 		offx = (float)thing->GetSpriteOffset(false);
@@ -1078,7 +1087,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 		}
 
 		texture = tex;
-		if (!texture || !texture->isValid())
+		if ((!texture || !texture->isValid()) && !r_showhitbox)
 			return;
 
 		if (thing->renderflags & RF_SPRITEFLIP) // [SP] Flip back
@@ -1406,7 +1415,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 		hw_styleflags = STYLEHW_NoAlphaTest;
 	}
 
-	if (trans == 0.0f) return;
+	if (trans == 0.0f && !r_showhitbox) return;
 
 	// end of light calculation
 
@@ -1650,7 +1659,7 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 			? TexAnim.UpdateStandaloneAnimation(spr->PT.animData, di->Level->maptime + timefrac)
 			: spr->PT.texture, !custom_anim);
 
-	if (spr->bDontInterpolate)
+	if (spr->flags & VTF_DontInterpolate)
 		timefrac = 0.;
 
 	FVector3 interp = spr->InterpolatedPosition(timefrac);
@@ -1680,13 +1689,12 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		double mult = 1.0 / sqrt(ps); // shrink slightly
 		r.Scale(mult * ps, mult);
 	}
-
-	if (spr->bXFlip)	
+	if (spr->flags & VTF_FlipX)
 	{
 		std::swap(ul,ur);
 		r.left = -r.width - r.left;	// mirror the sprite's x-offset
 	}
-	if (spr->bYFlip)	std::swap(vt,vb);
+	if (spr->flags & VTF_FlipY)	std::swap(vt,vb);
 
 	float viewvecX = vp.ViewVector.X;
 	float viewvecY = vp.ViewVector.Y;
