@@ -1439,6 +1439,7 @@ void FLevelLocals::PlayerReborn (int player)
 	p->cheats |= chasecam;
 	p->Bot = Bot;			//Added by MC:
 	p->settings_controller = settings_controller;
+	p->LastSafePos = p->mo->Pos();
 
 	p->oldbuttons = ~0, p->attackdown = true; p->usedown = true;	// don't do anything immediately
 	p->original_oldbuttons = ~0;
@@ -1915,7 +1916,7 @@ static bool CheckSingleWad (const char *name, bool &printRequires, bool printwar
 	{
 		return true;
 	}
-	if (fileSystem.CheckIfResourceFileLoaded (name) < 0)
+	if (fileSystem.CheckIfContainerLoaded (name) < 0)
 	{
 		if (printwarn)
 		{
@@ -2314,11 +2315,11 @@ static void PutSaveWads (FSerializer &arc)
 	const char *name;
 
 	// Name of IWAD
-	name = fileSystem.GetResourceFileName (fileSystem.GetIwadNum());
+	name = fileSystem.GetContainerName (fileSystem.GetBaseNum());
 	arc.AddString("Game WAD", name);
 
 	// Name of wad the map resides in
-	name = fileSystem.GetResourceFileName (fileSystem.GetFileContainer (primaryLevel->lumpnum));
+	name = fileSystem.GetContainerName (fileSystem.GetFileContainer (primaryLevel->lumpnum));
 	arc.AddString("Map WAD", name);
 }
 
@@ -2912,7 +2913,7 @@ void G_DoPlayDemo (void)
 	gameaction = ga_nothing;
 
 	// [RH] Allow for demos not loaded as lumps
-	demolump = fileSystem.CheckNumForFullName (defdemoname.GetChars(), true);
+	demolump = fileSystem.CheckNumForAnyName (defdemoname.GetChars());
 	if (demolump >= 0)
 	{
 		int demolen = fileSystem.FileLength (demolump);
