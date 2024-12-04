@@ -1930,7 +1930,7 @@ void FBehaviorContainer::LoadDefaultModules ()
 		FScanner sc(lump);
 		while (sc.GetString())
 		{
-			int acslump = fileSystem.CheckNumForName (sc.String, FileSys::ns_acslibrary);
+			int acslump = fileSystem.CheckNumForName (sc.String, ns_acslibrary);
 			if (acslump >= 0)
 			{
 				LoadModule (acslump);
@@ -1963,7 +1963,7 @@ FBehavior *FBehaviorContainer::LoadModule (int lumpnum, FileReader *fr, int len,
 	else
 	{
 		delete behavior;
-		Printf(TEXTCOLOR_RED "%s: invalid ACS module\n", fileSystem.GetFileFullName(lumpnum));
+		Printf(TEXTCOLOR_RED "%s: invalid ACS module\n", fileSystem.GetFileName(lumpnum));
 		return NULL;
 	}
 }
@@ -2322,7 +2322,7 @@ bool FBehavior::Init(FLevelLocals *Level, int lumpnum, FileReader * fr, int len,
 		if ((Level->flags2 & LEVEL2_HEXENHACK) && gameinfo.gametype == GAME_Hexen && lumpnum == -1 && reallumpnum > 0)
 		{
 			int fileno = fileSystem.GetFileContainer(reallumpnum);
-			const char * filename = fileSystem.GetResourceFileName(fileno);
+			const char * filename = fileSystem.GetContainerName(fileno);
 			if (!stricmp(filename, "HEXEN.WAD") || !stricmp(filename, "HEXDD.WAD"))
 			{
 				ShouldLocalize = true;
@@ -2567,7 +2567,7 @@ bool FBehavior::Init(FLevelLocals *Level, int lumpnum, FileReader * fr, int len,
 				if (parse[i])
 				{
 					FBehavior *module = NULL;
-					int lump = fileSystem.CheckNumForName (&parse[i], FileSys::ns_acslibrary);
+					int lump = fileSystem.CheckNumForName (&parse[i], ns_acslibrary);
 					if (lump < 0)
 					{
 						Printf (TEXTCOLOR_RED "Could not find ACS library %s.\n", &parse[i]);
@@ -4806,6 +4806,8 @@ enum EACSFunctions
 	ACSF_GetSectorHealth,
 	ACSF_GetLineHealth,
 	ACSF_SetSubtitleNumber,
+	ACSF_GetNetID,
+	ACSF_SetActivatorByNetID,
 
 		// Eternity's
 	ACSF_GetLineX = 300,
@@ -5380,6 +5382,13 @@ int DLevelScript::CallFunction(int argCount, int funcIndex, int32_t *args, int &
 			actor = Level->SingleActorFromTID(args[0], activator);
 			return actor != NULL? DoubleToACS(actor->Vel.Z) : 0;
 
+		case ACSF_GetNetID:
+			MIN_ARG_COUNT(2);
+			actor = Level->SelectActorFromTID(args[0], args[1], activator);
+			if (argCount > 2)
+				actor = COPY_AAPTREX(Level, actor, args[2]);
+			return actor != nullptr ? actor->GetNetworkID() : NetworkEntityManager::WorldNetID;
+
 		case ACSF_SetPointer:
 			MIN_ARG_COUNT(2);
 			if (activator)
@@ -5428,6 +5437,18 @@ int DLevelScript::CallFunction(int argCount, int funcIndex, int32_t *args, int &
 					activator = actor;
 					return 1;
 				}
+			}
+			return 0;
+
+		case ACSF_SetActivatorByNetID:
+			MIN_ARG_COUNT(1);
+			actor = dyn_cast<AActor>(NetworkEntityManager::GetNetworkEntity(args[0]));
+			if (argCount > 1)
+				actor = COPY_AAPTREX(Level, actor, args[1]);
+			if (actor != nullptr)
+			{
+				activator = actor;
+				return 1;
 			}
 			return 0;
 

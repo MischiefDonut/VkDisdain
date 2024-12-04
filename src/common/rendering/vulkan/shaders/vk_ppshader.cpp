@@ -95,22 +95,22 @@ ShaderIncludeResult VkPPShader::OnInclude(FString headerName, FString includerNa
 
 FString VkPPShader::LoadPublicShaderLump(const char* lumpname)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
-	if (lump == -1) lump = fileSystem.CheckNumForFullName(lumpname);
+	int lump = fileSystem.FindFile(lumpname, 0);
+	if (lump == -1) lump = fileSystem.FindFile(lumpname);
 	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
 	return GetStringFromLump(lump);
 }
 
 FString VkPPShader::LoadPrivateShaderLump(const char* lumpname)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
+	int lump = fileSystem.FindFile(lumpname, 0);
 	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
 	return GetStringFromLump(lump);
 }
 
 FString VkPPShader::LoadShaderCode(const FString &lumpName, const FString &defines, int version)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpName.GetChars());
+	int lump = fileSystem.FindFile(lumpName.GetChars());
 	if (lump == -1) I_FatalError("Unable to load '%s'", lumpName.GetChars());
 	FString code = GetStringFromLump(lump);
 

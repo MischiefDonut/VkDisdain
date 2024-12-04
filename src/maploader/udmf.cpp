@@ -2050,6 +2050,14 @@ public:
 					Flag(sec->Flags, SECF_HAZARD, key);
 					break;
 
+				case NAME_hurtmonsters:
+					Flag(sec->MoreFlags, SECMF_HURTMONSTERS, key);
+					break;
+
+				case NAME_harminair:
+					Flag(sec->MoreFlags, SECMF_HARMINAIR, key);
+					break;
+
 				case NAME_floorterrain:
 					sec->terrainnum[sector_t::floor] = P_FindTerrain(CheckString(key));
 					break;
@@ -2553,7 +2561,7 @@ public:
 		isExtended = false;
 		floordrop = false;
 
-		sc.OpenMem(fileSystem.GetFileFullName(map->lumpnum), map->Read(ML_TEXTMAP));
+		sc.OpenMem(fileSystem.GetFileName(map->lumpnum), map->Read(ML_TEXTMAP));
 		sc.SetCMode(true);
 		if (sc.CheckString("namespace"))
 		{
