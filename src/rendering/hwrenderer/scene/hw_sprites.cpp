@@ -319,7 +319,7 @@ void HWSprite::DrawSprite(HWDrawInfo *di, FRenderState &state, bool translucent)
 		else
 		{
 			FHWModelRenderer renderer(di, state, dynlightindex);
-			RenderModel(&renderer, x, y, z, modelframe, actor, di->Viewpoint.TicFrac);
+			RenderModel(&renderer, x, y, z, modelframe, actor, this, di->Viewpoint.TicFrac);
 			state.SetFlatVertexBuffer();
 			state.SetLightIndex(-1);
 		}
@@ -1434,6 +1434,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	}
 
 	particle = nullptr;
+	visualthinker = nullptr;
 
 	const bool drawWithXYBillboard = (!(actor->renderflags & RF_FORCEYBILLBOARD)
 		&& (actor->renderflags & RF_SPRITETYPEMASK) == RF_FACESPRITE
@@ -1471,7 +1472,7 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 	if (!particle || particle->alpha <= 0)
 		return;
 
-	if (spr && spr->PT.texture.isNull())
+	if (spr && spr->PT.texture.isNull() && !spr->modelClass)
 		return;
 
 	lightlevel = hw_ClampLight(spr ? spr->GetLightLevel(sector) : sector->GetSpriteLight());
@@ -1485,6 +1486,7 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 	bottomclip = -LARGE_VALUE;
 	index = 0;
 	actor = nullptr;
+	visualthinker = spr;
 	this->particle = particle;
 	fullbright = particle->flags & SPF_FULLBRIGHT;
 
@@ -1655,13 +1657,6 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 
 	if (paused || spr->isFrozen())
 		timefrac = 0.;
-	
-	bool custom_anim = ((spr->PT.flags & SPF_LOCAL_ANIM) && spr->PT.animData.ok);
-
-	texture = TexMan.GetGameTexture(
-			custom_anim
-			? TexAnim.UpdateStandaloneAnimation(spr->PT.animData, di->Level->maptime + timefrac)
-			: spr->PT.texture, !custom_anim);
 
 	if (spr->flags & VTF_DontInterpolate)
 		timefrac = 0.;
@@ -1671,51 +1666,86 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 	y = interp.Y;
 	z = interp.Z;
 
-	offx = (float)spr->GetOffset(false);
-	offy = (float)spr->GetOffset(true);
-
-	if (spr->PT.flags & SPF_ROLL)
-		Angles.Roll = TAngle<double>::fromDeg(spr->InterpolatedRoll(timefrac));
-
-	auto& spi = texture->GetSpritePositioning(0);
-
-	vt = spi.GetSpriteVT();
-	vb = spi.GetSpriteVB();
-	ul = spi.GetSpriteUR();
-	ur = spi.GetSpriteUL();
-
-	auto r = spi.GetSpriteRect();
-	r.Scale(spr->Scale.X, spr->Scale.Y);
-
-	if ((spr->PT.flags & SPF_ROLL) && !(spr->PT.flags & SPF_STRETCHPIXELS))
+	if(spr->modelClass)
 	{
-		double ps = di->Level->pixelstretch;
-		double mult = 1.0 / sqrt(ps); // shrink slightly
-		r.Scale(mult * ps, mult);
+		modelframe = FindModelFrame(GetDefaultByType(spr->modelClass), spr->modelSprite, spr->modelFrame, false);
+		modelframeflags = modelframe ? modelframe->getFlags(nullptr) : 0;
+
+		x1 = x2 = x;
+		y1 = y2 = y;
+		z1 = z2 = z;
+		texture = nullptr;
+		
+		if (spr->flags & !VTF_DontInterpolate)
+			Angles = DRotator(
+						DRotator(DAngle::fromDeg(spr->PrevAngle), DAngle::fromDeg(spr->PrevPitch), DAngle::fromDeg(spr->PrevRoll)),
+						DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll)),
+						vp.TicFrac);
+		else
+			Angles = DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll));
+
+		RenderStyle.SrcAlpha = STYLEALPHA_One;
+		RenderStyle.DestAlpha = STYLEALPHA_Zero;
+		hw_styleflags = STYLEHW_Solid;
+		OverrideShader = -1;
 	}
-	if (spr->flags & VTF_FlipX)
+	else
 	{
-		std::swap(ul,ur);
-		r.left = -r.width - r.left;	// mirror the sprite's x-offset
+		bool custom_anim = ((spr->PT.flags & SPF_LOCAL_ANIM) && spr->PT.animData.ok);
+
+		texture = TexMan.GetGameTexture(
+				custom_anim
+				? TexAnim.UpdateStandaloneAnimation(spr->PT.animData, di->Level->maptime + timefrac)
+				: spr->PT.texture, !custom_anim);
+
+
+		offx = (float)spr->GetOffset(false);
+		offy = (float)spr->GetOffset(true);
+
+		if (spr->PT.flags & SPF_ROLL)
+			Angles.Roll = TAngle<double>::fromDeg(spr->InterpolatedRoll(timefrac));
+
+		auto& spi = texture->GetSpritePositioning(0);
+
+		vt = spi.GetSpriteVT();
+		vb = spi.GetSpriteVB();
+		ul = spi.GetSpriteUR();
+		ur = spi.GetSpriteUL();
+
+		auto r = spi.GetSpriteRect();
+		r.Scale(spr->Scale.X, spr->Scale.Y);
+
+		if ((spr->PT.flags & SPF_ROLL) && !(spr->PT.flags & SPF_STRETCHPIXELS))
+		{
+			double ps = di->Level->pixelstretch;
+			double mult = 1.0 / sqrt(ps); // shrink slightly
+			r.Scale(mult * ps, mult);
+		}
+		if (spr->flags & VTF_FlipX)
+		{
+			std::swap(ul,ur);
+			r.left = -r.width - r.left;	// mirror the sprite's x-offset
+		}
+		if (spr->flags & VTF_FlipY)	std::swap(vt,vb);
+
+		float viewvecX = vp.ViewVector.X;
+		float viewvecY = vp.ViewVector.Y;
+		float rightfac = -r.left;
+		float leftfac = rightfac - r.width;
+
+		x1 = x - viewvecY * leftfac;
+		x2 = x - viewvecY * rightfac;
+		y1 = y + viewvecX * leftfac;
+		y2 = y + viewvecX * rightfac;
+		z1 = z - r.top;
+		z2 = z1 - r.height;
+
+		// [BB] Translucent particles have to be rendered without the alpha test.
+		hw_styleflags = STYLEHW_NoAlphaTest;
 	}
-	if (spr->flags & VTF_FlipY)	std::swap(vt,vb);
-
-	float viewvecX = vp.ViewVector.X;
-	float viewvecY = vp.ViewVector.Y;
-	float rightfac = -r.left;
-	float leftfac = rightfac - r.width;
-
-	x1 = x - viewvecY * leftfac;
-	x2 = x - viewvecY * rightfac;
-	y1 = y + viewvecX * leftfac;
-	y2 = y + viewvecX * rightfac;
-	z1 = z - r.top;
-	z2 = z1 - r.height;
 
 	depth = (float)((x - vp.Pos.X) * vp.TanCos + (y - vp.Pos.Y) * vp.TanSin);
 
-	// [BB] Translucent particles have to be rendered without the alpha test.
-	hw_styleflags = STYLEHW_NoAlphaTest;
 }
 
 //==========================================================================
