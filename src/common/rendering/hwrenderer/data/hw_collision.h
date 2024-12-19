@@ -94,7 +94,7 @@ class AccelStructScratchBuffer
 {
 public:
 	std::vector<int> leafs;
-	std::vector<FVector3> centroids;
+	std::vector<FVector4> centroids;
 	std::vector<int> workbuffer;
 };
 
@@ -107,10 +107,12 @@ public:
 	void Update();
 	TraceHit FindFirstHit(const FVector3& rayStart, const FVector3& rayEnd);
 
+	void PrintStats();
+
 private:
 	void FindFirstHit(const RayBBox& ray, int a, TraceHit* hit);
 	void CreateTLAS();
-	int Subdivide(int* instances, int numInstances, const FVector3* centroids, int* workBuffer);
+	int Subdivide(int* instances, int numInstances, const FVector4* centroids, int* workBuffer);
 	std::unique_ptr<CPUBottomLevelAccelStruct> CreateBLAS(int indexStart, int indexCount);
 	void Upload();
 
@@ -152,6 +154,7 @@ public:
 	int GetMaxDepth() const;
 	float GetAverageDepth() const;
 	float GetBalancedDepth() const;
+	double GetBuildTimeMS() const { return buildtime; }
 
 	const CollisionBBox &GetBBox() const { return nodes[root].aabb; }
 
@@ -183,9 +186,12 @@ private:
 	std::vector<Node> nodes;
 	int root = -1;
 
+	double buildtime = 0.0;
+
 	void FindFirstHit(const RayBBox& ray, int a, TraceHit* hit);
 	float IntersectTriangleRay(const RayBBox &ray, int a, float &barycentricB, float &barycentricC);
-	int Subdivide(int *triangles, int num_triangles, const FVector3 *centroids, int *work_buffer);
+	int Subdivide(int *triangles, int num_triangles, const FVector4 *centroids, int *work_buffer);
+	int SubdivideLeaf(int* triangles, int num_triangles);
 };
 
 class IntersectionTest

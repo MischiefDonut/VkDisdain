@@ -255,19 +255,8 @@ void DBaseDecal::SetShade (int r, int g, int b)
 
 FTextureID DBaseDecal::StickToWall (side_t *wall, double x, double y, F3DFloor *ffloor)
 {
-	Side = wall;
-	WallPrev = wall->AttachedDecals;
-
-	while (WallPrev != nullptr && WallPrev->WallNext != nullptr)
-	{
-		WallPrev = WallPrev->WallNext;
-	}
-	if (WallPrev != nullptr) WallPrev->WallNext = this;
-	else wall->AttachedDecals = this;
-	WallNext = nullptr;
-
-	LevelMeshUpdater->SideDecalsChanged(wall);
-
+	Side = nullptr;
+	WallNext = WallPrev = nullptr;
 
 	sector_t *front, *back;
 	line_t *line;
@@ -860,7 +849,7 @@ void SprayDecal(AActor *shooter, const char *name, double distance, DVector3 off
 	{
 		if (trace.HitType == TRACE_HitWall)
 		{
-			DImpactDecal::StaticCreate(shooter->Level, name, trace.HitPos, trace.Line->sidedef[trace.Side], NULL, entry, bloodTrans);
+			DImpactDecal::StaticCreate(shooter->Level, name, trace.HitPos, trace.Line->sidedef[trace.Side], trace.ffloor, entry, bloodTrans);
 		}
 	}
 }
