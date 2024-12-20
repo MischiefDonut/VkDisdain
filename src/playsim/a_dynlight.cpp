@@ -421,17 +421,22 @@ void FDynamicLight::Tick()
 		lightStrength = LightCalcStrength(m_currentRadius);
 	}
 
-	bool updated = UpdateLocation();
+	updated = UpdateLocation();
 
-	if(!updated && markTiles && (m_active != wasactive || oldred != GetRed() || oldblue != GetBlue() || oldgreen != GetGreen()))
+	if(!updated && (m_active != wasactive || oldred != GetRed() || oldblue != GetBlue() || oldgreen != GetGreen() || oldradius != m_currentRadius))
 	{
-		MarkTilesForUpdate(Level, touching_sides, touching_sector);
+		if(markTiles)
+		{
+			MarkTilesForUpdate(Level, touching_sides, touching_sector);
+		}
 
-		wasactive = m_active;
-		oldred = GetRed();
-		oldblue = GetBlue();
-		oldgreen = GetGreen();
+		updated = true;
 	}
+
+	wasactive = m_active;
+	oldred = GetRed();
+	oldblue = GetBlue();
+	oldgreen = GetGreen();
 }
 
 
@@ -758,6 +763,8 @@ void FDynamicLight::CollectWithinRadius(const DVector3 &opos, FSection *section,
 
 void FDynamicLight::LinkLight()
 {
+	bool markTiles = (Trace() && Level->levelMesh);
+
 	// mark the old light nodes
 	FLightNode * node;
 	
@@ -787,27 +794,62 @@ void FDynamicLight::LinkLight()
 		
 	// Now delete any nodes that won't be used. These are the ones where
 	// m_thing is still nullptr.
-	
-	node = touching_sides;
-	while (node)
-	{
-		if (node->lightsource == nullptr)
-		{
-			node = DeleteLightNode(node);
-		}
-		else
-			node = node->nextTarget;
-	}
 
-	node = touching_sector;
-	while (node)
+	if(markTiles)
 	{
-		if (node->lightsource == nullptr)
+		node = touching_sides;
+		while (node)
 		{
-			node = DeleteLightNode(node);
+			if (node->lightsource == nullptr)
+			{
+				MarkTilesForUpdate(Level, node->targLine->LightmapTiles);
+
+				node = DeleteLightNode(node);
+			}
+			else
+				node = node->nextTarget;
 		}
-		else
-			node = node->nextTarget;
+
+		node = touching_sector;
+		while (node)
+		{
+			if (node->lightsource == nullptr)
+			{
+				for(subsector_t * ss : static_cast<FSection *>(node->targ)->subsectors)
+				{
+					MarkTilesForUpdate(Level, ss->LightmapTiles[0]);
+					MarkTilesForUpdate(Level, ss->LightmapTiles[1]);
+				}
+
+				node = DeleteLightNode(node);
+			}
+			else
+				node = node->nextTarget;
+		}
+	}
+	else
+	{
+		node = touching_sides;
+		while (node)
+		{
+			if (node->lightsource == nullptr)
+			{
+				node = DeleteLightNode(node);
+			}
+			else
+				node = node->nextTarget;
+		}
+
+		node = touching_sector;
+		while (node)
+		{
+			if (node->lightsource == nullptr)
+			{
+				node = DeleteLightNode(node);
+			}
+			else
+				node = node->nextTarget;
+		}
 	}
 }
 
