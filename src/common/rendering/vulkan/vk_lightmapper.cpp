@@ -26,9 +26,9 @@ CVAR(Int, lm_max_updates, 128, CVAR_NOSAVE);
 CVAR(Float, lm_scale, 1.0, CVAR_NOSAVE);
 CVAR(Bool, lm_sunlight, true, CVAR_ARCHIVE);
 CVAR(Bool, lm_blur, true, CVAR_ARCHIVE);
-CVAR(Bool, lm_ao, false, CVAR_ARCHIVE);
+CVAR(Bool, lm_ao, false, CVAR_NOSAVE);
 CVAR(Bool, lm_softshadows, true, CVAR_ARCHIVE);
-CVAR(Bool, lm_bounce, false, CVAR_ARCHIVE);
+CVAR(Bool, lm_bounce, false, CVAR_NOSAVE);
 CVAR(Bool, lm_dynamic, true, CVAR_ARCHIVE);
 
 VkLightmapper::VkLightmapper(VulkanRenderDevice* fb) : fb(fb)
@@ -246,7 +246,7 @@ void VkLightmapper::UploadUniforms()
 	Uniforms values = {};
 	values.SunDir = SwapYZ(mesh->SunDirection);
 	values.SunColor = mesh->SunColor;
-	values.SunIntensity = 1.0f;
+	values.SunIntensity = mesh->SunIntensity;
 
 	uniforms.Uniforms = (uint8_t*)uniforms.TransferBuffer->Map(0, uniforms.NumStructs * uniforms.StructStride);
 	*reinterpret_cast<Uniforms*>(uniforms.Uniforms + uniforms.StructStride * uniforms.Index) = values;

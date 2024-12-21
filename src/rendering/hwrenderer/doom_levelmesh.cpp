@@ -223,6 +223,7 @@ DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
 
 	SunColor = doomMap.SunColor; // TODO keep only one copy?
 	SunDirection = doomMap.SunDirection;
+	SunIntensity = doomMap.SunIntensity;
 	Lightmap.SampleDistance = doomMap.LightmapSampleDistance;
 
 	// HWWall and HWFlat still looks at r_viewpoint when doing calculations,
@@ -2002,11 +2003,13 @@ void SaveMapLumps(FileWriter* writer, const TArray<MapLump>& lumps, const char* 
 void DoomLevelMesh::SaveLightmapLump(FLevelLocals& doomMap)
 {
 	/*
-	// LIGHTMAP V3 pseudo-C specification:
+	// LIGHTMAP version 4 pseudo-C specification:
+
+	(Please update LIGHTMAPVER in version.h when upgrading this)
 
 	struct LightmapLump
 	{
-		int version = 2;
+		int version;
 		uint32_t tileCount;
 		uint32_t pixelCount;
 		uint32_t uvCount;
@@ -2046,7 +2049,7 @@ void DoomLevelMesh::SaveLightmapLump(FLevelLocals& doomMap)
 		}
 	}
 
-	const int version = 3;
+	const int version = LIGHTMAPVER;
 
 	const uint32_t headerSize = sizeof(int) + 2 * sizeof(uint32_t);
 	const uint32_t bytesPerTileEntry = sizeof(uint32_t) * 4 + sizeof(uint16_t) * 2 + sizeof(float) * 9;
@@ -2294,6 +2297,19 @@ DEFINE_ACTION_FUNCTION(_Lightmap, SetSunColor)
 		auto vec = FVector3(float(x), float(y), float(z));
 		level.SunColor = vec;
 		level.levelMesh->SunColor = vec;
+	}
+	return 0;
+}
+
+DEFINE_ACTION_FUNCTION(_Lightmap, SetSunIntensity)
+{
+	PARAM_PROLOGUE;
+	PARAM_FLOAT(i);
+
+	if (level.levelMesh)
+	{
+		level.SunIntensity = i;
+		level.levelMesh->SunIntensity = i;
 	}
 	return 0;
 }
