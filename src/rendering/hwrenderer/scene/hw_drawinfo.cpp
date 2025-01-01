@@ -832,7 +832,7 @@ void HWDrawInfo::RenderPortal(HWPortal *p, FRenderState &state, bool usestencil)
 
 }
 
-void HWDrawInfo::DrawCorona(FRenderState& state, AActor* corona, float coronaFade, double dist)
+void HWDrawInfo::DrawCorona(FRenderState& state, AActor* corona, float coronaFade, const DVector3& pos, double dist)
 {
 	spriteframe_t* sprframe = &SpriteFrames[sprites[corona->sprite].spriteframes + (size_t)corona->SpawnState->GetFrame()];
 	FTextureID patch = sprframe->Texture[0];
@@ -841,7 +841,7 @@ void HWDrawInfo::DrawCorona(FRenderState& state, AActor* corona, float coronaFad
 	if (!tex || !tex->isValid()) return;
 
 	// Project the corona sprite center
-	FVector4 worldPos((float)corona->X(), (float)corona->Z(), (float)corona->Y(), 1.0f);
+	FVector4 worldPos((float)pos.X, (float)pos.Z, (float)pos.Y, 1.0f);
 	FVector4 viewPos, clipPos;
 	VPUniforms.mViewMatrix.multMatrixPoint(&worldPos[0], &viewPos[0]);
 	VPUniforms.mProjectionMatrix.multMatrixPoint(&viewPos[0], &clipPos[0]);
@@ -1045,8 +1045,8 @@ void HWDrawInfo::DrawCoronas(FRenderState& state)
 	for (AActor* corona : Coronas)
 	{
 		auto& coronaFade = corona->specialf1;
-		auto cPos = corona->Vec3Offset(0., 0., corona->Height * 0.5);
-		DVector3 direction = Viewpoint.Pos - cPos;
+		DVector3 realPos = corona->PosRelative(Viewpoint.sector);
+		DVector3 direction = Viewpoint.Pos - realPos;
 		double dist = direction.Length();
 
 		// skip coronas that are too far
@@ -1057,7 +1057,7 @@ void HWDrawInfo::DrawCoronas(FRenderState& state)
 
 		direction.MakeUnit();
 		FTraceResults results;
-		if (!Trace(cPos, corona->Sector, direction, dist, MF_SOLID, ML_BLOCKEVERYTHING, corona, results, 0, CheckForViewpointActor, &Viewpoint))
+		if (!Trace(corona->Pos(), corona->Sector, direction, dist, MF_SOLID, ML_BLOCKEVERYTHING, corona, results, 0, CheckForViewpointActor, &Viewpoint))
 		{
 			coronaFade = std::min(coronaFade + timeElapsed * fadeSpeed, 1.0);
 		}
@@ -1067,7 +1067,7 @@ void HWDrawInfo::DrawCoronas(FRenderState& state)
 		}
 
 		if (coronaFade > 0.0f)
-			DrawCorona(state, corona, (float)coronaFade, dist);
+			DrawCorona(state, corona, (float)coronaFade, realPos, dist);
 	}
 
 	state.AlphaFunc(Alpha_Greater, 0.f);
