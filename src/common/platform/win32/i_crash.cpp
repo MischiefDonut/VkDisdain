@@ -26,6 +26,7 @@
 #include <mutex>
 #include <thread>
 #include "i_mainwindow.h"
+#include "version.h"
 
 #ifdef _MSC_VER
 #include <dbghelp.h>
@@ -444,8 +445,47 @@ public:
 	T* Ptr;
 };
 
+static std::wstring GetExeFilename()
+{
+	wchar_t buffer[1024] = {};
+	if (GetModuleFileName(0, buffer, 1024) == FALSE)
+		return {};
+	return buffer;
+}
+
+static std::wstring GetExePath()
+{
+	std::wstring exePath = GetExeFilename();
+	size_t pos = exePath.find_last_of(L"/\\");
+	if (pos == std::wstring::npos)
+		return {};
+	exePath.resize(pos);
+	return exePath;
+}
+
+static std::wstring GetPdbFilename()
+{
+	std::wstring pdbFilename = GetExeFilename();
+	pdbFilename.resize(pdbFilename.size() - 3);
+	pdbFilename += L"pdb";
+	return pdbFilename;
+}
+
+static bool IsPdbFileMissing()
+{
+	std::wstring pdbFilename = GetPdbFilename();
+	HANDLE filehandle = CreateFile(pdbFilename.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (filehandle == INVALID_HANDLE_VALUE)
+		return true;
+	CloseHandle(filehandle);
+	return false;
+}
+
 void I_AddMinidumpCallstack(const FString& minidumpFilename, FString& text, FString& logText)
 {
+	if (IsPdbFileMissing())
+		logText.AppendFormat("\nWarning: could not find " GAMENAMELOWERCASE ".pdb - No call stack will be displayed for the crash.\n");
+
 	DbgPtr<IDebugClient5> client;
 	HRESULT result = DebugCreate(client.GetIID(), client.InitPtr());
 	if (FAILED(result))
@@ -460,6 +500,17 @@ void I_AddMinidumpCallstack(const FString& minidumpFilename, FString& text, FStr
 	result = client->QueryInterface(symbols.GetIID(), symbols.InitPtr());
 	if (FAILED(result))
 		return;
+
+	symbols->SetSymbolOptions(
+		SYMOPT_CASE_INSENSITIVE |
+		SYMOPT_UNDNAME |
+		SYMOPT_DEFERRED_LOADS |
+		SYMOPT_LOAD_LINES |
+		SYMOPT_OMAP_FIND_NEAREST |
+		SYMOPT_FAIL_CRITICAL_ERRORS |
+		SYMOPT_NO_PROMPTS);
+	symbols->SetImagePathWide(GetExePath().c_str());
+	symbols->SetSymbolPathWide(GetExePath().c_str());
 
 	result = client->OpenDumpFileWide(minidumpFilename.WideString().c_str(), 0);
 	if (FAILED(result))
@@ -476,6 +527,9 @@ void I_AddMinidumpCallstack(const FString& minidumpFilename, FString& text, FStr
 	{
 		std::string description(descriptionText, descriptionSize - 1);
 		size_t uselessInfoPos = description.find(" (first/second chance not available)");
+		if (uselessInfoPos != std::string::npos)
+			description.resize(uselessInfoPos);
+		uselessInfoPos = description.find(" - code");
 		if (uselessInfoPos != std::string::npos)
 			description.resize(uselessInfoPos);
 		text = description;

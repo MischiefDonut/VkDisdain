@@ -64,6 +64,7 @@
 extern TArray<spritedef_t> sprites;
 extern TArray<spriteframe_t> SpriteFrames;
 extern uint32_t r_renderercaps;
+extern TArray<AActor*> Coronas;
 
 const float LARGE_VALUE = 1e19f;
 const float MY_SQRT2    = 1.41421356237309504880; // sqrt(2)
@@ -833,7 +834,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	if (isFogball)
 	{
 		Fogball fogball;
-		fogball.Position = FVector3(thing->Pos());
+		fogball.Position = FVector3(thing->PosRelative(r_viewpoint.sector));
 		fogball.Radius = (float)thing->args[3];
 		fogball.Color = FVector3(powf(thing->args[0] * (1.0f / 255.0f), 2.2), powf(thing->args[1] * (1.0f / 255.0f), 2.2), powf(thing->args[2] * (1.0f / 255.0f), 2.2));
 		fogball.Fog = (float)thing->Alpha;
@@ -843,7 +844,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 
 	if (thing->IsKindOf(NAME_Corona))
 	{
-		di->Coronas.Push(thing);
+		Coronas.Push(thing);
 		return;
 	}
 
