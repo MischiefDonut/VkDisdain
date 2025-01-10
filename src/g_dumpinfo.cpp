@@ -111,7 +111,7 @@ CCMD (countdecals)
 {
 	for (auto Level : AllLevels())
 	{
-		auto iterator = Level->GetThinkerIterator<DImpactDecal>(NAME_None, STAT_AUTODECAL);
+		auto iterator = Level->GetThinkerIterator<DThinker>(NAME_None, STAT_AUTODECAL);
 		int count = 0;
 		
 		while (iterator.Next())

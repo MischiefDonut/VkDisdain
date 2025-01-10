@@ -524,6 +524,7 @@ struct LevelLocals native
 	native int isFrozen() const;
 	native void setFrozen(bool on);
 	native string LookupString(uint index);
+	native void AddImpactDecal(Thinker decal);
 
 	native clearscope Sector PointInSector(Vector2 pt) const;
 
