@@ -697,6 +697,7 @@ class Actor : Thinker native
 	native clearscope static int ApplyDamageFactors(class<Inventory> itemcls, Name damagetype, int damage, int defdamage);
 	native void RemoveFromHash();
 	native void ChangeTid(int newtid);
+	native bool ActivateSpecial(Actor activator, bool death = false);
 	deprecated("3.8", "Use Level.FindUniqueTid() instead") static int FindUniqueTid(int start = 0, int limit = 0)
 	{
 		return level.FindUniqueTid(start, limit);
@@ -705,6 +706,8 @@ class Actor : Thinker native
 	native clearscope int GetRenderStyle() const;
 	native clearscope bool CheckKeys(int locknum, bool remote, bool quiet = false);
 	protected native void CheckPortalTransition(bool linked = true);
+	native clearscope bool CanTalk() const;
+	native bool StartConversation(Actor player, bool faceTalker = true, bool saveAngle = true);
 		
 	native clearscope string GetTag(string defstr = "") const;
 	native clearscope string GetCharacterName() const;
