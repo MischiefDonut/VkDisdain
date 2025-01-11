@@ -112,9 +112,9 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 		};
 
 		const auto& desc = effectshaders[key.SpecialEffect];
-		program.vert = LoadVertShader(desc.ShaderName, mainvp, desc.defines, key.UseLevelMesh);
+		program.vert = LoadVertShader(desc.ShaderName, mainvp, nullptr, desc.defines, key, nullptr);
 		if (!key.NoFragmentShader)
-			program.frag = LoadFragShader(desc.ShaderName, desc.fp1, desc.fp2, desc.fp3, desc.fp4, desc.fp5, desc.defines, key);
+			program.frag = LoadFragShader(desc.ShaderName, desc.fp1, desc.fp2, desc.fp3, desc.fp4, desc.fp5, desc.defines, key, nullptr);
 	}
 	else
 	{
@@ -131,30 +131,30 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 		// Note: the MaterialShaderIndex enum needs to be updated whenever this array is modified.
 		static const FDefaultShader defaultshaders[] =
 		{
-			{"Default",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Warp 1",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_warp1.glsl",   "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Warp 2",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_warp2.glsl",   "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Specular",            "shaders/scene/material_spec.glsl",                    "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_specular.glsl", "#define SPECULAR\n#define NORMALMAP\n"},
-			{"PBR",                 "shaders/scene/material_pbr.glsl",                     "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_pbr.glsl",      "#define PBR\n#define NORMALMAP\n"},
-			{"Paletted",	        "shaders/scene/material_paletted.glsl",                "shaders/scene/mateffect_default.glsl", nullptr,									 "shaders/scene/lightmodel_nolights.glsl", "#define PALETTE_EMULATION\n"},
-			{"No Texture",          "shaders/scene/material_notexture.glsl",               "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define NO_LAYERS\n"},
-			{"Basic Fuzz",          "shaders/scene/material_fuzz_standard.glsl",           "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Smooth Fuzz",         "shaders/scene/material_fuzz_smooth.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Swirly Fuzz",         "shaders/scene/material_fuzz_swirly.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Translucent Fuzz",    "shaders/scene/material_fuzz_smoothtranslucent.glsl",  "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Jagged Fuzz",         "shaders/scene/material_fuzz_jagged.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Noise Fuzz",          "shaders/scene/material_fuzz_noise.glsl",              "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Smooth Noise Fuzz",   "shaders/scene/material_fuzz_smoothnoise.glsl",        "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
-			{"Software Fuzz",       "shaders/scene/material_fuzz_software.glsl",           "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   ""},
+			{"Default",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_DEFAULT\n"},
+			{"Warp 1",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_warp1.glsl",   "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_WARP1\n"},
+			{"Warp 2",	            "shaders/scene/material_default.glsl",                 "shaders/scene/mateffect_warp2.glsl",   "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_WARP2\n"},
+			{"Specular",            "shaders/scene/material_spec.glsl",                    "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_specular.glsl", "#define SHADERTYPE_SPECULAR\n#define SPECULAR\n#define NORMALMAP\n"},
+			{"PBR",                 "shaders/scene/material_pbr.glsl",                     "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_pbr.glsl",      "#define SHADERTYPE_PBR\n#define PBR\n#define NORMALMAP\n"},
+			{"Paletted",	        "shaders/scene/material_paletted.glsl",                "shaders/scene/mateffect_default.glsl", nullptr,									 "shaders/scene/lightmodel_nolights.glsl", "#define SHADERTYPE_PALETTE\n#define PALETTE_EMULATION\n"},
+			{"No Texture",          "shaders/scene/material_notexture.glsl",               "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_NOTEXTURE\n#define NO_LAYERS\n"},
+			{"Basic Fuzz",          "shaders/scene/material_fuzz_standard.glsl",           "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_BASIC\n"},
+			{"Smooth Fuzz",         "shaders/scene/material_fuzz_smooth.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_SMOOTH\n"},
+			{"Swirly Fuzz",         "shaders/scene/material_fuzz_swirly.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_SWIRLY\n"},
+			{"Translucent Fuzz",    "shaders/scene/material_fuzz_smoothtranslucent.glsl",  "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_TRANSLUCENT\n"},
+			{"Jagged Fuzz",         "shaders/scene/material_fuzz_jagged.glsl",             "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_JAGGED\n"},
+			{"Noise Fuzz",          "shaders/scene/material_fuzz_noise.glsl",              "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_NOISE\n"},
+			{"Smooth Noise Fuzz",   "shaders/scene/material_fuzz_smoothnoise.glsl",        "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_SMOOTHNOISE\n"},
+			{"Software Fuzz",       "shaders/scene/material_fuzz_software.glsl",           "shaders/scene/mateffect_default.glsl", "shaders/scene/lightmodel_shared.glsl",   "shaders/scene/lightmodel_normal.glsl",   "#define SHADERTYPE_FUZZ\n#define SHADERTYPE_FUZZ_SOFTWARE\n"},
 			{nullptr,nullptr,nullptr,nullptr}
 		};
 
 		if (key.EffectState < FIRST_USER_SHADER)
 		{
 			const auto& desc = defaultshaders[key.EffectState];
-			program.vert = LoadVertShader(desc.ShaderName, mainvp, desc.Defines, key.UseLevelMesh);
+			program.vert = LoadVertShader(desc.ShaderName, mainvp, nullptr, desc.Defines, key, nullptr);
 			if (!key.NoFragmentShader)
-				program.frag = LoadFragShader(desc.ShaderName, mainfp, desc.material_lump, desc.mateffect_lump, desc.lightmodel_lump_shared, desc.lightmodel_lump, desc.Defines, key);
+				program.frag = LoadFragShader(desc.ShaderName, mainfp, desc.material_lump, desc.mateffect_lump, desc.lightmodel_lump_shared, desc.lightmodel_lump, desc.Defines, key, nullptr);
 		}
 		else
 		{
@@ -162,63 +162,76 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 			const FString& name = ExtractFileBase(desc.shader.GetChars());
 			FString defines = defaultshaders[desc.shaderType].Defines + desc.defines;
 
-			program.vert = LoadVertShader(name, mainvp, defines.GetChars(), key.UseLevelMesh);
+			program.vert = LoadVertShader(name, mainvp, desc.vertshader.IsEmpty() ? nullptr : desc.vertshader.GetChars(), defines.GetChars(), key, &desc);
 			if (!key.NoFragmentShader)
-				program.frag = LoadFragShader(name, mainfp, desc.shader.GetChars(), defaultshaders[desc.shaderType].mateffect_lump, defaultshaders[desc.shaderType].lightmodel_lump_shared, defaultshaders[desc.shaderType].lightmodel_lump, defines.GetChars(), key);
+				program.frag = LoadFragShader(name, mainfp, desc.shader.GetChars(), defaultshaders[desc.shaderType].mateffect_lump, defaultshaders[desc.shaderType].lightmodel_lump_shared, defaultshaders[desc.shaderType].lightmodel_lump, defines.GetChars(), key, &desc);
+
+			desc.Uniforms.WriteUniforms(program.Uniforms);
 		}
 	}
 	return &program;
 }
 
-std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername, const char *vert_lump, const char *defines, bool levelmesh)
+void VkShaderManager::BuildLayoutBlock(FString &layoutBlock, bool isFrag, const VkShaderKey& key, const UserShaderDesc *shader)
 {
-	FString definesBlock;
+	layoutBlock << "// This must match the PushConstants struct\n";
+	layoutBlock << "layout(push_constant) uniform PushConstants\n";
+	layoutBlock << "{\n";
+	if (key.UseLevelMesh)
+	{
+		layoutBlock << "    int unused0;\n";
+		layoutBlock << "    int unused1;\n";
+	}
+	else
+	{
+		layoutBlock << "    int uDataIndex; // surfaceuniforms index\n";
+		layoutBlock << "    int uLightIndex; // dynamic lights\n";
+	}
+	layoutBlock << "    int uBoneIndexBase; // bone animation\n";
+	layoutBlock << "    int uFogballIndex; // fog balls\n";
+
+	if(shader && shader->Uniforms.UniformStructSize)
+	{
+		for(auto &field : shader->Uniforms.Fields)
+		{
+			layoutBlock.AppendFormat("    %s %s;\n", GetTypeStr(field.Type), field.Name.GetChars());
+		}
+	}
+	layoutBlock << "};\n";
+
+	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars() << "\n";
+	layoutBlock << LoadPrivateShaderLump(isFrag ? "shaders/scene/layout_frag.glsl" : "shaders/scene/layout_vert.glsl").GetChars() << "\n";
+
+	int varyingLocation = 11;
+	if(shader) for(auto &varying : shader->Varyings)
+	{
+		layoutBlock.AppendFormat("layout(location = %d) %s %s %s %s;\n", varyingLocation, varying.Property.GetChars(), isFrag ? "in" : "out", GetTypeStr(varying.Type), varying.Name.GetChars());
+		varyingLocation++;
+	}
+
+}
+
+void VkShaderManager::BuildDefinesBlock(FString &definesBlock, const char *defines, bool isFrag, const VkShaderKey& key, const UserShaderDesc *shader)
+{
+	if (fb->IsRayQueryEnabled())
+	{
+		definesBlock << "\n#define SUPPORTS_RAYQUERY\n";
+	}
+
 	definesBlock << defines;
 	definesBlock << "\n#define MAX_SURFACE_UNIFORMS " << std::to_string(MAX_SURFACE_UNIFORMS).c_str() << "\n";
 	definesBlock << "#define MAX_LIGHT_DATA " << std::to_string(MAX_LIGHT_DATA).c_str() << "\n";
 	definesBlock << "#define MAX_FOGBALL_DATA " << std::to_string(MAX_FOGBALL_DATA).c_str() << "\n";
-#ifdef NPOT_EMULATION
-	definesBlock << "#define NPOT_EMULATION\n";
-#endif
+
+	#ifdef NPOT_EMULATION
+		definesBlock << "#define NPOT_EMULATION\n";
+	#endif
+
 	if (!fb->GetDevice()->EnabledFeatures.Features.shaderClipDistance)
 	{
 		definesBlock << "#define NO_CLIPDISTANCE_SUPPORT\n";
 	}
 
-	if (levelmesh)
-		definesBlock << "#define USE_LEVELMESH\n";
-
-	FString layoutBlock;
-	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars() << "\n";
-	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_vert.glsl").GetChars() << "\n";
-
-	FString codeBlock;
-	codeBlock << LoadPrivateShaderLump(vert_lump).GetChars() << "\n";
-
-	return ShaderBuilder()
-		.Type(ShaderType::Vertex)
-		.DebugName(shadername.GetChars())
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("DefinesBlock", definesBlock.GetChars())
-		.AddSource("LayoutBlock", layoutBlock.GetChars())
-		.AddSource(vert_lump, codeBlock.GetChars())
-		.OnIncludeLocal([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); })
-		.OnIncludeSystem([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); })
-		.Create(shadername.GetChars(), fb->GetDevice());
-}
-
-std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *light_lump_shared, const char *light_lump, const char *defines, const VkShaderKey& key)
-{
-	FString definesBlock;
-	if (fb->IsRayQueryEnabled()) definesBlock << "\n#define SUPPORTS_RAYQUERY\n";
-	definesBlock << defines;
-	definesBlock << "\n#define MAX_SURFACE_UNIFORMS " << std::to_string(MAX_SURFACE_UNIFORMS).c_str() << "\n";
-	definesBlock << "#define MAX_LIGHT_DATA " << std::to_string(MAX_LIGHT_DATA).c_str() << "\n";
-	definesBlock << "#define MAX_FOGBALL_DATA " << std::to_string(MAX_FOGBALL_DATA).c_str() << "\n";
-#ifdef NPOT_EMULATION
-	definesBlock << "#define NPOT_EMULATION\n";
-#endif
-	if (!fb->GetDevice()->EnabledFeatures.Features.shaderClipDistance) definesBlock << "#define NO_CLIPDISTANCE_SUPPORT\n";
 	if (!key.AlphaTest) definesBlock << "#define NO_ALPHATEST\n";
 	if (key.GBufferPass) definesBlock << "#define GBUFFER_PASS\n";
 	if (key.AlphaTestOnly) definesBlock << "#define ALPHATEST_ONLY\n";
@@ -256,7 +269,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 
 	if (key.UseRaytrace) definesBlock << "#define USE_RAYTRACE\n";
 	if (key.UseRaytracePrecise) definesBlock << "#define USE_RAYTRACE_PRECISE\n";
-	
+
 	definesBlock << "#define SHADOWMAP_FILTER ";
 	definesBlock << std::to_string(key.ShadowmapFilter).c_str();
 	definesBlock << "\n";
@@ -290,13 +303,51 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	if (key.SWLightBanded) definesBlock << "#define SWLIGHT_BANDED\n";
 	if (key.FogBalls) definesBlock << "#define FOGBALLS\n";
 
-	// Backwards compatibility with shaders that rape and pillage... uhm, I mean abused uFogEnabled to detect 2D rendering!
-	if (key.Simple2D) definesBlock << "#define uFogEnabled -3\n";
-	else definesBlock << "#define uFogEnabled 0\n";
+	definesBlock << ((key.Simple2D) ? "#define uFogEnabled -3\n" : "#define uFogEnabled 0\n");
+
+}
+
+std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername, const char *vert_lump, const char *vert_lump_custom, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader)
+{
+	FString definesBlock;
+	BuildDefinesBlock(definesBlock, defines, false, key, shader);
 
 	FString layoutBlock;
-	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars() << "\n";
-	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_frag.glsl").GetChars() << "\n";
+	BuildLayoutBlock(layoutBlock, false, key, shader);
+
+
+	FString codeBlock;
+	codeBlock << LoadPrivateShaderLump(vert_lump).GetChars() << "\n";
+	if(vert_lump_custom)
+	{
+		codeBlock << "\n#line 1\n";
+		codeBlock << LoadPublicShaderLump(vert_lump_custom).GetChars() << "\n";
+	}
+	else
+	{
+		codeBlock << LoadPrivateShaderLump("shaders/scene/vert_nocustom.glsl").GetChars() << "\n";
+	}
+
+	return ShaderBuilder()
+		.Type(ShaderType::Vertex)
+		.DebugName(shadername.GetChars())
+		.AddSource("VersionBlock", GetVersionBlock().GetChars())
+		.AddSource("DefinesBlock", definesBlock.GetChars())
+		.AddSource("LayoutBlock", layoutBlock.GetChars())
+		.AddSource(vert_lump_custom ? vert_lump_custom : vert_lump, codeBlock.GetChars())
+		.OnIncludeLocal([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); })
+		.OnIncludeSystem([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); })
+		.Create(shadername.GetChars(), fb->GetDevice());
+}
+
+std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *light_lump_shared, const char *light_lump, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader)
+{
+	FString definesBlock;
+	BuildDefinesBlock(definesBlock, defines, false, key, shader);
+
+	FString layoutBlock;
+	BuildLayoutBlock(layoutBlock, true, key, shader);
+
 
 	FString codeBlock;
 	codeBlock << LoadPrivateShaderLump(frag_lump).GetChars() << "\n";
@@ -360,14 +411,14 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	if (light_lump && lightBlock.IsEmpty())
 	{
 		lightname = light_lump;
+
 		if(light_lump_shared)
 		{
-			lightBlock << (LoadPrivateShaderLump(light_lump_shared) + LoadPrivateShaderLump(light_lump)).GetChars();
+			lightBlock << LoadPrivateShaderLump(light_lump_shared).GetChars();
 		}
-		else 
-		{
-			lightBlock << LoadPrivateShaderLump(light_lump).GetChars();
-		}
+
+		lightBlock << LoadPrivateShaderLump(light_lump).GetChars();
+		
 	}
 
 	if (mateffect_lump && mateffectBlock.IsEmpty())

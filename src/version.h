@@ -108,9 +108,10 @@ const char *GetVersionString();
 #define GAMENAME "DISDAIN"
 #define WGAMENAME L"DISDAIN"
 #define GAMENAMELOWERCASE "disdain"
+#define TOOLNAMELOWERCASE "vktool"
 #define QUERYIWADDEFAULT false
-#define FORUM_URL "http://disdainfps.com/"
-#define BUGS_FORUM_URL	"http://forum.disdainfps.com/"
+//#define FORUM_URL "http://disdainfps.com/"
+//#define BUGS_FORUM_URL	"http://forum.disdainfps.com/"
 // For QUERYIWADDEFAULT: Set to 'true' to always show dialog box on startup by default, 'false' to disable
 // Should set to 'false' for standalone games, and set to 'true' for regular source port forks that are meant to run any game.
 

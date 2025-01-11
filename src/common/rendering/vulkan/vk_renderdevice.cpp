@@ -160,15 +160,19 @@ void VulkanPrintLog(const char* typestr, const std::string& msg)
 	}
 }
 
-VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface) : SystemBaseFrameBuffer(hMonitor, fullscreen)
+VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanInstance> instance, std::shared_ptr<VulkanSurface> surface) : SystemBaseFrameBuffer(hMonitor, fullscreen)
 {
 	VulkanDeviceBuilder builder;
 	builder.OptionalRayQuery();
 	builder.RequireExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-	builder.Surface(surface);
+	if (surface)
+	{
+		HasSurface = true;
+		builder.Surface(surface);
+	}
 	builder.SelectDevice(vk_device);
-	SupportedDevices = builder.FindDevices(surface->Instance);
-	mDevice = builder.Create(surface->Instance);
+	SupportedDevices = builder.FindDevices(instance);
+	mDevice = builder.Create(instance);
 
 	bool supportsBindless =
 		mDevice->EnabledFeatures.DescriptorIndexing.descriptorBindingPartiallyBound &&
@@ -248,11 +252,7 @@ void VulkanRenderDevice::InitializeState()
 
 	mDescriptorSetManager->Init();
 
-#ifdef __APPLE__
-	mRenderState = std::make_unique<VkRenderStateMolten>(this);
-#else
 	mRenderState = std::make_unique<VkRenderState>(this);
-#endif
 }
 
 void VulkanRenderDevice::Update()
@@ -582,9 +582,9 @@ void VulkanRenderDevice::PrintStartupLog()
 	Printf(PRINT_LOG, "\n");
 
 	const auto &limits = props.limits;
-	Printf("Max. texture size: %d\n", limits.maxImageDimension2D);
-	Printf("Max. uniform buffer range: %d\n", limits.maxUniformBufferRange);
-	Printf("Min. uniform buffer offset alignment: %" PRIu64 "\n", limits.minUniformBufferOffsetAlignment);
+	Printf(PRINT_LOG, "Max. texture size: %d\n", limits.maxImageDimension2D);
+	Printf(PRINT_LOG, "Max. uniform buffer range: %d\n", limits.maxUniformBufferRange);
+	Printf(PRINT_LOG, "Min. uniform buffer offset alignment: %" PRIu64 "\n", limits.minUniformBufferOffsetAlignment);
 }
 
 void VulkanRenderDevice::SetLevelMesh(LevelMesh* mesh)
@@ -656,10 +656,20 @@ void VulkanRenderDevice::DownloadLightmap(int arrayIndex, uint16_t* buffer)
 
 int VulkanRenderDevice::GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation)
 {
+	GlobalShaderAddr addr;
+	auto globalshader = GetGlobalShader(material->GetShaderIndex(), nullptr, addr);
+
 	FMaterialState materialState;
 	materialState.mMaterial = material;
 	materialState.mClampMode = clampmode;
 	materialState.mTranslation = translation;
+
+	if(addr.type == 1 && *globalshader)
+	{ // handle per-map global shaders
+		materialState.globalShaderAddr = addr;
+		materialState.mOverrideShader = globalshader->shaderindex;
+	}
+
 	return static_cast<VkMaterial*>(material)->GetBindlessIndex(materialState);
 }
 

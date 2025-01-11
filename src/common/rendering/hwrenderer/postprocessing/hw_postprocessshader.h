@@ -3,20 +3,7 @@
 #include "zstring.h"
 #include "tarray.h"
 
-enum class PostProcessUniformType
-{
-	Undefined,
-	Int,
-	Float,
-	Vec2,
-	Vec3
-};
-
-struct PostProcessUniformValue
-{
-	PostProcessUniformType Type = PostProcessUniformType::Undefined;
-	double Values[4] = { 0.0, 0.0, 0.0, 0.0 };
-};
+#include "hw_useruniforms.h"
 
 struct PostProcessShader
 {
@@ -27,7 +14,8 @@ struct PostProcessShader
 	FString Name;
 	bool Enabled = false;
 
-	TMap<FString, PostProcessUniformValue> Uniforms;
+	//TMap<FString, UserUniformValue> Uniforms;
+	UserUniforms Uniforms;
 	TMap<FString, FString> Textures;
 };
 

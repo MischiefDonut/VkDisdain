@@ -240,6 +240,16 @@ void* FBaseCVar::GetExtraDataPointer()
 	return m_ExtraDataPointer;
 }
 
+void FBaseCVar::SetExtraDataPointer2(void *pointer)
+{
+	m_ExtraDataPointer2 = pointer;
+}
+
+void* FBaseCVar::GetExtraDataPointer2()
+{
+	return m_ExtraDataPointer2;
+}
+
 const char *FBaseCVar::GetHumanString(int precision) const
 {
 	return GetGenericRep(CVAR_String).String;
@@ -982,6 +992,22 @@ int FColorCVar::ToInt2 (UCVarValue value, ECVarType type)
 		ret = ToInt (value, type);
 	}
 	return ret;
+}
+
+DVector4 FColorCVar::asDV4() const
+{
+	PalEntry col;
+	col.d = Value;
+
+	return {col.r / 255.0, col.g / 255.0, col.b / 255.0, col.a / 255.0};
+}
+
+FVector4 FColorCVar::asFV4() const
+{
+	PalEntry col;
+	col.d = Value;
+
+	return {col.r / 255.0f, col.g / 255.0f, col.b / 255.0f, col.a / 255.0f};
 }
 
 //

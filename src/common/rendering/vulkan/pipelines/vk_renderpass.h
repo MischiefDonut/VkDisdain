@@ -34,7 +34,8 @@ public:
 			uint64_t DepthFunc : 2;
 			uint64_t StencilTest : 1;
 			uint64_t StencilPassOp : 2;
-			uint64_t Unused : 46;
+			uint64_t DrawLine : 1;
+			uint64_t Unused : 45;
 		};
 		uint64_t AsQWORD = 0;
 	};
@@ -69,21 +70,27 @@ public:
 	bool operator!=(const VkRenderPassKey &other) const { return memcmp(this, &other, sizeof(VkRenderPassKey)) != 0; }
 };
 
+struct PipelineData
+{
+	std::unique_ptr<VulkanPipeline> pipeline;
+	UniformStructHolder Uniforms;
+};
+
 class VkRenderPassSetup
 {
 public:
 	VkRenderPassSetup(VulkanRenderDevice* fb, const VkRenderPassKey &key);
 
 	VulkanRenderPass *GetRenderPass(int clearTargets);
-	VulkanPipeline *GetPipeline(const VkPipelineKey &key);
+	VulkanPipeline *GetPipeline(const VkPipelineKey &key, UniformStructHolder &Uniforms);
 
 	VkRenderPassKey PassKey;
 	std::unique_ptr<VulkanRenderPass> RenderPasses[8];
-	std::map<VkPipelineKey, std::unique_ptr<VulkanPipeline>> Pipelines;
+	std::map<VkPipelineKey, PipelineData> Pipelines;
 
 private:
 	std::unique_ptr<VulkanRenderPass> CreateRenderPass(int clearTargets);
-	std::unique_ptr<VulkanPipeline> CreatePipeline(const VkPipelineKey &key);
+	std::unique_ptr<VulkanPipeline> CreatePipeline(const VkPipelineKey &key, UniformStructHolder &Uniforms);
 
 	VulkanRenderDevice* fb = nullptr;
 };
@@ -109,7 +116,7 @@ public:
 	VkRenderPassSetup *GetRenderPass(const VkRenderPassKey &key);
 	int GetVertexFormat(const std::vector<size_t>& bufferStrides, const std::vector<FVertexBufferAttribute>& attrs);
 	VkVertexFormat *GetVertexFormat(int index);
-	VulkanPipelineLayout* GetPipelineLayout(bool levelmesh);
+	VulkanPipelineLayout* GetPipelineLayout(bool levelmesh, int UserUniformSize);
 
 	VkPPRenderPassSetup* GetPPRenderPass(const VkPPRenderPassKey& key);
 

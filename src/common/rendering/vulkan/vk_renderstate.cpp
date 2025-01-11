@@ -71,15 +71,37 @@ void VkRenderState::ClearScreen()
 	mCommandBuffer->draw(4, 1, vertices.second, 0);
 }
 
-void VkRenderState::Draw(int dt, int index, int count, bool apply)
+void VkRenderState::DoDraw(int dt, int index, int count, bool apply)
 {
-	if (apply || mNeedApply)
-		Apply(dt);
+	#ifdef __APPLE__
+	// moltenvk doesn't support drawing triangle fans
+	if (dt == DT_TriangleFan)
+	{
+		IBuffer* oldIndexBuffer = mIndexBuffer;
+		mIndexBuffer = fb->GetBufferManager()->FanToTrisIndexBuffer.get();
 
-	mCommandBuffer->draw(count, 1, index, 0);
+		if (apply || mNeedApply)
+			Apply(DT_Triangles);
+		else
+			ApplyVertexBuffers();
+
+		mCommandBuffer->drawIndexed((count - 2) * 3, 1, 0, index, 0);
+
+		mIndexBuffer = oldIndexBuffer;
+	}
+	else
+	{
+		#endif
+		if (apply || mNeedApply)
+			Apply(dt);
+
+		mCommandBuffer->draw(count, 1, index, 0);
+		#ifdef __APPLE__
+	}
+	#endif
 }
 
-void VkRenderState::DrawIndexed(int dt, int index, int count, bool apply)
+void VkRenderState::DoDrawIndexed(int dt, int index, int count, bool apply)
 {
 	if (apply || mNeedApply)
 		Apply(dt);
@@ -226,10 +248,11 @@ void VkRenderState::ApplyRenderPass(int dt)
 	// Find a pipeline that matches our state
 	VkPipelineKey pipelineKey;
 	pipelineKey.DrawType = dt;
+	pipelineKey.DrawLine = mDrawLine || mWireframe;
 	pipelineKey.VertexFormat = mVertexBuffer ? static_cast<VkHardwareVertexBuffer*>(mVertexBuffer)->VertexFormat : mRSBuffers->Flatbuffer.VertexFormat;
 	pipelineKey.RenderStyle = mRenderStyle;
-	pipelineKey.DepthTest = mDepthTest;
-	pipelineKey.DepthWrite = mDepthTest && mDepthWrite;
+	pipelineKey.DepthTest = mDepthTest && !mWireframe;
+	pipelineKey.DepthWrite = mDepthTest && !mWireframe && mDepthWrite;
 	pipelineKey.DepthFunc = mDepthFunc;
 	pipelineKey.DepthClamp = mDepthClamp;
 	pipelineKey.DepthBias = !(mBias.mFactor == 0 && mBias.mUnits == 0);
@@ -247,7 +270,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 	{
 		int effectState = mMaterial.mOverrideShader >= 0 ? mMaterial.mOverrideShader : (mMaterial.mMaterial ? mMaterial.mMaterial->GetShaderIndex() : 0);
 		pipelineKey.ShaderKey.SpecialEffect = EFF_NONE;
-		pipelineKey.ShaderKey.EffectState = mTextureEnabled ? effectState : SHADER_NoTexture;
+		pipelineKey.ShaderKey.EffectState = (mTextureEnabled && !mWireframe) ? effectState : SHADER_NoTexture;
 		if (r_skipmats && pipelineKey.ShaderKey.EffectState >= 3 && pipelineKey.ShaderKey.EffectState <= 4)
 			pipelineKey.ShaderKey.EffectState = 0;
 		pipelineKey.ShaderKey.AlphaTest = mSurfaceUniforms.uAlphaThreshold >= 0.f;
@@ -330,7 +353,7 @@ void VkRenderState::ApplyRenderPass(int dt)
 
 	if (changingPipeline)
 	{
-		mCommandBuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, mPassSetup->GetPipeline(pipelineKey));
+		mCommandBuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, mPassSetup->GetPipeline(pipelineKey, mUniforms));
 		mPipelineKey = pipelineKey;
 	}
 }
@@ -444,7 +467,12 @@ void VkRenderState::ApplyPushConstants()
 	mPushConstants.uBoneIndexBase = mBoneIndexBase;
 	mPushConstants.uFogballIndex = mFogballIndex >= 0 ? (mFogballIndex % MAX_FOGBALL_DATA) : -1;
 
-	mCommandBuffer->pushConstants(fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
+	mCommandBuffer->pushConstants(fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh, mUniforms.sz), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &mPushConstants);
+
+	if(mUniforms.sz > 0)
+	{
+		mCommandBuffer->pushConstants(fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh, mUniforms.sz), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, (uint32_t)sizeof(PushConstants), (uint32_t)mUniforms.sz, mUniforms.addr);
+	}
 }
 
 void VkRenderState::ApplyMatrices()
@@ -510,7 +538,7 @@ void VkRenderState::ApplyBufferSets()
 	if (mViewpointOffset != mLastViewpointOffset || matrixOffset != mLastMatricesOffset || surfaceUniformsOffset != mLastSurfaceUniformsOffset || lightsOffset != mLastLightsOffset || fogballsOffset != mLastFogballsOffset)
 	{
 		auto descriptors = fb->GetDescriptorSetManager();
-		VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh);
+		VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(mPipelineKey.ShaderKey.UseLevelMesh, mUniforms.sz);
 
 		uint32_t offsets[5] = { mViewpointOffset, matrixOffset, surfaceUniformsOffset, lightsOffset, fogballsOffset };
 		mCommandBuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedSet());
@@ -1075,15 +1103,16 @@ void VkRenderState::ApplyLevelMeshPipeline(VulkanCommandBuffer* cmdbuffer, VkPip
 	pipelineKey.ShaderKey.GBufferPass = mRenderTarget.DrawBuffers > 1;
 
 	// State overridden by the renderstate drawing the mesh
-	pipelineKey.DepthTest = mDepthTest;
-	pipelineKey.DepthWrite = mDepthTest && mDepthWrite;
+	pipelineKey.DrawLine = mDrawLine || mWireframe;
+	pipelineKey.DepthTest = mDepthTest && !mWireframe;
+	pipelineKey.DepthWrite = mDepthTest && !mWireframe && mDepthWrite;
 	pipelineKey.DepthClamp = mDepthClamp;
 	pipelineKey.DepthBias = !(mBias.mFactor == 0 && mBias.mUnits == 0);
 	pipelineKey.StencilTest = mStencilTest;
 	pipelineKey.StencilPassOp = mStencilOp;
 	pipelineKey.ColorMask = mColorMask;
 	pipelineKey.CullMode = mCullMode;
-	if (!mTextureEnabled)
+	if (!mTextureEnabled || mWireframe)
 		pipelineKey.ShaderKey.EffectState = SHADER_NoTexture;
 
 	mPipelineKey = pipelineKey;
@@ -1092,43 +1121,16 @@ void VkRenderState::ApplyLevelMeshPipeline(VulkanCommandBuffer* cmdbuffer, VkPip
 	pushConstants.uBoneIndexBase = -1;
 	pushConstants.uFogballIndex = -1;
 
-	VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(pipelineKey.ShaderKey.UseLevelMesh);
+	VulkanPipelineLayout* layout = fb->GetRenderPassManager()->GetPipelineLayout(pipelineKey.ShaderKey.UseLevelMesh, mUniforms.sz);
 	uint32_t viewpointOffset = mViewpointOffset;
 	uint32_t matrixOffset = mRSBuffers->MatrixBuffer->Offset();
 	uint32_t fogballsOffset = 0;
 	uint32_t offsets[] = { viewpointOffset, matrixOffset, fogballsOffset };
 
 	auto descriptors = fb->GetDescriptorSetManager();
-	cmdbuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, mPassSetup->GetPipeline(pipelineKey));
+	cmdbuffer->bindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, mPassSetup->GetPipeline(pipelineKey, mUniforms));
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, descriptors->GetFixedSet());
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, descriptors->GetLevelMeshSet(), 3, offsets);
 	cmdbuffer->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, descriptors->GetBindlessSet());
 	cmdbuffer->pushConstants(layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)sizeof(PushConstants), &pushConstants);
-}
-
-/////////////////////////////////////////////////////////////////////////////
-
-void VkRenderStateMolten::Draw(int dt, int index, int count, bool apply)
-{
-	if (dt == DT_TriangleFan)
-	{
-		IBuffer* oldIndexBuffer = mIndexBuffer;
-		mIndexBuffer = fb->GetBufferManager()->FanToTrisIndexBuffer.get();
-
-		if (apply || mNeedApply)
-			Apply(DT_Triangles);
-		else
-			ApplyVertexBuffers();
-
-		mCommandBuffer->drawIndexed((count - 2) * 3, 1, 0, index, 0);
-
-		mIndexBuffer = oldIndexBuffer;
-	}
-	else
-	{
-		if (apply || mNeedApply)
-			Apply(dt);
-
-		mCommandBuffer->draw(count, 1, index, 0);
-	}
 }

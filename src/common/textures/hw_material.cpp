@@ -28,17 +28,44 @@
 #include "texturemanager.h"
 #include "c_cvars.h"
 #include "v_video.h"
+#include "hw_renderstate.h"
 
 
 CVAR(Bool, gl_customshader, true, 0);
 
-
-static IHardwareTexture* (*layercallback)(int layer, int translation);
 TArray<UserShaderDesc> usershaders;
 
-void FMaterial::SetLayerCallback(IHardwareTexture* (*cb)(int layer, int translation))
+
+void FRenderState::SetMaterial(FMaterial *mat, int clampmode, int translation, int overrideshader, PClass *cls)
 {
-	layercallback = cb;
+	mMaterial.mMaterial = mat;
+	mMaterial.mClampMode = clampmode;
+	mMaterial.mTranslation = translation;
+	if(overrideshader >= FIRST_USER_SHADER)
+	{
+		mMaterial.mOverrideShader = overrideshader;
+		mMaterial.globalShaderAddr = {0, 3, 0};
+	}
+	else
+	{ // handle per-map/per-class global shaders
+		GlobalShaderAddr addr;
+		auto globalshader = GetGlobalShader((overrideshader > 0) ? overrideshader : mat->GetShaderIndex(), cls, addr);
+
+		if(addr.type > 0 && globalshader->shaderindex >= 0)
+		{
+			mMaterial.mOverrideShader = globalshader->shaderindex;
+			mMaterial.globalShaderAddr = addr;
+		}
+		else
+		{
+			mMaterial.mOverrideShader = overrideshader;
+			mMaterial.globalShaderAddr = {0, 3, 0};
+		}
+	}
+	mMaterial.mChanged = true;
+	mTextureModeFlags = mat->GetLayerFlags();
+	auto scale = mat->GetDetailScale();
+	mSurfaceUniforms.uDetailParms = { scale.X, scale.Y, 2, 0 };
 }
 
 //===========================================================================
@@ -127,26 +154,46 @@ FMaterial::FMaterial(FGameTexture * tx, int scaleflags)
 			mTextureLayers.Push({ placeholder->GetTexture(), 0, -1, MaterialLayerSampling::Default });
 		}
 
+		mNumNonMaterialLayers = mTextureLayers.Size();
+
 		auto index = tx->GetShaderIndex();
+
+		const auto globalshader = mShaderIndex < FIRST_USER_SHADER ? &globalshaders[mShaderIndex] : &nullglobalshader;
+
 		if (gl_customshader)
 		{
-			if (index >= FIRST_USER_SHADER)
+			if (index >= FIRST_USER_SHADER || globalshader->shaderindex >= FIRST_USER_SHADER)
 			{
-				const UserShaderDesc& usershader = usershaders[index - FIRST_USER_SHADER];
-				if (usershader.shaderType == mShaderIndex) // Only apply user shader if it matches the expected material
+
+				if (index >= FIRST_USER_SHADER && usershaders[index - FIRST_USER_SHADER].shaderType == mShaderIndex) // Only apply user shader if it matches the expected material
 				{
 					if (tx->Layers)
 					{
-						size_t index = 0;
+						size_t i = 0;
 						for (auto& texture : tx->Layers->CustomShaderTextures)
 						{
 							if (texture != nullptr)
 							{
-								mTextureLayers.Push({ texture.get(), 0, -1, tx->Layers->CustomShaderTextureSampling[index++]});	// scalability should be user-definable.
+								mTextureLayers.Push({ texture.get(), 0, -1, tx->Layers->CustomShaderTextureSampling[i]});	// scalability should be user-definable.
 							}
+							i++;
 						}
 					}
 					mShaderIndex = index;
+				}
+				else if(mShaderIndex < FIRST_USER_SHADER && globalshader->shaderindex >= FIRST_USER_SHADER)
+				{
+					size_t i = 0;
+					for (auto& texture : globalshader->CustomShaderTextures)
+					{
+						if (texture != nullptr)
+						{
+							mTextureLayers.Push({ texture.get(), 0, -1, globalshader->CustomShaderTextureSampling[i]});	// scalability should be user-definable.
+						}
+						i++;
+					}
+
+					mShaderIndex = globalshader->shaderindex;
 				}
 			}
 		}
@@ -177,23 +224,10 @@ FMaterial::~FMaterial()
 
 IHardwareTexture* FMaterial::GetLayer(int i, int translation, MaterialLayerInfo** pLayer) const
 {
-	if ((mScaleFlags & CTF_Indexed) && i > 0 && layercallback)
-	{
-		static MaterialLayerInfo deflayer = { nullptr, 0, CLAMP_XY };
-		if (i == 1 || i == 2)
-		{
-			if (pLayer) *pLayer = &deflayer;
-			//This must be done with a user supplied callback because we cannot set up the rules for palette data selection here
-			return layercallback(i, translation);
-		}
-	}
-	else
-	{
-		auto& layer = mTextureLayers[i];
-		if (pLayer) *pLayer = &layer;
-		if (mScaleFlags & CTF_Indexed) translation = -1;
-		if (layer.layerTexture) return layer.layerTexture->GetHardwareTexture(translation, layer.scaleFlags);
-	}
+	auto& layer = mTextureLayers[i];
+	if (pLayer) *pLayer = &layer;
+	if (mScaleFlags & CTF_Indexed) translation = -1;
+	if (layer.layerTexture) return layer.layerTexture->GetHardwareTexture(translation, layer.scaleFlags);
 	return nullptr;
 }
 

@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 3.16.0 )
+cmake_minimum_required( VERSION 3.24.0 )
 
 include(precompiled_headers)
 
@@ -141,11 +141,7 @@ else()
 endif()
 
 if( NOT NO_OPENAL )
-	if ( "vcpkg-openal-soft" IN_LIST VCPKG_MANIFEST_FEATURES )
-		# Statically link to OpenAL from vcpkg
-		find_package( OpenAL CONFIG REQUIRED )
-		list( APPEND PROJECT_LIBRARIES OpenAL::OpenAL )
-	elseif ( NOT DYN_OPENAL )	# DYN_OPENAL uses local copies of the headers.
+	if ( NOT DYN_OPENAL )	# DYN_OPENAL uses local copies of the headers.
 		find_package( OpenAL )
 		mark_as_advanced(CLEAR OPENAL_INCLUDE_DIR)
 		if( OPENAL_INCLUDE_DIR )
@@ -558,6 +554,7 @@ file( GLOB HEADER_FILES
 	intermission/*.h
 	maploader/*.h
 	menu/*.h
+	commandlets/*.h
 	sound/*.h
 	sound/backend/*.h*
 	posix/*.h
@@ -820,6 +817,8 @@ set (PCH_SOURCES
 	playsim/p_user.cpp
 	rendering/r_utility.cpp
 	rendering/r_sky.cpp
+	commandlets/commandlet.cpp
+	commandlets/lightmapcmd.cpp
 	sound/s_advsound.cpp
 	sound/s_sndseq.cpp
 	sound/s_doomsound.cpp
@@ -1214,12 +1213,22 @@ set( GAME_SOURCES
 
 )
 
+set( APP_SOURCES
+	gamemain.cpp
+)
+
+set( TOOL_SOURCES
+	toolmain.cpp
+)
+
 set( GAME_NONPCH_SOURCES ${GAME_SOURCES} )
 list( REMOVE_ITEM GAME_NONPCH_SOURCES ${PCH_SOURCES} )
 
-add_executable( zdoom WIN32 MACOSX_BUNDLE ${GAME_SOURCES} )
+add_library( zengine STATIC ${GAME_SOURCES})
+add_executable( zdoom WIN32 MACOSX_BUNDLE ${APP_SOURCES} )
+add_executable( ztool ${TOOL_SOURCES} )
 
-target_precompile_headers( zdoom PRIVATE g_pch.h )
+target_precompile_headers( zengine PRIVATE g_pch.h )
 
 set_source_files_properties( ${FASTMATH_SOURCES} PROPERTIES COMPILE_FLAGS ${ZD_FASTMATH_FLAG} )
 set_source_files_properties( xlat/parse_xlat.cpp PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.c" )
@@ -1239,8 +1248,6 @@ if( UNIX )
 		set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} ${Backtrace_LIBRARIES} )
 	endif()
 endif()
-
-target_link_libraries( zdoom ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} )
 
 include_directories(
 	BEFORE
@@ -1305,7 +1312,14 @@ include_directories(
 	${SYSTEM_SOURCES_DIR}
 )
 
-add_dependencies( zdoom revision_check )
+add_dependencies( zengine revision_check )
+add_dependencies( zdoom zengine )
+add_dependencies( ztool zengine )
+
+target_link_libraries( zengine ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} )
+
+target_link_libraries( zdoom "$<LINK_LIBRARY:WHOLE_ARCHIVE,zengine>" )
+target_link_libraries( ztool "$<LINK_LIBRARY:WHOLE_ARCHIVE,zengine>" )
 
 # Due to some quirks, we need to do this in this order
 if( NOT ZDOOM_OUTPUT_OLDSTYLE )
@@ -1313,6 +1327,8 @@ if( NOT ZDOOM_OUTPUT_OLDSTYLE )
 	# Linux distributions are slow to adopt 2.6. :(
 	set_target_properties( zdoom PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${ZDOOM_OUTPUT_DIR} )
 	set_target_properties( zdoom PROPERTIES OUTPUT_NAME ${ZDOOM_EXE_NAME} )
+	set_target_properties( ztool PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${ZDOOM_OUTPUT_DIR} )
+	set_target_properties( ztool PROPERTIES OUTPUT_NAME ${ZTOOL_EXE_NAME} )
 else()
 	set_target_properties( zdoom PROPERTIES
 		RUNTIME_OUTPUT_NAME ${ZDOOM_EXE_NAME}
@@ -1324,29 +1340,49 @@ else()
 		RUNTIME_OUTPUT_NAME_RELWITHDEBINFO ${ZDOOM_EXE_NAME}rd
 		RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${ZDOOM_OUTPUT_DIR}
 	)
+	set_target_properties( ztool PROPERTIES
+		RUNTIME_OUTPUT_NAME ${ZTOOL_EXE_NAME}
+		RUNTIME_OUTPUT_DIRECTORY_RELEASE ${ZDOOM_OUTPUT_DIR}
+		RUNTIME_OUTPUT_NAME_DEBUG ${ZTOOL_EXE_NAME}d
+		RUNTIME_OUTPUT_DIRECTORY_DEBUG ${ZDOOM_OUTPUT_DIR}
+		RUNTIME_OUTPUT_NAME_MINSIZEREL ${ZTOOL_EXE_NAME}msr
+		RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${ZDOOM_OUTPUT_DIR}
+		RUNTIME_OUTPUT_NAME_RELWITHDEBINFO ${ZTOOL_EXE_NAME}rd
+		RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${ZDOOM_OUTPUT_DIR}
+	)
 endif()
 
 if( MSVC )
-	option ( CONSOLE_MODE "Compile as a console application" OFF )
-	if ( CONSOLE_MODE )
-		set ( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:CONSOLE" )
-	else()
-		set ( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS" )
-	endif()
-
+	option ( CONSOLE_MODE "Compile game executable as a console application" OFF )
 	option( ZDOOM_GENERATE_MAPFILE "Generate .map file for debugging." OFF )
-	set( LINKERSTUFF "/MANIFEST:NO" )
 
-	if( ZDOOM_GENERATE_MAPFILE )
-		set( LINKERSTUFF "${LINKERSTUFF} /MAP" )
+	set(LINKERSTUFF "/MANIFEST:NO")
+
+	if (ZDOOM_GENERATE_MAPFILE)
+		set(LINKERSTUFF ${LINKERSTUFF} "/MAP")
 	endif()
-	set_target_properties(zdoom PROPERTIES LINK_FLAGS ${LINKERSTUFF})
+
+	set(ZDOOM_LINKERSTUFF ${LINKERSTUFF})
+	set(ZTOOL_LINKERSTUFF ${LINKERSTUFF})
+
+	if (CONSOLE_MODE)
+		set(ZDOOM_LINKERSTUFF ${ZDOOM_LINKERSTUFF} "/SUBSYSTEM:CONSOLE")
+	endif()
+
+	set_target_properties(zdoom PROPERTIES LINK_FLAGS ${ZDOOM_LINKERSTUFF})
+	set_target_properties(ztool PROPERTIES LINK_FLAGS ${ZTOOL_LINKERSTUFF})
 
 	# Create stripped PDBs for nightly builds
 	set_target_properties(zdoom PROPERTIES LINK_FLAGS_RELWITHDEBINFO /PDBSTRIPPED:${ZDOOM_OUTPUT_DIR}/RelWithDebInfo/${ZDOOM_EXE_NAME}-stripped.pdb)
+	set_target_properties(ztool PROPERTIES LINK_FLAGS_RELWITHDEBINFO /PDBSTRIPPED:${ZDOOM_OUTPUT_DIR}/RelWithDebInfo/${ZTOOL_EXE_NAME}-stripped.pdb)
 
 	add_custom_command(TARGET zdoom POST_BUILD
 		COMMAND "mt.exe" -manifest \"${CMAKE_CURRENT_SOURCE_DIR}\\common\\platform\\win32\\manifest.xml\" -outputresource:\"$<TARGET_FILE:zdoom>\"\;\#1
+		COMMENT "Adding manifest..."
+	)
+
+	add_custom_command(TARGET ztool POST_BUILD
+		COMMAND "mt.exe" -manifest \"${CMAKE_CURRENT_SOURCE_DIR}\\common\\platform\\win32\\manifest.xml\" -outputresource:\"$<TARGET_FILE:ztool>\"\;\#1
 		COMMENT "Adding manifest..."
 	)
 
@@ -1354,11 +1390,20 @@ endif()
 
 if( NOT WIN32 AND NOT APPLE )
 	FILE( WRITE ${CMAKE_CURRENT_BINARY_DIR}/link-make "if [ ! -e ${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME} ]; then ln -sf ${CMAKE_CURRENT_BINARY_DIR}/${ZDOOM_EXE_NAME} ${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME}; fi" )
+	FILE( WRITE ${CMAKE_CURRENT_BINARY_DIR}/link-make "if [ ! -e ${ZDOOM_OUTPUT_DIR}/${ZTOOL_EXE_NAME} ]; then ln -sf ${CMAKE_CURRENT_BINARY_DIR}/${ZTOOL_EXE_NAME} ${ZDOOM_OUTPUT_DIR}/${ZTOOL_EXE_NAME}; fi" )
 	add_custom_command( TARGET zdoom POST_BUILD
+		COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/link-make
+		COMMAND ${CMAKE_CURRENT_BINARY_DIR}/link-make )
+	add_custom_command( TARGET ztool POST_BUILD
 		COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/link-make
 		COMMAND ${CMAKE_CURRENT_BINARY_DIR}/link-make )
 	IF ("${INSTALL_RPATH}" STREQUAL "")
 		set_target_properties(zdoom PROPERTIES
+			#allow libzmusic.so.1 library in same folder as executable at runtime
+			INSTALL_RPATH "\$ORIGIN:\$ORIGIN/zmusic/build/source"
+			BUILD_WITH_INSTALL_RPATH ON
+		)
+		set_target_properties(ztool PROPERTIES
 			#allow libzmusic.so.1 library in same folder as executable at runtime
 			INSTALL_RPATH "\$ORIGIN:\$ORIGIN/zmusic/build/source"
 			BUILD_WITH_INSTALL_RPATH ON
@@ -1374,10 +1419,6 @@ add_custom_command(TARGET zdoom POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 	${CMAKE_SOURCE_DIR}/fm_banks/gs-by-papiezak-and-sneakernets.wopn $<TARGET_FILE_DIR:zdoom>/fm_banks/gs-by-papiezak-and-sneakernets.wopn
 )
-
-if (VCPKG_TOOLCHAIN)
-	x_vcpkg_install_local_dependencies(TARGETS zdoom DESTINATION ".")
-endif()
 
 if( WIN32 )
 	set( INSTALL_SOUNDFONT_PATH . CACHE STRING "Directory where soundfonts and WOPL/WOPN banks will be placed during install." )
@@ -1410,6 +1451,10 @@ if( APPLE )
 		XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.vkdoom.vkdoom"
 		XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "" )
 
+	set_target_properties(ztool PROPERTIES
+		LINK_FLAGS "${LINK_FRAMEWORKS}"
+	)
+
 	# Dymanic libraries like libvulkan.dylib or libMoltenVK.dylib will be loaded by dlopen()
 	# if placed in the directory with the main executable
 	set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rpath @executable_path" )
@@ -1423,7 +1468,11 @@ endif()
 install(TARGETS zdoom
 		DESTINATION ${INSTALL_PATH}
 		COMPONENT "Game executable")
+install(TARGETS ztool
+		DESTINATION ${INSTALL_PATH}
+		COMPONENT "Tool executable")
 
+source_group("Commandlets" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/commandlets/.+")
 source_group("Audio Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/sound/.+")
 source_group("Game Data" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/gamedata/.+")
 source_group("Game Data\\Fonts" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/gamedata/fonts/.+")
