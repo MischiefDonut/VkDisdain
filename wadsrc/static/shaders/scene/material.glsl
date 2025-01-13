@@ -14,7 +14,6 @@ struct Material
 	float Metallic;
 	float Roughness;
 	float AO;
-	vec2 LightmapCoord;
 };
 
 vec4 Process(vec4 color);
@@ -51,22 +50,32 @@ void SetMaterialProps(inout Material material, vec2 texCoord)
 #endif	
 	material.Base = getTexel(texCoord.st); 
 	material.Normal = ApplyNormalMap(texCoord.st);
-
-	material.LightmapCoord = vLightmap.xy;
-
+    
 // OpenGL doesn't care, but Vulkan pukes all over the place if these texture samplings are included in no-texture shaders, even though never called.
 #ifndef NO_LAYERS
 	#if defined(TEXF_Brightmap)
 		material.Bright = desaturate(texture(brighttexture, texCoord.st));
 	#endif
-
+	
 	#if defined(TEXF_Detailmap)
 		vec4 Detail = texture(detailtexture, texCoord.st * uDetailParms.xy) * uDetailParms.z;
 		material.Base.rgb *= Detail.rgb;
 	#endif
-
+	
 	#if defined(TEXF_Glowmap)
 		material.Glow = desaturate(texture(glowtexture, texCoord.st));
 	#endif
-#endif
+	
+	#ifdef PBR
+		material.Metallic = texture(metallictexture, texCoord.st).r;
+		material.Roughness = texture(roughnesstexture, texCoord.st).r;
+		material.AO = texture(aotexture, texCoord.st).r;
+	#endif
+	
+	#ifdef SPECULAR
+		material.Specular = texture(speculartexture, texCoord.st).rgb;
+		material.Glossiness = uSpecularMaterial.x;
+		material.SpecularLevel = uSpecularMaterial.y;
+	#endif
+#endif   
 }
