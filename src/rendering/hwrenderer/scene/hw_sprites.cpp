@@ -1689,7 +1689,7 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		hw_styleflags = STYLEHW_Solid;
 		OverrideShader = -1;
 	}
-	else
+	else if(spr->PT.texture.isValid())
 	{
 		bool custom_anim = ((spr->PT.flags & SPF_LOCAL_ANIM) && spr->PT.animData.ok);
 

@@ -61,7 +61,7 @@ float pauseTimeOffset = .0f;
 extern TDeletingArray<FVoxel *> Voxels;
 extern TDeletingArray<FVoxelDef *> VoxelDefs;
 
-void RenderFrameModels(FModelRenderer* renderer, FLevelLocals* Level, const FSpriteModelFrame *smf, const FState* curState, const int curTics, FTranslationID translation, AActor* actor);
+void RenderFrameModels(FModelRenderer* renderer, FLevelLocals* Level, const FSpriteModelFrame *smf, const FState* curState, const int curTics, FTranslationID translation, AActor* actor, HWSprite *spr);
 
 
 void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteModelFrame *smf, AActor *actor, HWSprite *spr, double ticFrac)
@@ -223,7 +223,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	float orientation = scaleFactorX * scaleFactorY * scaleFactorZ;
 
 	renderer->BeginDrawModel(RenderStyle, smf_flags, objectToWorldMatrix, orientation < 0);
-	RenderFrameModels(renderer, Level, smf, actor ? actor->state : nullptr, actor ? actor->tics : -1, translation, actor);
+	RenderFrameModels(renderer, Level, smf, actor ? actor->state : nullptr, actor ? actor->tics : -1, translation, actor, spr);
 	renderer->EndDrawModel(RenderStyle, smf_flags);
 }
 
@@ -257,18 +257,18 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 
 	// [BB] Weapon bob, very similar to the normal Doom weapon bob.
 
-	
+
 
 	objectToWorldMatrix.translate(rotation_pivot.X, rotation_pivot.Y, rotation_pivot.Z);
-	
+
 	objectToWorldMatrix.rotate(rotation.X, 0, 1, 0);
 	objectToWorldMatrix.rotate(rotation.Y, 1, 0, 0);
 	objectToWorldMatrix.rotate(rotation.Z, 0, 0, 1);
 
 	objectToWorldMatrix.translate(-rotation_pivot.X, -rotation_pivot.Y, -rotation_pivot.Z);
-	
+
 	objectToWorldMatrix.translate(translation.X, translation.Y, translation.Z);
-	
+
 
 	// [BB] For some reason the jDoom models need to be rotated.
 	objectToWorldMatrix.rotate(90.f, 0, 1, 0);
@@ -284,7 +284,7 @@ void RenderHUDModel(FModelRenderer *renderer, DPSprite *psp, FVector3 translatio
 	auto trans = psp->GetTranslation();
 	if ((psp->Flags & PSPF_PLAYERTRANSLATED)) trans = psp->Owner->mo->Translation;
 
-	RenderFrameModels(renderer, playermo->Level, smf, psp->GetState(), psp->GetTics(), trans, psp->Caller);
+	RenderFrameModels(renderer, playermo->Level, smf, psp->GetState(), psp->GetTics(), trans, psp->Caller, nullptr);
 	renderer->EndDrawHUDModel(playermo->RenderStyle, smf_flags);
 }
 
@@ -341,7 +341,7 @@ void calcFrames(const ModelAnim &curAnim, double tic, ModelAnimFrameInterp &to, 
 	}
 }
 
-void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, const int curTics, FTranslationID translation, AActor* actor)
+void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, const int curTics, FTranslationID translation, AActor* actor, HWSprite *spr)
 {
 	// [BB] Frame interpolation: Find the FSpriteModelFrame smfNext which follows after smf in the animation
 	// and the scalar value inter ( element of [0,1) ), both necessary to determine the interpolated frame.
@@ -467,9 +467,9 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			{
 				//modelFrame
 				if (actor->modelData->modelFrameGenerators.Size() > i
-				 && (unsigned)actor->modelData->modelFrameGenerators[i] < modelsamount
-				 && smf->modelframes[actor->modelData->modelFrameGenerators[i]] >= 0
-				   ) {
+					&& (unsigned)actor->modelData->modelFrameGenerators[i] < modelsamount
+					&& smf->modelframes[actor->modelData->modelFrameGenerators[i]] >= 0
+					) {
 					modelframe = smf->modelframes[actor->modelData->modelFrameGenerators[i]];
 
 					if (smfNext) 
@@ -534,7 +534,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			animationid = smf->animationIDs[i];
 			modelframe = smf->modelframes[i];
 			if (smfNext) modelframenext = smfNext->modelframes[i];
-			skinid = smf->skinIDs[i];
+			skinid = (spr && spr->visualthinker && spr->visualthinker->PT.texture.isValid())? spr->visualthinker->PT.texture : smf->skinIDs[i];
 		}
 
 		if (modelid >= 0 && modelid < Models.size())
@@ -544,8 +544,8 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			mdl->BuildVertexBuffer(renderer);
 
 			auto ssidp = surfaceskinids.Size() > 0
-					   ? surfaceskinids.Data()
-					   : (((i * MD3_MAX_SURFACES) < smf->surfaceskinIDs.Size()) ? &smf->surfaceskinIDs[i * MD3_MAX_SURFACES] : nullptr);
+				? surfaceskinids.Data()
+				: (((i * MD3_MAX_SURFACES) < smf->surfaceskinIDs.Size()) ? &smf->surfaceskinIDs[i * MD3_MAX_SURFACES] : nullptr);
 
 
 			bool nextFrame = smfNext && modelframe != modelframenext;
