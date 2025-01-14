@@ -31,10 +31,17 @@ public:
 	DVector2		Scale,
 					Offset;
 	float			PrevRoll;
+	float			Angle, Pitch;
+	float			PrevAngle, PrevPitch;
+
 	int16_t			LightLevel;
 	FTranslationID	Translation;
 	FTextureID		AnimatedTexture;
 	sector_t		*cursector;
+	
+	PClass			*modelClass;
+	int				modelSprite;
+	int				modelFrame;
 
 	int flags;
 

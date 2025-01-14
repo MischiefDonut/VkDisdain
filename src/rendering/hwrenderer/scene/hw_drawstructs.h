@@ -407,6 +407,7 @@ public:
 	FGameTexture *texture;
 	AActor * actor;
 	particle_t * particle;
+	DVisualThinker * visualthinker;
 	TArray<lightlist_t> *lightlist;
 	DRotator Angles;
 

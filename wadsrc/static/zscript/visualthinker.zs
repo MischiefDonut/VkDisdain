@@ -7,6 +7,10 @@ Class VisualThinker : Thinker native
 							Offset;
 	native float			Roll,
 							PrevRoll,
+							Angle,
+							PrevAngle,
+							Pitch,
+							PrevPitch,
 							Alpha;
 	native TextureID		Texture;
 	native TranslationID	Translation;
@@ -25,6 +29,9 @@ Class VisualThinker : Thinker native
 	native Color			scolor;
 
 	native Sector			CurSector; // can be null!
+
+	native void ClearModel();
+	native void SetModel(Class<Actor> model, SpriteID sprite, int frame);
 
 	native void SetTranslation(Name trans);
 	native void SetRenderStyle(int mode); // see ERenderStyle
