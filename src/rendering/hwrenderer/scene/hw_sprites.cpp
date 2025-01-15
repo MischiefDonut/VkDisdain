@@ -1713,7 +1713,10 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		ur = spi.GetSpriteUL();
 
 		auto r = spi.GetSpriteRect();
-		r.Scale(spr->Scale.X, spr->Scale.Y);
+
+		auto scale = spr->InterpolatedScale(timefrac);
+
+		r.Scale(scale.X, scale.Y);
 
 		if ((spr->PT.flags & SPF_ROLL) && !(spr->PT.flags & SPF_STRETCHPIXELS))
 		{

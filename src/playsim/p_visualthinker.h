@@ -28,7 +28,7 @@ class DVisualThinker : public DThinker
 	void UpdateSector(subsector_t * newSubsector);
 public:
 	DVector3		Prev;
-	DVector2		Scale,
+	DVector2		Scale, PrevScale,
 					Offset;
 	float			PrevRoll;
 	float			Angle, Pitch;
@@ -59,6 +59,7 @@ public:
 	int GetLightLevel(sector_t *rendersector) const;
 	FVector3 InterpolatedPosition(double ticFrac) const;
 	float InterpolatedRoll(double ticFrac) const;
+	DVector2 InterpolatedScale(double ticFrac) const;
 
 	void Tick() override;
 	void UpdateSpriteInfo();

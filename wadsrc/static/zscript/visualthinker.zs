@@ -3,7 +3,7 @@ Class VisualThinker : Thinker native
 	native Vector3			Pos,
 							Prev;
 	native FVector3			Vel;
-	native Vector2			Scale,
+	native Vector2			Scale, PrevScale,
 							Offset;
 	native float			Roll,
 							PrevRoll,
@@ -36,6 +36,15 @@ Class VisualThinker : Thinker native
 	native void SetTranslation(Name trans);
 	native void SetRenderStyle(int mode); // see ERenderStyle
 	native bool IsFrozen();
+
+	void ClearInterpolation()
+	{
+		Prev = Pos;
+		PrevScale = Scale;
+		PrevAngle = Angle;
+		PrevPitch = Pitch;
+		PrevRoll = Roll;
+	}
 
 	native protected void UpdateSector(); // needs to be called if the thinker is set to a non-ticking statnum and the position is modified (or if Tick is overriden and doesn't call Super.Tick())
 	native protected void UpdateSpriteInfo(); // needs to be called every time the texture is updated if the thinker uses SPF_LOCAL_ANIM and is set to a non-ticking statnum (or if Tick is overriden and doesn't call Super.Tick())

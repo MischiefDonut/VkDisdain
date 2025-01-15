@@ -1128,6 +1128,7 @@ void DVisualThinker::Tick()
 	PrevRoll = PT.Roll;
 	PrevAngle = Angle;
 	PrevPitch = Pitch;
+	PrevScale = Scale;
 	// Handle crossing a line portal
 	DVector2 newxy = Level->GetPortalOffsetPosition(PT.Pos.X, PT.Pos.Y, PT.Vel.X, PT.Vel.Y);
 	PT.Pos.X = newxy.X;
@@ -1187,6 +1188,13 @@ float DVisualThinker::InterpolatedRoll(double ticFrac) const
 	if (flags & VTF_DontInterpolate) return PT.Roll;
 
 	return float(PrevRoll + (PT.Roll - PrevRoll) * ticFrac);
+}
+
+DVector2 DVisualThinker::InterpolatedScale(double ticFrac) const
+{
+	if (flags & VTF_DontInterpolate) return Scale;
+
+	return PrevScale + (Scale - PrevScale) * ticFrac;
 }
 
 
@@ -1351,6 +1359,7 @@ DEFINE_FIELD_NAMED(DVisualThinker, flags, VisualThinkerFlags);
 
 DEFINE_FIELD(DVisualThinker, Prev);
 DEFINE_FIELD(DVisualThinker, Scale);
+DEFINE_FIELD(DVisualThinker, PrevScale);
 DEFINE_FIELD(DVisualThinker, Offset);
 DEFINE_FIELD(DVisualThinker, PrevRoll);
 DEFINE_FIELD(DVisualThinker, Angle);
