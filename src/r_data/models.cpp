@@ -76,7 +76,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 
 	assert(actor || spr->visualthinker);
 
-	DVector2 Scale = actor ? actor->Scale : spr->visualthinker->Scale;
+	DVector2 Scale = actor ? actor->Scale : spr->visualthinker->InterpolatedScale(ticFrac);
 	DVector3 Vel = actor ? actor->Vel : DVector3(spr->visualthinker->PT.Vel);
 	FLevelLocals * Level = actor ? actor->Level : spr->visualthinker->Level;
 	FRenderStyle RenderStyle;
