@@ -1826,9 +1826,6 @@ FxExpression *FxTypeCast::Resolve(FCompileContext &ctx)
 
 		val->ValueType = val->value.Type = TypeSpriteID;
 		val->value.Int = GetSpriteIndex(soundName.GetChars(), true);
-
-		delete this;
-		return val;
 	}
 	else if (basex->isConstant() && basex->ValueType == TypeName && ValueType == TypeSpriteID)
 	{
@@ -1837,10 +1834,6 @@ FxExpression *FxTypeCast::Resolve(FCompileContext &ctx)
 
 		val->ValueType = val->value.Type = TypeSpriteID;
 		val->value.Int = GetSpriteIndex(soundName.GetChars(), true);
-		
-
-		delete this;
-		return val;
 	}
 
 	// first deal with the simple types
