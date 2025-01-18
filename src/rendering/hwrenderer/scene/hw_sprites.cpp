@@ -1451,7 +1451,7 @@ void HWSprite::Process(HWDrawInfo *di, FRenderState& state, AActor* thing, secto
 	}
 
 	particle = nullptr;
-	visualthinker = nullptr;
+	spr = nullptr;
 
 	const bool drawWithXYBillboard = (!(actor->renderflags & RF_FORCEYBILLBOARD)
 		&& (actor->renderflags & RF_SPRITETYPEMASK) == RF_FACESPRITE
@@ -1503,7 +1503,6 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 	bottomclip = -LARGE_VALUE;
 	index = 0;
 	actor = nullptr;
-	visualthinker = spr;
 	this->particle = particle;
 	this->spr = spr;
 	fullbright = particle->flags & SPF_FULLBRIGHT;
