@@ -179,6 +179,5 @@ CVAR(Bool, gl_fakemodellight, true, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 
 int get_gl_spritelight()
 {
-	return gl_spritelight < 0 ? (static_cast<VulkanRenderDevice *>(screen)->IsRayQueryEnabled() ? 1 : 0) : gl_spritelight;
+	return gl_spritelight < 0 ? (screen->IsRayQueryEnabled() ? 1 : 0) : gl_spritelight;
 }
-
