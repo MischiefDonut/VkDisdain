@@ -172,3 +172,5 @@ CUSTOM_CVAR(Int, gl_spritelight, 1, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 {
 	if (self < 0 || self > 2) self = 1; // default gpu vertex, 0 = cpu, 1 = gpu vertex, 2 = gpu pixel
 }
+
+CVAR(Bool, gl_fakemodellight, true, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)

@@ -280,7 +280,7 @@ void HWDrawInfo::GetDynSpriteLightList(AActor *self, FDynLightData &modellightda
 
 		ActorTraceStaticLight staticLight(self);
 
-		if(isModel)
+		if(isModel && gl_fakemodellight)
 		{
 			//fake light for contrast
 			AddSunLightToList(modellightdata, x, y, z, FVector3(self->Level->SunDirection.X + 180, 45, 0), self->Level->SunColor * self->Level->SunIntensity * 0.05, false);
