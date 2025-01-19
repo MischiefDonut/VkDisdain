@@ -742,7 +742,7 @@ void HWDrawInfo::PreparePlayerSprites2D(sector_t * viewsector, area_t in_area, F
 			GetDynSpriteLight(playermo, nullptr, nullptr, hudsprite.dynrgb);
 			if (gl_spritelight > 0)
 			{
-				GetDynSpriteLightList(playermo, lightdata);
+				GetDynSpriteLightList(playermo, lightdata, false);
 			}
 		}
 
@@ -846,7 +846,7 @@ void HWDrawInfo::PreparePlayerSprites3D(sector_t * viewsector, area_t in_area, F
 		// set the lighting parameters
 		if (hudsprite.RenderStyle.BlendOp != STYLEOP_Shadow && Level->HasDynamicLights && !isFullbrightScene() && gl_light_sprites)
 		{
-			GetDynSpriteLightList(playermo, lightdata);
+			GetDynSpriteLightList(playermo, lightdata, true);
 			hudsprite.lightindex = state.UploadLights(lightdata);
 		}
 
