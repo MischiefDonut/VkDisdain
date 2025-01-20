@@ -74,7 +74,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	if (!(smf_flags & MDL_IGNORETRANSLATION))
 		translation = actor ? actor->Translation : spr->translation;
 
-	assert(actor || spr->visualthinker);
+	assert(actor || spr->spr);
 
 	DVector2 Scale = actor ? actor->Scale : spr->spr->InterpolatedScale(ticFrac);
 	DVector3 Vel = actor ? actor->Vel : DVector3(spr->spr->PT.Vel);
