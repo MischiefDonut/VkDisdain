@@ -76,9 +76,9 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 
 	assert(actor || spr->visualthinker);
 
-	DVector2 Scale = actor ? actor->Scale : spr->visualthinker->InterpolatedScale(ticFrac);
-	DVector3 Vel = actor ? actor->Vel : DVector3(spr->visualthinker->PT.Vel);
-	FLevelLocals * Level = actor ? actor->Level : spr->visualthinker->Level;
+	DVector2 Scale = actor ? actor->Scale : spr->spr->InterpolatedScale(ticFrac);
+	DVector3 Vel = actor ? actor->Vel : DVector3(spr->spr->PT.Vel);
+	FLevelLocals * Level = actor ? actor->Level : spr->spr->Level;
 	FRenderStyle RenderStyle;
 	if(actor)
 	{
@@ -534,7 +534,7 @@ void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpr
 			animationid = smf->animationIDs[i];
 			modelframe = smf->modelframes[i];
 			if (smfNext) modelframenext = smfNext->modelframes[i];
-			skinid = (spr && spr->visualthinker && spr->visualthinker->PT.texture.isValid())? spr->visualthinker->PT.texture : smf->skinIDs[i];
+			skinid = (spr && spr->spr && spr->spr->PT.texture.isValid())? spr->spr->PT.texture : smf->skinIDs[i];
 		}
 
 		if (modelid >= 0 && modelid < Models.size())

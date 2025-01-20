@@ -1508,7 +1508,6 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 	bottomclip = -LARGE_VALUE;
 	index = 0;
 	actor = nullptr;
-	visualthinker = spr;
 	this->particle = particle;
 	this->spr = spr;
 	fullbright = particle->flags & SPF_FULLBRIGHT;
