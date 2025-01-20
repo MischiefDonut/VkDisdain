@@ -1,97 +1,11 @@
 
 // Check if light is in shadow
 
+#include <shaders/scene/light_trace.glsl> // needed always to do per-pixel tracing of lightmap lights for sprites
+
 #if defined(USE_RAYTRACE)
 
-#include <shaders/lightmap/polyfill_rayquery.glsl>
-#include <shaders/lightmap/trace_levelmesh.glsl>
-#include <shaders/lightmap/montecarlo.glsl>
-
-float TraceDynLightRay(vec3 origin, float tmin, vec3 direction, float dist)
-{
-	float alpha = 1.0;
-
-	for (int i = 0; i < 3; i++)
-	{
-		TraceResult result = TraceFirstHit(origin, tmin, direction, dist);
-
-		// Stop if we hit nothing - the point light is visible.
-		if (result.primitiveIndex == -1)
-			return alpha;
-
-		SurfaceInfo surface = GetSurface(result.primitiveIndex);
-		
-		// Pass through surface texture
-		alpha = PassRayThroughSurfaceDynLight(surface, GetSurfaceUV(result.primitiveIndex, result.primitiveWeights), alpha);
-
-		// Stop if there is no light left
-		if (alpha <= 0.0)
-			return 0.0;
-
-		// Move to surface hit point
-		origin += direction * result.t;
-		dist -= result.t;
-
-		// Move through the portal, if any
-		TransformRay(surface.PortalIndex, origin, direction);
-	}
-
-	return 0.0;
-}
-
-float traceHit(vec3 origin, vec3 direction, float dist)
-{
-	#if defined(USE_RAYTRACE_PRECISE)
-		return TraceDynLightRay(origin, 0.01f, direction, dist);
-	#else
-		return TraceAnyHit(origin, 0.01f, direction, dist) ? 0.0 : 1.0;
-	#endif
-}
-
-float traceShadow(vec4 lightpos, float softShadowRadius)
-{
-	vec3 origin = pixelpos.xyz + vWorldNormal.xyz;
-	vec3 target = lightpos.xyz + 0.01; // nudge light position slightly as Doom maps tend to have their lights perfectly aligned with planes
-
-	vec3 direction = normalize(target - origin);
-	float dist = distance(origin, target);
-
-#if SHADOWMAP_FILTER == 0
-	return traceHit(origin, direction, dist);
-#else
-	if (softShadowRadius == 0)
-	{
-		return traceHit(origin, direction, dist);
-	}
-	else
-	{
-		vec3 v = (abs(direction.x) > abs(direction.y)) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-		vec3 xdir = normalize(cross(direction, v));
-		vec3 ydir = cross(direction, xdir);
-
-		float sum = 0.0;
-		const int step_count = SHADOWMAP_FILTER * 4;
-		for (int i = 0; i < step_count; i++)
-		{
-			vec2 gridoffset = getVogelDiskSample(i, step_count, gl_FragCoord.x + gl_FragCoord.y * 13.37) * softShadowRadius;
-			vec3 pos = target + xdir * gridoffset.x + ydir * gridoffset.y;
-			sum += traceHit(origin, normalize(pos - origin), dist);
-		}
-		return (sum / step_count);
-	}
-#endif
-}
-
-float shadowAttenuation(vec4 lightpos, float lightcolorA, float softShadowRadius)
-{
-	float shadowIndex = abs(lightcolorA) - 1.0;
-	if (shadowIndex >= 16000000.0)
-		return 1.0; // No shadowmap available for this light
-
-	if (lightpos.w > 1000000.0)
-		return 1.0; // Sunlight
-	return traceShadow(lightpos, softShadowRadius);
-}
+#define shadowAttenuation(lightpos, shadowIndex, softShadowRadius, flags) traceShadow(lightpos, softShadowRadius)
 
 #elif defined(USE_SHADOWMAP)
 
@@ -200,7 +114,7 @@ float sampleShadowmapPCF(vec3 planePoint, float v)
 	return sum / (SHADOWMAP_FILTER * 2.0 + 1.0);
 }
 
-float shadowmapAttenuation(vec4 lightpos, float shadowIndex)
+float shadowmapAttenuation(vec3 lightpos, float shadowIndex)
 {
 	vec3 planePoint = pixelpos.xyz - lightpos.xyz;
 	planePoint += 0.01; // nudge light position slightly as Doom maps tend to have their lights perfectly aligned with planes
@@ -217,23 +131,31 @@ float shadowmapAttenuation(vec4 lightpos, float shadowIndex)
 	#endif
 }
 
-float shadowAttenuation(vec4 lightpos, float lightcolorA, float softShadowRadius)
+float shadowAttenuation(vec3 lightpos, int shadowIndex, float softShadowRadius, int flags)
 {
-	if (lightpos.w > 1000000.0)
-		return 1.0; // Sunlight
-
-	float shadowIndex = abs(lightcolorA) - 1.0;
-	if (shadowIndex >= 1024.0)
-		return 1.0; // No shadowmap available for this light
-
-	return shadowmapAttenuation(lightpos, shadowIndex);
+	if((flags & LIGHTINFO_TRACE) > 0)
+	{
+		return traceShadow(lightpos, softShadowRadius);
+	}
+	else
+	{
+		if (shadowIndex >= 1024)
+			return 1.0; // No shadowmap available for this light
+		return shadowmapAttenuation(lightpos, float(shadowIndex));
+	}
 }
-
 #else
 
-float shadowAttenuation(vec4 lightpos, float lightcolorA, float softShadowRadius)
+float shadowAttenuation(vec3 lightpos, int shadowIndex, float softShadowRadius, int flags)
 {
-	return 1.0;
+	if((flags & LIGHTINFO_TRACE) > 0)
+	{
+		return traceShadow(lightpos, softShadowRadius);
+	}
+	else
+	{
+		return 1.0;
+	}
 }
 
 #endif

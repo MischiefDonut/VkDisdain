@@ -136,6 +136,8 @@ public:
 	FVector3 SunDirection = FVector3(0.0f, 0.0f, -1.0f);
 	FVector3 SunColor = FVector3(0.0f, 0.0f, 0.0f);
 	float SunIntensity = 1.0f;
+	bool AmbientOcclusion = true;
+	bool LightBounce = true;
 
 	TArray<LevelMeshPortal> Portals;
 
@@ -171,7 +173,7 @@ public:
 
 		// Lights
 		TArray<LevelMeshLight> Lights;
-		TArray<FVector4> DynLights;
+		TArray<uint8_t> DynLights;
 
 		// Index data
 		TArray<uint32_t> Indexes;

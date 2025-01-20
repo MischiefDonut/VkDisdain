@@ -1,6 +1,97 @@
 
 #include "shaders/scene/bones.glsl"
 
+#if defined(SHADE_VERTEX) && !defined(PBR) && !defined(SPECULAR) && !defined(SIMPLE)
+
+	#undef SHADOWMAP_FILTER
+	#define SHADOWMAP_FILTER 0
+	#include <shaders/scene/lightmodel_shared.glsl>
+	#include <shaders/scene/light_trace.glsl>
+	#include <shaders/scene/light_spot.glsl>
+	
+	vec3 lightValue(DynLightInfo light)
+	{
+#ifdef USE_SPRITE_CENTER
+		float lightdistance = distance(light.pos.xyz, uActorCenter.xyz);
+		
+		if (light.radius < lightdistance)
+			return vec3(0.0); // Early out lights touching surface but not this fragment
+		
+		vec3 lightdir = normalize(light.pos.xyz - uActorCenter.xyz);
+#else
+		float lightdistance = distance(light.pos.xyz, pixelpos.xyz);
+		
+		if (light.radius < lightdistance)
+			return vec3(0.0); // Early out lights touching surface but not this fragment
+		
+		vec3 lightdir = normalize(light.pos.xyz - pixelpos.xyz);
+#endif
+		
+		float attenuation = distanceAttenuation(lightdistance, light.radius, light.strength, light.linearity);
+		
+		if ((light.flags & LIGHTINFO_SPOT) != 0)
+		{
+			attenuation *= spotLightAttenuation(light.pos.xyz, light.spotDir.xyz, light.spotInnerAngle, light.spotOuterAngle);
+		}
+		
+		#ifndef LIGHT_NONORMALS
+			if ((light.flags & LIGHTINFO_ATTENUATED) != 0)
+			{
+				float dotprod = dot(vWorldNormal.xyz, lightdir);
+				attenuation *= clamp(dotprod, 0.0, 1.0);
+			}
+		#endif
+		
+		if (attenuation > 0.0) // Skip shadow map test if possible
+		{
+			if((light.flags & LIGHTINFO_SUN) != 0)
+			{
+				attenuation *= traceSun(lightdir);
+			}
+			else if((light.flags & LIGHTINFO_SHADOWMAPPED) != 0)
+			{
+				attenuation *= traceShadow(light.pos.xyz, light.softShadowRadius);
+			}
+			
+			return light.color.rgb * attenuation;
+		}
+		else
+		{
+			return vec3(0.0);
+		}
+		
+		return vec3(0.0);
+	}
+	
+	vec3 ProcessVertexLight()
+	{
+		vec3 light = vec3(0.0);
+		
+		if (uLightIndex >= 0)
+		{
+			ivec4 lightRange = getLightRange();
+			
+			if (lightRange.z > lightRange.x)
+			{
+				// modulated lights
+				for(int i=lightRange.x; i<lightRange.y; i++)
+				{
+					light += lightValue(getLights()[i]);
+				}
+				
+				// subtractive lights
+				for(int i=lightRange.y; i<lightRange.z; i++)
+				{
+					light -= lightValue(getLights()[i]);
+				}
+			}
+		}
+		
+		return light;
+	}
+
+#endif
+
 void ModifyVertex();
 
 void main()
@@ -36,29 +127,31 @@ void main()
 		vColor = aColor;
 	#endif
 
-	#ifndef SIMPLE
+	#if !defined(SIMPLE) || defined(SIMPLE3D)
 		vLightmap = vec3(aLightmap, aPosition.w);
 
 		pixelpos.xyz = worldcoord.xyz;
 		pixelpos.w = -eyeCoordPos.z/eyeCoordPos.w;
 
-		if (uGlowTopColor.a > 0 || uGlowBottomColor.a > 0)
-		{
-			float topatpoint = (uGlowTopPlane.w + uGlowTopPlane.x * worldcoord.x + uGlowTopPlane.y * worldcoord.z) * uGlowTopPlane.z;
-			float bottomatpoint = (uGlowBottomPlane.w + uGlowBottomPlane.x * worldcoord.x + uGlowBottomPlane.y * worldcoord.z) * uGlowBottomPlane.z;
-			glowdist.x = topatpoint - worldcoord.y;
-			glowdist.y = worldcoord.y - bottomatpoint;
-			glowdist.z = clamp(glowdist.x / (topatpoint - bottomatpoint), 0.0, 1.0);
-		}
+		#if !defined(SIMPLE)
+			if (uGlowTopColor.a > 0 || uGlowBottomColor.a > 0)
+			{
+				float topatpoint = (uGlowTopPlane.w + uGlowTopPlane.x * worldcoord.x + uGlowTopPlane.y * worldcoord.z) * uGlowTopPlane.z;
+				float bottomatpoint = (uGlowBottomPlane.w + uGlowBottomPlane.x * worldcoord.x + uGlowBottomPlane.y * worldcoord.z) * uGlowBottomPlane.z;
+				glowdist.x = topatpoint - worldcoord.y;
+				glowdist.y = worldcoord.y - bottomatpoint;
+				glowdist.z = clamp(glowdist.x / (topatpoint - bottomatpoint), 0.0, 1.0);
+			}
 
-		if (uObjectColor2.a != 0)
-		{
-			float topatpoint = (uGradientTopPlane.w + uGradientTopPlane.x * worldcoord.x + uGradientTopPlane.y * worldcoord.z) * uGradientTopPlane.z;
-			float bottomatpoint = (uGradientBottomPlane.w + uGradientBottomPlane.x * worldcoord.x + uGradientBottomPlane.y * worldcoord.z) * uGradientBottomPlane.z;
-			gradientdist.x = topatpoint - worldcoord.y;
-			gradientdist.y = worldcoord.y - bottomatpoint;
-			gradientdist.z = clamp(gradientdist.x / (topatpoint - bottomatpoint), 0.0, 1.0);
-		}
+			if (uObjectColor2.a != 0)
+			{
+				float topatpoint = (uGradientTopPlane.w + uGradientTopPlane.x * worldcoord.x + uGradientTopPlane.y * worldcoord.z) * uGradientTopPlane.z;
+				float bottomatpoint = (uGradientBottomPlane.w + uGradientBottomPlane.x * worldcoord.x + uGradientBottomPlane.y * worldcoord.z) * uGradientBottomPlane.z;
+				gradientdist.x = topatpoint - worldcoord.y;
+				gradientdist.y = worldcoord.y - bottomatpoint;
+				gradientdist.z = clamp(gradientdist.x / (topatpoint - bottomatpoint), 0.0, 1.0);
+			}
+		#endif
 
 		if (uSplitBottomPlane.z != 0.0)
 		{
@@ -69,7 +162,7 @@ void main()
 		vWorldNormal = NormalModelMatrix * vec4(normalize(bones.Normal), 1.0);
 		vEyeNormal = NormalViewMatrix * vec4(normalize(vWorldNormal.xyz), 1.0);
 	#endif
-
+	
 	#ifdef SPHEREMAP
 		vec3 u = normalize(eyeCoordPos.xyz);
 		vec4 n = normalize(NormalViewMatrix * vec4(parmTexCoord.x, 0.0, parmTexCoord.y, 0.0));
@@ -122,6 +215,10 @@ void main()
 #endif
 
 	gl_PointSize = 1.0;
-    
-    ModifyVertex();
+	
+	#if defined(SHADE_VERTEX) && !defined(PBR) && !defined(SPECULAR) && !defined(SIMPLE)
+		vLightColor = ProcessVertexLight();
+	#endif
+	
+	ModifyVertex();
 }

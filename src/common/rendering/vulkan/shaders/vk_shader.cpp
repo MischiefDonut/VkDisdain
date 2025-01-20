@@ -172,8 +172,101 @@ VkShaderProgram* VkShaderManager::Get(const VkShaderKey& key)
 	return &program;
 }
 
+enum class FieldCondition
+{
+	ALWAYS,
+	NOTSIMPLE,
+	HAS_CLIPDISTANCE,
+	USELEVELMESH,
+	GBUFFER_PASS,
+	SHADE_VERTEX,
+};
+
+struct BuiltinFieldDesc : public VaryingFieldDesc
+{
+	FieldCondition cond;
+};
+
+static std::vector<VaryingFieldDesc> vertexShaderInputs
+{
+	{"aPosition",		"", UniformType::Vec4},		//0, VATTR_VERTEX
+	{"aTexCoord",		"", UniformType::Vec2},		//1, VATTR_TEXCOORD
+	{"aColor",			"", UniformType::Vec4},		//2, VATTR_COLOR
+	{"aVertex2",		"", UniformType::Vec4},		//3, VATTR_VERTEX2
+	{"aNormal",			"", UniformType::Vec4},		//4, VATTR_NORMAL
+	{"aNormal2",		"", UniformType::Vec4},		//5, VATTR_NORMAL2
+	{"aLightmap",		"", UniformType::Vec2},		//6, VATTR_LIGHTMAP
+	{"aBoneWeight",		"", UniformType::Vec4},		//7, VATTR_BONEWEIGHT
+	{"aBoneSelector",	"", UniformType::UVec4},	//8, VATTR_BONESELECTOR
+	{"aDataIndex",		"", UniformType::Int},		//9, VATTR_UNIFORM_INDEXES
+};
+
+static std::vector<BuiltinFieldDesc> vertexShaderOutputs
+{
+	{"vTexCoord",		"",		UniformType::Vec4,	FieldCondition::ALWAYS},			//0
+	{"vColor",			"",		UniformType::Vec4,	FieldCondition::ALWAYS},			//1
+	{"pixelpos",		"",		UniformType::Vec4,	FieldCondition::ALWAYS},			//2
+	{"glowdist",		"",		UniformType::Vec3,	FieldCondition::NOTSIMPLE},			//3
+	{"gradientdist",	"",		UniformType::Vec3,	FieldCondition::NOTSIMPLE},			//4
+	{"vWorldNormal",	"",		UniformType::Vec4,	FieldCondition::ALWAYS},			//5
+	{"vEyeNormal",		"",		UniformType::Vec4,	FieldCondition::ALWAYS},			//6
+	{"ClipDistanceA",	"",		UniformType::Vec4,	FieldCondition::HAS_CLIPDISTANCE},	//7
+	{"ClipDistanceB",	"",		UniformType::Vec4,	FieldCondition::HAS_CLIPDISTANCE},	//8
+	{"vLightmap",		"",		UniformType::Vec3,	FieldCondition::ALWAYS},			//9
+	{"uDataIndex",		"flat", UniformType::Int,	FieldCondition::USELEVELMESH},		//10
+	{"vLightColor",		"",		UniformType::Vec3,	FieldCondition::SHADE_VERTEX},		//11
+};
+
+static std::vector<BuiltinFieldDesc> fragShaderOutputs
+{
+	{"FragColor",		"",		UniformType::Vec4, FieldCondition::ALWAYS},			//0
+	{"FragFog",			"",		UniformType::Vec4, FieldCondition::GBUFFER_PASS},	//1
+	{"FragNormal",		"",		UniformType::Vec4, FieldCondition::GBUFFER_PASS},	//2
+};
+
+void AddFields(FString &layoutBlock, int &index, bool is_in, const std::vector<VaryingFieldDesc> &fields)
+{
+	for(auto &field : fields)
+	{
+		layoutBlock.AppendFormat("layout(location = %d) %s %s %s %s;\n", index, field.Property.GetChars(), is_in ? "in" : "out", GetTypeStr(field.Type), field.Name.GetChars());
+		index++;
+	}
+}
+
+void AddBuiltinFields(FString &layoutBlock, int &index, bool is_in, const std::vector<BuiltinFieldDesc> &fields, const VkShaderKey& key, bool hasClipDistance)
+{
+	for(auto &field : fields)
+	{
+		switch(field.cond)
+		{
+		case FieldCondition::NOTSIMPLE:
+			if(key.Simple) continue;
+			break;
+		case FieldCondition::HAS_CLIPDISTANCE:
+			if(!hasClipDistance) continue;
+			break;
+		case FieldCondition::GBUFFER_PASS:
+			if(!key.GBufferPass) continue;
+			break;
+		case FieldCondition::USELEVELMESH:
+			if(!key.UseLevelMesh) continue;
+			break;
+		case FieldCondition::SHADE_VERTEX:
+			if(!key.ShadeVertex) continue;
+			break;
+		default:
+			break;
+		}
+
+		layoutBlock.AppendFormat("layout(location = %d) %s %s %s %s;\n", index, field.Property.GetChars(), is_in ? "in" : "out", GetTypeStr(field.Type), field.Name.GetChars());
+		index++;
+	}
+}
+
 void VkShaderManager::BuildLayoutBlock(FString &layoutBlock, bool isFrag, const VkShaderKey& key, const UserShaderDesc *shader)
 {
+	bool hasClipDistance = fb->GetDevice()->EnabledFeatures.Features.shaderClipDistance;
+
 	layoutBlock << "// This must match the PushConstants struct\n";
 	layoutBlock << "layout(push_constant) uniform PushConstants\n";
 	layoutBlock << "{\n";
@@ -199,15 +292,32 @@ void VkShaderManager::BuildLayoutBlock(FString &layoutBlock, bool isFrag, const 
 	}
 	layoutBlock << "};\n";
 
-	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars() << "\n";
-	layoutBlock << LoadPrivateShaderLump(isFrag ? "shaders/scene/layout_frag.glsl" : "shaders/scene/layout_vert.glsl").GetChars() << "\n";
-
-	int varyingLocation = 11;
-	if(shader) for(auto &varying : shader->Varyings)
+	if(!isFrag)
 	{
-		layoutBlock.AppendFormat("layout(location = %d) %s %s %s %s;\n", varyingLocation, varying.Property.GetChars(), isFrag ? "in" : "out", GetTypeStr(varying.Type), varying.Name.GetChars());
-		varyingLocation++;
+		int index = 0;
+		AddFields(layoutBlock, index, true, vertexShaderInputs);
 	}
+
+	{
+		int index = 0;
+
+		AddBuiltinFields(layoutBlock, index, isFrag, vertexShaderOutputs, key, hasClipDistance);
+
+		if(shader)
+		{
+			AddFields(layoutBlock, index, isFrag, shader->Varyings);
+		}
+	}
+
+	if(isFrag)
+	{
+		int index = 0;
+		AddBuiltinFields(layoutBlock, index, false, fragShaderOutputs, key, hasClipDistance);
+	}
+
+	layoutBlock << "#line 1\n";
+
+	layoutBlock << LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars() << "\n";
 
 }
 
@@ -223,6 +333,11 @@ void VkShaderManager::BuildDefinesBlock(FString &definesBlock, const char *defin
 	definesBlock << "#define MAX_LIGHT_DATA " << std::to_string(MAX_LIGHT_DATA).c_str() << "\n";
 	definesBlock << "#define MAX_FOGBALL_DATA " << std::to_string(MAX_FOGBALL_DATA).c_str() << "\n";
 
+	if(isFrag)
+	{
+		definesBlock << "#define FRAGSHADER\n";
+	}
+
 	#ifdef NPOT_EMULATION
 		definesBlock << "#define NPOT_EMULATION\n";
 	#endif
@@ -235,6 +350,8 @@ void VkShaderManager::BuildDefinesBlock(FString &definesBlock, const char *defin
 	if (!key.AlphaTest) definesBlock << "#define NO_ALPHATEST\n";
 	if (key.GBufferPass) definesBlock << "#define GBUFFER_PASS\n";
 	if (key.AlphaTestOnly) definesBlock << "#define ALPHATEST_ONLY\n";
+	if (key.Simple) definesBlock << "#define SIMPLE\n";
+	if (key.Simple3D) definesBlock << "#define SIMPLE3D\n";
 
 	switch(key.LightBlendMode)
 	{
@@ -303,8 +420,12 @@ void VkShaderManager::BuildDefinesBlock(FString &definesBlock, const char *defin
 	if (key.SWLightBanded) definesBlock << "#define SWLIGHT_BANDED\n";
 	if (key.FogBalls) definesBlock << "#define FOGBALLS\n";
 
-	definesBlock << ((key.Simple2D) ? "#define uFogEnabled -3\n" : "#define uFogEnabled 0\n");
 
+	if (key.ShadeVertex) definesBlock << "#define SHADE_VERTEX\n";
+	if (key.LightNoNormals) definesBlock << "#define LIGHT_NONORMALS\n";
+	if (key.UseSpriteCenter) definesBlock << "#define USE_SPRITE_CENTER\n";
+
+	definesBlock << ((key.Simple2D) ? "#define uFogEnabled -3\n" : "#define uFogEnabled 0\n");
 }
 
 std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername, const char *vert_lump, const char *vert_lump_custom, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader)
@@ -333,7 +454,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 		.DebugName(shadername.GetChars())
 		.AddSource("VersionBlock", GetVersionBlock().GetChars())
 		.AddSource("DefinesBlock", definesBlock.GetChars())
-		.AddSource("LayoutBlock", layoutBlock.GetChars())
+		.AddSource("shaders/scene/layout_shared.glsl", layoutBlock.GetChars())
 		.AddSource(vert_lump_custom ? vert_lump_custom : vert_lump, codeBlock.GetChars())
 		.OnIncludeLocal([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); })
 		.OnIncludeSystem([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); })
@@ -343,7 +464,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *light_lump_shared, const char *light_lump, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader)
 {
 	FString definesBlock;
-	BuildDefinesBlock(definesBlock, defines, false, key, shader);
+	BuildDefinesBlock(definesBlock, defines, true, key, shader);
 
 	FString layoutBlock;
 	BuildLayoutBlock(layoutBlock, true, key, shader);

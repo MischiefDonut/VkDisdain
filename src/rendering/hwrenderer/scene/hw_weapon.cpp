@@ -87,11 +87,13 @@ void HWDrawInfo::DrawPSprite(HUDSprite *huds, FRenderState &state)
 
 	if (huds->mframe)
 	{
+		state.SetShadeVertex(get_gl_spritelight() == 1);
 		state.AlphaFunc(Alpha_GEqual, 0);
 
 		FHWModelRenderer renderer(this, state, huds->lightindex);
 		RenderHUDModel(&renderer, huds->weapon, huds->translation, huds->rotation + FVector3(huds->mx / 4., (huds->my - WEAPONTOP) / -4., 0), huds->pivot, huds->mframe);
 		state.SetFlatVertexBuffer();
+		state.SetShadeVertex(false);
 	}
 	else
 	{
@@ -739,7 +741,7 @@ void HWDrawInfo::PreparePlayerSprites2D(sector_t * viewsector, area_t in_area, F
 		// set the lighting parameters
 		if (hudsprite.RenderStyle.BlendOp != STYLEOP_Shadow && Level->HasDynamicLights && !isFullbrightScene() && gl_light_sprites)
 		{
-			GetDynSpriteLight(playermo, nullptr, hudsprite.dynrgb);
+			GetDynSpriteLight(playermo, nullptr, nullptr, hudsprite.dynrgb);
 		}
 
 		if (!hudsprite.GetWeaponRect(this, state, psp, spos.X, spos.Y, player, vp.TicFrac)) continue;
@@ -842,7 +844,7 @@ void HWDrawInfo::PreparePlayerSprites3D(sector_t * viewsector, area_t in_area, F
 		// set the lighting parameters
 		if (hudsprite.RenderStyle.BlendOp != STYLEOP_Shadow && Level->HasDynamicLights && !isFullbrightScene() && gl_light_sprites)
 		{
-			hw_GetDynModelLight(drawctx, playermo, lightdata);
+			GetDynSpriteLightList(playermo, lightdata, true);
 			hudsprite.lightindex = state.UploadLights(lightdata);
 		}
 

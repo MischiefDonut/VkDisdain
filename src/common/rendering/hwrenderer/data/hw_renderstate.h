@@ -139,6 +139,9 @@ protected:
 	uint8_t mSplitEnabled : 1;
 	uint8_t mBrightmapEnabled : 1;
 	uint8_t mWireframe : 2;
+	uint8_t mShadeVertex : 1;
+	uint8_t mLightNoNormals : 1;
+	uint8_t mUseSpriteCenter : 1;
 
 	FVector4 mWireframeColor;
 	FVector4 uObjectColor;
@@ -183,6 +186,9 @@ public:
 
 	void Reset()
 	{
+		mUseSpriteCenter = 0;
+		mLightNoNormals = 0;
+		mShadeVertex = 0;
 		mWireframe = 0;
 		mWireframeColor = toFVector4(PalEntry(0xffffffff));
 		mTextureEnabled = true;
@@ -246,15 +252,58 @@ public:
 		mSurfaceUniforms.uVertexNormal = { norm.X, norm.Y, norm.Z, 0.f };
 	}
 
+	void SetWireframe(int mode)
+	{
+		mWireframe = mode;
+		mWireframeColor = toFVector4(PalEntry(0xffffffff));
+	}
+
 	void SetWireframe(int mode, FVector4 color)
 	{
 		mWireframe = mode;
 		mWireframeColor = color;
 	}
 
+	void SetWireframe(int mode, PalEntry color)
+	{
+		mWireframe = mode;
+		mWireframeColor = toFVector4(color);
+	}
+	
+
+	void SetShadeVertex(bool value)
+	{
+		mShadeVertex = value;
+	}
+
+	void SetLightNoNormals(bool value)
+	{
+		mLightNoNormals = value;
+	}
+
+	void SetUseSpriteCenter(bool value)
+	{
+		mUseSpriteCenter = value;
+	}
+
+	void SetWireframeColor(FVector4 color)
+	{
+		mWireframeColor = color;
+	}
+
+	void SetWireframeColor(PalEntry color)
+	{
+		mWireframeColor = toFVector4(color);
+	}
+
 	void SetNormal(float x, float y, float z)
 	{
 		mSurfaceUniforms.uVertexNormal = { x, y, z, 0.f };
+	}
+
+	void SetActorCenter(float x, float y, float z)
+	{
+		mSurfaceUniforms.uActorCenter = { x, y, z };
 	}
 
 	void SetColor(float r, float g, float b, float a = 1.f, int desat = 0)
@@ -565,7 +614,6 @@ public:
 	{
 		SetMaterial(tex, upscalemask, scaleflags, clampmode, translation.index(), overrideshader, cls);
 	}
-
 
 	void SetClipSplit(float bottom, float top)
 	{
