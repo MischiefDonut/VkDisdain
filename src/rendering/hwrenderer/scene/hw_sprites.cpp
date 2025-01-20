@@ -1706,9 +1706,11 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		else
 			Angles = DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll));
 
+		/*
 		RenderStyle.SrcAlpha = STYLEALPHA_One;
 		RenderStyle.DestAlpha = STYLEALPHA_Zero;
 		hw_styleflags = STYLEHW_Solid;
+		*/
 		OverrideShader = -1;
 	}
 	else if(spr->PT.texture.isValid())
