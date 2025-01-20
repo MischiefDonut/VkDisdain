@@ -1698,7 +1698,7 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		z1 = z2 = z;
 		texture = nullptr;
 		
-		if (spr->flags & !VTF_DontInterpolate)
+		if (!(spr->flags & VTF_DontInterpolate))
 			Angles = DRotator(
 						DRotator(DAngle::fromDeg(spr->PrevAngle), DAngle::fromDeg(spr->PrevPitch), DAngle::fromDeg(spr->PrevRoll)),
 						DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll)),
