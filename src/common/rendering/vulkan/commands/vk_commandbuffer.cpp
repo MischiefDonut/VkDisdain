@@ -124,8 +124,11 @@ void VkCommandBufferManager::FlushCommands(VulkanCommandBuffer** commands, size_
 
 	if (mNextSubmit >= maxConcurrentSubmitCount)
 	{
+		vkQueueWaitIdle(fb->GetDevice()->GraphicsQueue);
+		/*
 		vkWaitForFences(fb->GetDevice()->device, 1, &mSubmitFence[currentIndex]->fence, VK_TRUE, std::numeric_limits<uint64_t>::max());
 		vkResetFences(fb->GetDevice()->device, 1, &mSubmitFence[currentIndex]->fence);
+		*/
 	}
 
 	QueueSubmit submit;
@@ -213,8 +216,11 @@ void VkCommandBufferManager::WaitForCommands(bool finish, bool uploadOnly)
 
 	if (numWaitFences > 0)
 	{
+		vkQueueWaitIdle(fb->GetDevice()->GraphicsQueue);
+		/*
 		vkWaitForFences(fb->GetDevice()->device, numWaitFences, mSubmitWaitFences, VK_TRUE, std::numeric_limits<uint64_t>::max());
 		vkResetFences(fb->GetDevice()->device, numWaitFences, mSubmitWaitFences);
+		*/
 	}
 
 	DeleteFrameObjects(uploadOnly);
