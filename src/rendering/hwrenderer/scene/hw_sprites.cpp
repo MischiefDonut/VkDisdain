@@ -1658,10 +1658,15 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 		else hw_styleflags = STYLEHW_NoAlphaTest;
 	}
 
-	if (sector->e->XFloor.lightlist.Size() != 0 && !di->isFullbrightScene() && !fullbright)
+	if (sector->e->XFloor.lightlist.Size() != 0 && !di->isFullbrightScene() && !fullbright &&
+		RenderStyle.BlendOp != STYLEOP_Shadow && RenderStyle.BlendOp != STYLEOP_RevSub)
+	{
 		lightlist = &sector->e->XFloor.lightlist;
+	}
 	else
+	{
 		lightlist = nullptr;
+	}
 
 	PutSprite(di, state, hw_styleflags != STYLEHW_Solid);
 	rendered_sprites++;
@@ -1690,6 +1695,81 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 
 	if(spr->modelClass)
 	{
+		OverrideShader = -1;
+
+		RenderStyle = spr->PT.style;
+
+		ThingColor = (RenderStyle.Flags & STYLEF_ColorIsFixed) ? spr->PT.color : 0xffffff;
+		ThingColor.a = 255;
+
+		OverrideShader = -1;
+		trans = spr->PT.alpha;
+		hw_styleflags = STYLEHW_Normal;
+
+		if (RenderStyle.BlendOp >= STYLEOP_Fuzz && RenderStyle.BlendOp <= STYLEOP_FuzzOrRevSub)
+		{
+			RenderStyle.CheckFuzz();
+			if (RenderStyle.BlendOp == STYLEOP_Fuzz)
+			{
+				if (gl_fuzztype != 0 && !(RenderStyle.Flags & STYLEF_InvertSource))
+				{
+					RenderStyle = LegacyRenderStyles[STYLE_Translucent];
+					OverrideShader = SHADER_NoTexture + gl_fuzztype;
+					trans = 0.99f;	// trans may not be 1 here
+					hw_styleflags = STYLEHW_NoAlphaTest;
+				}
+				else
+				{
+					// Without shaders only the standard effect is available.
+					RenderStyle.BlendOp = STYLEOP_Shadow;
+				}
+			}
+		}
+
+		if (RenderStyle.Flags & STYLEF_TransSoulsAlpha)
+		{
+			trans = transsouls;
+		}
+		else if (RenderStyle.Flags & STYLEF_Alpha1)
+		{
+			trans = 1.f;
+		}
+
+		if (trans >= 1.f - FLT_EPSILON && RenderStyle.BlendOp != STYLEOP_Shadow && (
+			(RenderStyle.SrcAlpha == STYLEALPHA_One && RenderStyle.DestAlpha == STYLEALPHA_Zero) ||
+			(RenderStyle.SrcAlpha == STYLEALPHA_Src && RenderStyle.DestAlpha == STYLEALPHA_InvSrc)
+			))
+		{
+			// This is a non-translucent sprite (i.e. STYLE_Normal or equivalent)
+			trans = 1.f;
+
+			RenderStyle.SrcAlpha = STYLEALPHA_One;
+			RenderStyle.DestAlpha = STYLEALPHA_Zero;
+			hw_styleflags = STYLEHW_Solid;
+		}
+
+		if ((RenderStyle.Flags & STYLEF_RedIsAlpha) || spr->PT.style >= STYLE_Normal)
+		{
+			if (hw_styleflags == STYLEHW_Solid)
+			{
+				RenderStyle.SrcAlpha = STYLEALPHA_Src;
+				RenderStyle.DestAlpha = STYLEALPHA_InvSrc;
+			}
+			hw_styleflags = STYLEHW_NoAlphaTest;
+		}
+
+		if (di->isFullbrightScene() && di->isStealthVision() && gl_enhanced_nightvision)
+		{
+			if (RenderStyle.BlendOp == STYLEOP_Shadow)
+			{
+				// enhanced vision makes them more visible!
+				trans = 0.5f;
+				FRenderStyle rs = RenderStyle;
+				RenderStyle = STYLE_Translucent;
+				RenderStyle.Flags = rs.Flags;	// Flags must be preserved, at this point it can only be STYLEF_InvertSource
+			}
+		}
+
 		modelframe = FindModelFrame(GetDefaultByType(spr->modelClass), spr->modelSprite, spr->modelFrame, false);
 		modelframeflags = modelframe ? modelframe->getFlags(nullptr) : 0;
 
@@ -1706,12 +1786,6 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		else
 			Angles = DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll));
 
-		/*
-		RenderStyle.SrcAlpha = STYLEALPHA_One;
-		RenderStyle.DestAlpha = STYLEALPHA_Zero;
-		hw_styleflags = STYLEHW_Solid;
-		*/
-		OverrideShader = -1;
 	}
 	else if(spr->PT.texture.isValid())
 	{
