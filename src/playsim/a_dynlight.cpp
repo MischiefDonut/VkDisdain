@@ -100,7 +100,7 @@ static void MarkTilesForUpdate(FLevelLocals * Level, FLightNode * touching_sides
 	
 		while(touching_sector)
 		{
-			for(subsector_t * ss : static_cast<FSection *>(touching_sector->targ)->subsectors)
+			for(subsector_t * ss : touching_sector->targSection->subsectors)
 			{
 				MarkTilesForUpdate(Level, ss->LightmapTiles[0]);
 				MarkTilesForUpdate(Level, ss->LightmapTiles[1]);
@@ -305,6 +305,7 @@ void FDynamicLight::Tick()
 	if (!target)
 	{
 		// How did we get here? :?
+		UnlinkLight();
 		ReleaseLight();
 		return;
 	}
@@ -444,16 +445,18 @@ void FDynamicLight::Tick()
 		if(updated)
 		{
 			ActorList.Clear();
+			ActorResult.Clear();
 		}
 		else if(ActorList.Size() > 0)
 		{
-			unsigned i = ActorList.Size() - 1;
+			unsigned i = ActorList.Size();
 			while(i > 0)
 			{
-				if(ActorList[i]->ObjectFlags & OF_EuthanizeMe)
+				const unsigned index = i - 1u;
+				if(ActorList[index]->ObjectFlags & OF_EuthanizeMe)
 				{
-					ActorList.Delete(i);
-					ActorResult.Delete(i);
+					ActorList.Delete(index);
+					ActorResult.Delete(index);
 				}
 				i--;
 			}
@@ -842,7 +845,7 @@ void FDynamicLight::LinkLight()
 		{
 			if (node->lightsource == nullptr)
 			{
-				for(subsector_t * ss : static_cast<FSection *>(node->targ)->subsectors)
+				for(subsector_t * ss : node->targSection->subsectors)
 				{
 					MarkTilesForUpdate(Level, ss->LightmapTiles[0]);
 					MarkTilesForUpdate(Level, ss->LightmapTiles[1]);
@@ -900,7 +903,7 @@ void FDynamicLight::UnlinkLight ()
 
 		while (touching_sector)
 		{
-			for(subsector_t * ss : static_cast<FSection *>(touching_sector->targ)->subsectors)
+			for(subsector_t * ss : touching_sector->targSection->subsectors)
 			{
 				MarkTilesForUpdate(Level, ss->LightmapTiles[0]);
 				MarkTilesForUpdate(Level, ss->LightmapTiles[1]);
