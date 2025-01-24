@@ -3785,7 +3785,7 @@ bool P_BounceActor(AActor *mo, AActor *BlockingMobj, bool ontop)
 			if (fabs(speed) < EQUAL_EPSILON) speed = 0;
 			mo->Angles.Yaw = angle;
 			mo->VelFromAngle(speed);
-			mo->PlayBounceSound(true);
+			mo->PlayBounceSound(true, 1.0);
 		}
 		else
 		{
@@ -3813,7 +3813,7 @@ bool P_BounceActor(AActor *mo, AActor *BlockingMobj, bool ontop)
 				mo->Vel *= mo->bouncefactor;
 			}
 
-			mo->PlayBounceSound(true);
+			mo->PlayBounceSound(true, 1.0);
 			if (mo->BounceFlags & BOUNCE_MBF) // Bring it to rest below a certain speed
 			{
 				if (fabs(mo->Vel.Z) < mo->Mass * mo->GetGravity() / 64)
