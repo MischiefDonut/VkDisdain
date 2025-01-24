@@ -1061,6 +1061,7 @@ void FLevelLocals::Serialize(FSerializer &arc, bool hubload)
 		RecreateAllAttachedLights();
 		InitPortalGroups(this);
 
+		// [Disdain] changed DImpactDecal to DThinker
 		auto it = GetThinkerIterator<DThinker>(NAME_None, STAT_AUTODECAL);
 		ImpactDecalCount = 0;
 		while (it.Next()) ImpactDecalCount++;

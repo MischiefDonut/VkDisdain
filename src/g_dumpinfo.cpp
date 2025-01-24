@@ -111,6 +111,7 @@ CCMD (countdecals)
 {
 	for (auto Level : AllLevels())
 	{
+		// [Disdain] changed DImpactDecal to DThinker
 		auto iterator = Level->GetThinkerIterator<DThinker>(NAME_None, STAT_AUTODECAL);
 		int count = 0;
 		
