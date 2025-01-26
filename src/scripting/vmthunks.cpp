@@ -2535,6 +2535,7 @@ DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, HasPossibleSight, HasPossibleSight)
 	ACTION_RETURN_BOOL(res);
 }
 
+// [Disdain]
 EXTERN_CVAR(Int, cl_maxdecals)
 
 static void AddImpactDecal(FLevelLocals* self, DThinker* decal)
@@ -2551,6 +2552,7 @@ static void AddImpactDecal(FLevelLocals* self, DThinker* decal)
 	}
 }
 
+// [Disdain]
 DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, AddImpactDecal, AddImpactDecal)
 {
 	PARAM_SELF_STRUCT_PROLOGUE(FLevelLocals);
