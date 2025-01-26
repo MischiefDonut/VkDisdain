@@ -30,10 +30,13 @@ Class VisualThinker : Thinker native
 
 	native Sector			CurSector; // can be null!
 
+	virtual void BeginPlay() {}
+
 	native void ClearModel();
 	native void SetModel(Class<Actor> model, SpriteID sprite, int frame);
 
 	native void SetTranslation(Name trans);
+	native clearscope ERenderStyle GetRenderStyle() const;
 	native void SetRenderStyle(int mode); // see ERenderStyle
 	native bool IsFrozen();
 
