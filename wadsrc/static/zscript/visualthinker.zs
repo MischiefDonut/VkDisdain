@@ -25,6 +25,7 @@ Class VisualThinker : Thinker native
     FlagDef                 YFlip :             VisualThinkerFlags, 3;
     FlagDef                 DontInterpolate :   VisualThinkerFlags, 4;
     FlagDef                 AddLightLevel :     VisualThinkerFlags, 5;
+    FlagDef                 AllowShaders :		VisualThinkerFlags, 6;
 
 	native Color			scolor;
 

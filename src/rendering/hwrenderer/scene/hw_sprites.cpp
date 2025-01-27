@@ -1501,7 +1501,7 @@ void HWSprite::ProcessParticle(HWDrawInfo *di, FRenderState& state, particle_t *
 	foglevel = (uint8_t)clamp<short>(sector->lightlevel, 0, 255);
 
 	trans = particle->alpha;
-	OverrideShader = 0;
+	OverrideShader = (spr && (spr->flags & VTF_AllowShaders)) ? -1 : 0;
 	modelframe = nullptr;
 	texture = nullptr;
 	topclip = LARGE_VALUE;
@@ -1702,7 +1702,6 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		ThingColor = (RenderStyle.Flags & STYLEF_ColorIsFixed) ? spr->PT.color : 0xffffff;
 		ThingColor.a = 255;
 
-		OverrideShader = -1;
 		trans = spr->PT.alpha;
 		hw_styleflags = STYLEHW_Normal;
 
