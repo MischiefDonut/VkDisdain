@@ -20,7 +20,6 @@ enum EVisualThinkerFlags
 	VTF_FlipY			= 1 << 3, // flip the sprite on the x/y axis.
 	VTF_DontInterpolate	= 1 << 4, // disable all interpolation
 	VTF_AddLightLevel	= 1 << 5, // adds sector light level to 'LightLevel'
-	VTF_AllowShaders	= 1 << 6, // allow shaders
 };
 
 class DVisualThinker : public DThinker
