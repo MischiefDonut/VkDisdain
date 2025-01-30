@@ -202,7 +202,6 @@ IMPLEMENT_POINTERS_START(AActor)
 	IMPLEMENT_POINTER(alternative)
 	IMPLEMENT_POINTER(ViewPos)
 	IMPLEMENT_POINTER(modelData)
-	IMPLEMENT_POINTER(boneComponentData)
 IMPLEMENT_POINTERS_END
 
 //==========================================================================
