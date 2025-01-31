@@ -2258,7 +2258,7 @@ void P_FakeZMovement(AActor *mo)
 	if ((mo->DisdainFlags & DF_SWIM) && mo->waterlevel > 2 && fabs(mo->Vel.Z) <= mo->FloatSpeed && CanSwim(mo))
 	{
 		FWaterResults res;
-		P_UpdateWaterDepth(mo->Pos(), mo->Height, mo->Sector, mo->Height, false, res);
+		P_UpdateWaterDepth(mo->Pos(), mo->Height, *mo->Sector, mo->Height, false, res);
 		if (res.level <= 2)
 			ClampWaterHeight(mo, mo->Z(), res);
 	}
@@ -2562,7 +2562,7 @@ bool P_TryMove(AActor *thing, const DVector2 &pos,
 			&& ((thing->waterlevel > 2 && thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed) || (thing->waterlevel <= 2 && tm.FromPMove)))
 		{
 			FWaterResults res;
-			P_UpdateWaterDepth(DVector3(tm.pos.XY(), thing->Z()), thing->Height, tm.sector, thing->Height, false, res);
+			P_UpdateWaterDepth(DVector3(tm.pos.XY(), thing->Z()), thing->Height, *tm.sector, thing->Height, false, res);
 			if (res.level <= 2)
 			{
 				thing->SetZ(oldz);
@@ -2986,7 +2986,7 @@ bool P_CheckMove(AActor *thing, const DVector2 &pos, FCheckPosition& tm, int fla
 			&& thing->Vel.XY().LengthSquared() <= thing->Speed * thing->Speed)
 		{
 			FWaterResults res;
-			P_UpdateWaterDepth(DVector3(tm.pos.XY(), newz), thing->Height, tm.sector, thing->Height, false, res);
+			P_UpdateWaterDepth(DVector3(tm.pos.XY(), newz), thing->Height, *tm.sector, thing->Height, false, res);
 			if (res.level <= 2)
 				return false;
 		}
