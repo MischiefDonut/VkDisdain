@@ -2690,7 +2690,7 @@ static void P_ZMovement (AActor *mo, double oldfloorz)
 		double newz = clamp(mo->Z(), mo->floorz, mo->ceilingz - mo->Height);
 
 		FWaterResults res;
-		P_UpdateWaterDepth(DVector3(mo->Pos().XY(), newz), mo->Height, mo->Sector, mo->Height, false, res);
+		P_UpdateWaterDepth({ mo->Pos().XY(), newz }, mo->Height, *mo->Sector, mo->Height, false, res);
 		if (res.level <= 2)
 		{
 			ClampWaterHeight(mo, newz, res);
@@ -4892,53 +4892,83 @@ void AActor::CheckSectorTransition(sector_t *oldsec)
 //
 //==========================================================================
 
-void P_UpdateWaterDepth(const DVector3 &pos, double height, const sector_t *sec, double viewHeight, bool splash, FWaterResults &res)
+void P_UpdateWaterDepth(const DVector3& pos, double height, sector_t& sec, double viewHeight, bool splash, FWaterResults& res)
 {
-	res = { 0, 0.0, -DBL_MAX, DBL_MAX };
-	if (sec == nullptr)
-		return;
+	memset(&res, 0, sizeof(FWaterResults));
 
-	if (sec->MoreFlags & SECMF_UNDERWATER)	// Intentionally not SECMF_UNDERWATERMASK
+	if (sec.MoreFlags & SECMF_UNDERWATER)	// Intentionally not SECMF_UNDERWATERMASK
 	{
-		res.top = sec->ceilingplane.ZatPoint(pos.XY());
-		res.bot = sec->floorplane.ZatPoint(pos.XY());
-		res.depth = height;
+		res.sec = &sec;
+
+		// Traverse through portals until finding a non-underwater sector.
+		sector_t* curSec = &sec;
+		while (!curSec->PortalBlocksMovement(sector_t::ceiling))
+		{
+			sector_t* dest = curSec->GetPortalDestination(sector_t::ceiling);
+			if (!(dest->MoreFlags & SECMF_UNDERWATER))
+				break;
+
+			curSec = dest;
+		}
+		res.top = curSec->ceilingplane.ZatPoint(pos.XY());
+
+		curSec = &sec;
+		while (!curSec->PortalBlocksMovement(sector_t::floor))
+		{
+			sector_t* dest = curSec->GetPortalDestination(sector_t::floor);
+			if (!(dest->MoreFlags & SECMF_UNDERWATER))
+				break;
+
+			curSec = dest;
+		}
+		res.bottom = curSec->floorplane.ZatPoint(pos.XY());
+		res.depth = clamp<double>(res.top - pos.Z, 0.0, height);
 	}
-	else if (const sector_t *hsec = sec->GetHeightSec(); hsec != nullptr)
+	else if (sector_t* hSec = sec.GetHeightSec(); hSec != nullptr)
 	{
 		// Splash checks also check Boom-style non-swimmable sectors
 		// as well as non-solid, visible 3D floors (below)
-		if ((hsec->MoreFlags & SECMF_UNDERWATERMASK) || splash)
+		if ((hSec->MoreFlags & SECMF_UNDERWATERMASK) || splash)
 		{
-			res.top = hsec->floorplane.ZatPoint(pos.XY());
-			res.bot = hsec->ceilingplane.ZatPoint(pos.XY());
-			res.depth = res.top - pos.Z;
-			if (res.depth <= 0.0 && !(hsec->MoreFlags & SECMF_FAKEFLOORONLY) && pos.Z + height > res.bot)
-				res.depth = height;
+			// Boon TODO: How does this thing even work???
+			const double hTop = hSec->floorplane.ZatPoint(pos.XY());
+			const double hBot = (hSec->MoreFlags & SECMF_FAKEFLOORONLY) ? -FLT_MAX : hSec->ceilingplane.ZatPoint(pos.XY());
+			if (pos.Z < hTop && pos.Z + height * 0.5 >= hBot)
+			{
+				res.sec = hSec;
+				res.top = hTop;
+				res.bottom = hBot;
+				res.depth = clamp<double>(res.top - pos.Z, 0.0, height);
+			}
 		}
 	}
 	else
 	{
 		// Check 3D floors as well!
-		double center = pos.Z + height * 0.5;
-		for (auto rover : sec->e->XFloor.ffloors)
+		const double center = pos.Z + height * 0.5;
+		for (auto& rover : sec.e->XFloor.ffloors)
 		{
-			if (double ff_top = 0.0, ff_bot = 0.0;
-				!(rover->flags & FF_SOLID) && (rover->flags & FF_EXISTS)
-				&& ((rover->flags & FF_SWIMMABLE) || (splash && rover->alpha != 0))
-				&& (ff_top = rover->top.plane->ZatPoint(pos.XY())) > pos.Z
-				&& (ff_bot = rover->bottom.plane->ZatPoint(pos.XY())) <= center)
+			if (!(rover->flags & FF_EXISTS) || (rover->flags & FF_SOLID)
+				|| (!(rover->flags & FF_SWIMMABLE) && (!splash || !rover->alpha)))
 			{
-				res.top = ff_top;
-				res.bot = ff_bot;
-				res.depth = res.top - pos.Z;
-				break;
+				continue;
 			}
+
+			const double ff_top = rover->top.plane->ZatPoint(pos.XY());
+			const double ff_bot = rover->bottom.plane->ZatPoint(pos.XY());
+			if (ff_top <= pos.Z || ff_bot > center)
+				continue;
+
+			res.sec = &sec;
+			res.ffloor = rover;
+			res.top = ff_top;
+			res.bottom = ff_bot;
+			res.depth = clamp<double>(res.top - pos.Z, 0.0, height);
+			break;
 		}
 	}
 
-	res.depth = max(0.0, res.depth);
-	if (res.depth >= height*0.5)
+	if (res.depth >= height * 0.5)
 		res.level = 2 + (res.depth >= viewHeight); // When noclipping around and going from low to high sector, your view height can go negative, which is why this is nested inside here
 	else if (res.depth > 0.0)
 		res.level = 1;
@@ -4955,11 +4985,11 @@ void P_UpdateWaterDepth(const DVector3 &pos, double height, const sector_t *sec,
 void AActor::SplashCheck()
 {
 	FWaterResults res;
-	P_UpdateWaterDepth(Pos(), Height, Sector, player ? player->viewheight : Height, true, res);
+	P_UpdateWaterDepth(Pos(), Height, *Sector, player ? player->viewheight : Height, true, res);
 	waterlevel = res.level;
 	waterdepth = res.depth;
 	watertop = res.top;
-	waterbottom = res.bot;
+	waterbottom = res.bottom;
 
 	// some additional checks to make deep sectors like Boom's splash without setting
 	// the water flags. 
@@ -5003,11 +5033,11 @@ bool AActor::UpdateWaterLevel(bool dosplash)
 	if (dosplash) SplashCheck();
 
 	FWaterResults res;
-	P_UpdateWaterDepth(Pos(), Height, Sector, player ? player->viewheight : Height, false, res);
+	P_UpdateWaterDepth(Pos(), Height, *Sector, player ? player->viewheight : Height, false, res);
 	waterlevel = res.level;
 	waterdepth = res.depth;
 	watertop = res.top;
-	waterbottom = res.bot;
+	waterbottom = res.bottom;
 
 	// Play surfacing and diving sounds, as appropriate.
 	//

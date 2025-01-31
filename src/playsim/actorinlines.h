@@ -269,7 +269,7 @@ inline double GetWallBounceFactor(AActor* actor)
 	return actor->wallbouncefactor;
 }
 
-inline void ClampWaterHeight(AActor* actor, double z, const FWaterResults &res)
+inline void ClampWaterHeight(AActor* actor, double z, const FWaterResults& res)
 {
 	if (z + actor->Height >= actor->watertop)
 		actor->SetZ((res.level == 1 ? res.top : actor->watertop) - actor->Height);

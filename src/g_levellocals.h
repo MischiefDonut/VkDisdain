@@ -821,6 +821,11 @@ inline int sector_t::GetOppositePortalGroup(int plane)
 	return Level->sectorPortals[Portals[plane]].mDestination->PortalGroup;
 }
 
+inline sector_t* sector_t::GetPortalDestination(int plane)
+{
+	return Level->sectorPortals[Portals[plane]].mDestination;
+}
+
 inline bool sector_t::PortalBlocksView(int plane)
 {
 	if (GetPortalType(plane) != PORTS_LINKEDPORTAL) return false;

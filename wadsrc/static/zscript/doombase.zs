@@ -412,6 +412,15 @@ struct FSpawnParticleParams
 	native double rollacc;
 };
 
+struct FWaterResults
+{
+	native int WaterLevel;
+	native double WaterDepth;
+	native double WaterTop, WaterBottom;
+	native Sector WaterSec;
+	native F3DFloor WaterFFloor;
+}
+
 struct LevelLocals native
 {
 	enum EUDMF
@@ -528,6 +537,7 @@ struct LevelLocals native
 	native string LookupString(uint index);
 
 	// [Disdain]
+	native clearscope static void GetWaterContents(out FWaterResults res, Vector3 pos, double height, Sector sec, double viewHeight, bool splash = false);
 	native void AddImpactDecal(Thinker decal);
 
 	native clearscope Sector PointInSector(Vector2 pt) const;
