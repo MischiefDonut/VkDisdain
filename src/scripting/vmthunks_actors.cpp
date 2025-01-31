@@ -2228,3 +2228,31 @@ DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, SpawnParticle, SpawnParticle)
 	SpawnParticle(self, p);
 	return 0;
 }
+
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, level, WaterLevel)
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, depth, WaterDepth)
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, top, WaterTop)
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, bottom, WaterBottom)
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, sec, WaterSec)
+DEFINE_FIELD_NAMED_X(FWaterResults, FWaterResults, ffloor, WaterFFloor)
+
+static void GetWaterContents(FWaterResults* res, double x, double y, double z, double height, sector_t* sec, double viewHeight, bool splash)
+{
+	P_UpdateWaterDepth({ x, y, z }, height, *sec, viewHeight, splash, *res);
+}
+
+DEFINE_ACTION_FUNCTION_NATIVE(FLevelLocals, GetWaterContents, GetWaterContents)
+{
+	PARAM_PROLOGUE;
+	PARAM_POINTER_NOT_NULL(res, FWaterResults);
+	PARAM_FLOAT(x);
+	PARAM_FLOAT(y);
+	PARAM_FLOAT(z);
+	PARAM_FLOAT(height);
+	PARAM_POINTER_NOT_NULL(sec, sector_t);
+	PARAM_FLOAT(viewHeight);
+	PARAM_BOOL(splash);
+
+	GetWaterContents(res, x, y, z, height, sec, viewHeight, splash);
+	return 0;
+}
