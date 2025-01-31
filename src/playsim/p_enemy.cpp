@@ -679,7 +679,7 @@ static int P_Move (AActor *actor)
 				if (actor->DisdainFlags & DF_SWIM)
 				{
 					FWaterResults res;
-					P_UpdateWaterDepth(actor->Pos(), actor->Height, actor->Sector, actor->Height, false, res);
+					P_UpdateWaterDepth(actor->Pos(), actor->Height, *actor->Sector, actor->Height, false, res);
 					if (res.level <= 2)
 						ClampWaterHeight(actor, actor->Z(), res);
 				}
