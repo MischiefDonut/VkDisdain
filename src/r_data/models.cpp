@@ -174,7 +174,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 
 	// [MK] distortions might happen depending on when the pixel stretch is compensated for
 	// so we make the "undistorted" behavior opt-in
-	if (smf_flags & MDL_CORRECTPIXELSTRETCH)
+	if ((smf_flags & MDL_CORRECTPIXELSTRETCH) && smf->modelIDs.Size() > 0)
 	{
 		stretch = (smf->modelIDs[0] >= 0 ? Models[smf->modelIDs[0]]->getAspectFactor(Level->info->pixelstretch) : 1.f) / Level->info->pixelstretch;
 		objectToWorldMatrix.scale(1, stretch, 1);
