@@ -176,7 +176,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	// so we make the "undistorted" behavior opt-in
 	if (smf_flags & MDL_CORRECTPIXELSTRETCH)
 	{
-		stretch = (smf->modelIDs[0] >= 0 ? Models[smf->modelIDs[0]]->getAspectFactor(actor->Level->info->pixelstretch) : 1.f) / actor->Level->info->pixelstretch;
+		stretch = (smf->modelIDs[0] >= 0 ? Models[smf->modelIDs[0]]->getAspectFactor(Level->info->pixelstretch) : 1.f) / Level->info->pixelstretch;
 		objectToWorldMatrix.scale(1, stretch, 1);
 	}
 
@@ -217,7 +217,7 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 
 	if (!(smf_flags & MDL_CORRECTPIXELSTRETCH) && smf->modelIDs.Size() > 0)
 	{
-		stretch = (smf->modelIDs[0] >= 0 ? Models[smf->modelIDs[0]]->getAspectFactor(actor->Level->info->pixelstretch) : 1.f) / actor->Level->info->pixelstretch;
+		stretch = (smf->modelIDs[0] >= 0 ? Models[smf->modelIDs[0]]->getAspectFactor(Level->info->pixelstretch) : 1.f) / Level->info->pixelstretch;
 		objectToWorldMatrix.scale(1, stretch, 1);
 	}
 
