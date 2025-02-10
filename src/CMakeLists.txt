@@ -1154,6 +1154,9 @@ set (PCH_SOURCES
 	utility/nodebuilder/nodebuild_extract.cpp
 	utility/nodebuilder/nodebuild_gl.cpp
 	utility/nodebuilder/nodebuild_utility.cpp
+
+	# [Disdain] Bespoke Stuff
+	i_handheld.cpp
 )
 
 if( ${HAVE_VM_JIT} )

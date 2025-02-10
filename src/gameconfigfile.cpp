@@ -52,6 +52,9 @@
 #include "i_system.h"  // for SHARE_DIR
 #endif // !_MSC_VER && !__APPLE__
 
+// [Disdain]
+#include "i_handheld.h"
+
 EXTERN_CVAR (Bool, con_centernotify)
 EXTERN_CVAR (Int, msg0color)
 EXTERN_CVAR (Color, color)
@@ -75,6 +78,9 @@ EXTERN_CVAR (Int, gl_texture_hqresize_targets)
 EXTERN_CVAR(Int, wipetype)
 EXTERN_CVAR(Bool, i_pauseinbackground)
 EXTERN_CVAR(Bool, i_soundinbackground)
+
+// [Disdain]
+EXTERN_CVAR(Bool, use_joystick)
 
 #ifdef _WIN32
 EXTERN_CVAR(Int, in_mouse)
@@ -667,6 +673,10 @@ void FGameConfigFile::DoGameSetup (const char *gamename)
 	if (gameinfo.gametype & GAME_Doom)
 	{
 		SetDoomDefaults ();
+
+		// [Disdain]
+		if (IsHandheld())
+			use_joystick = true;
 	}
 
 	if (gameinfo.gametype & GAME_Raven)
