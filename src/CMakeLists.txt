@@ -893,6 +893,7 @@ set (PCH_SOURCES
 	rendering/hwrenderer/hw_vertexbuilder.cpp
 	rendering/hwrenderer/doom_aabbtree.cpp
 	rendering/hwrenderer/doom_levelmesh.cpp
+	rendering/hwrenderer/doom_lightprobes.cpp
 	rendering/hwrenderer/hw_models.cpp
 	rendering/hwrenderer/hw_precache.cpp
 	rendering/hwrenderer/scene/hw_lighting.cpp
@@ -1126,6 +1127,7 @@ set (PCH_SOURCES
 	common/rendering/hwrenderer/data/hw_collision.cpp
 	common/rendering/hwrenderer/data/hw_levelmesh.cpp
 	common/rendering/hwrenderer/data/hw_meshbuilder.cpp
+	common/rendering/hwrenderer/data/hw_lightprobe.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocessshader.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess_cvars.cpp

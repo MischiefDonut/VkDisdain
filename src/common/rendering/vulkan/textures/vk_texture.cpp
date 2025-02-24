@@ -30,6 +30,7 @@
 VkTextureManager::VkTextureManager(VulkanRenderDevice* fb) : fb(fb)
 {
 	CreateNullTexture();
+	CreateBrdfLutTexture();
 	CreateShadowmap();
 	CreateLightmap();
 	CreateIrradiancemap();
@@ -166,6 +167,58 @@ void VkTextureManager::CreateNullTexture()
 		.Execute(fb->GetCommands()->GetTransferCommands(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 }
 
+void VkTextureManager::CreateBrdfLutTexture()
+{
+	const char* lumpname = "bdrf.lut";
+	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
+	if (lump == -1) I_FatalError("Unable to load '%s'", lumpname);
+	auto fd = fileSystem.ReadFile(lump);
+	if (fd.size() != 512 * 512 * 2 * sizeof(uint16_t))
+		I_FatalError("Unexpected file size for '%s'");
+
+	BrdfLutTexture = ImageBuilder()
+		.Format(VK_FORMAT_R16G16_SFLOAT)
+		.Size(512, 512)
+		.Usage(VK_IMAGE_USAGE_SAMPLED_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT)
+		.DebugName("VkDescriptorSetManager.BrdfLutTexture")
+		.Create(fb->GetDevice());
+
+	BrdfLutTextureView = ImageViewBuilder()
+		.Image(BrdfLutTexture.get(), VK_FORMAT_R16G16_SFLOAT)
+		.DebugName("VkDescriptorSetManager.BrdfLutTextureView")
+		.Create(fb->GetDevice());
+
+	auto cmdbuffer = fb->GetCommands()->GetTransferCommands();
+
+	PipelineBarrier()
+		.AddImage(BrdfLutTexture.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+		.Execute(cmdbuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+	auto stagingBuffer = BufferBuilder()
+		.Size(512 * 512 * 2 * sizeof(uint16_t))
+		.Usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY)
+		.DebugName("VkDescriptorSetManager.BrdfLutTextureStagingBuffer")
+		.Create(fb->GetDevice());
+
+	void* data = stagingBuffer->Map(0, fd.size());
+	memcpy(data, fd.data(), fd.size());
+	stagingBuffer->Unmap();
+
+	VkBufferImageCopy region = {};
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.layerCount = 1;
+	region.imageExtent.depth = 1;
+	region.imageExtent.width = 512;
+	region.imageExtent.height = 512;
+	cmdbuffer->copyBufferToImage(stagingBuffer->buffer, BrdfLutTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+	fb->GetCommands()->TransferDeleteList->Add(std::move(stagingBuffer));
+
+	PipelineBarrier()
+		.AddImage(BrdfLutTexture.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+		.Execute(cmdbuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+}
+
 void VkTextureManager::CreateShadowmap()
 {
 	Shadowmap.Image = ImageBuilder()
@@ -212,10 +265,10 @@ void VkTextureManager::CreatePrefiltermap()
 	int size = 1 << MAX_REFLECTION_LOD;
 	for (int arrayIndex = 0; arrayIndex < 6; arrayIndex++)
 	{
-		for (int level = 0; level < MAX_REFLECTION_LOD; level++)
+		for (int level = 0; level <= MAX_REFLECTION_LOD; level++)
 		{
 			int mipsize = size >> level;
-			for (int i = 0; i < mipsize; i++)
+			for (int i = 0; i < mipsize * mipsize; i++)
 			{
 				data.Push(0);
 				data.Push(0);
@@ -226,7 +279,7 @@ void VkTextureManager::CreatePrefiltermap()
 	CreatePrefiltermap(size, 6, std::move(data));
 }
 
-void VkTextureManager::CreateIrradiancemap(int size, int count, TArray<uint16_t>&& newPixelData)
+void VkTextureManager::CreateIrradiancemap(int size, int count, const TArray<uint16_t>& newPixelData)
 {
 	if (Irradiancemap.Size == size && Irradiancemap.Count == count && newPixelData.Size() == 0)
 		return;
@@ -256,10 +309,10 @@ void VkTextureManager::CreateIrradiancemap(int size, int count, TArray<uint16_t>
 
 	auto cmdbuffer = fb->GetCommands()->GetTransferCommands();
 
-	if (count > 0 && newPixelData.Size() >= (size_t)w * h * count * 3)
-	{
-		assert(newPixelData.Size() == (size_t)w * h * count * 3);
+	assert(newPixelData.Size() == (size_t)w * h * count * 3);
 
+	if (count > 0 && newPixelData.Size() == (size_t)w * h * count * 3)
+	{
 		int totalSize = w * h * count * pixelsize;
 
 		auto stagingBuffer = BufferBuilder()
@@ -293,8 +346,6 @@ void VkTextureManager::CreateIrradiancemap(int size, int count, TArray<uint16_t>
 		cmdbuffer->copyBufferToImage(stagingBuffer->buffer, Irradiancemap.Image.Image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 		fb->GetCommands()->TransferDeleteList->Add(std::move(stagingBuffer));
-
-		newPixelData.Clear();
 	}
 
 	VkImageTransition()
@@ -302,7 +353,7 @@ void VkTextureManager::CreateIrradiancemap(int size, int count, TArray<uint16_t>
 		.Execute(cmdbuffer);
 }
 
-void VkTextureManager::CreatePrefiltermap(int size, int count, TArray<uint16_t>&& newPixelData)
+void VkTextureManager::CreatePrefiltermap(int size, int count, const TArray<uint16_t>& newPixelData)
 {
 	if (Prefiltermap.Size == size && Prefiltermap.Count == count && newPixelData.Size() == 0)
 		return;
@@ -333,28 +384,27 @@ void VkTextureManager::CreatePrefiltermap(int size, int count, TArray<uint16_t>&
 
 	auto cmdbuffer = fb->GetCommands()->GetTransferCommands();
 
-	if (count > 0 && newPixelData.Size() >= (size_t)w * h * count * 3)
+	int totalSize = 0;
+	for (int level = 0; level < miplevels; level++)
 	{
-		assert(newPixelData.Size() == (size_t)w * h * count * 3);
+		int mipwidth = std::max(w >> level, 1);
+		int mipheight = std::max(h >> level, 1);
+		totalSize += mipwidth * mipheight * count;
+	}
+	assert(newPixelData.Size() == (size_t)totalSize * 3);
 
-		int totalSize = 0;
-		for (int level = 0; level < miplevels; level++)
-		{
-			int mipwidth = std::max(w >> level, 1);
-			int mipheight = std::max(h >> level, 1);
-			totalSize += mipwidth * mipheight * count * pixelsize;
-		}
-
+	if (count > 0 && newPixelData.Size() == (size_t)totalSize * 3)
+	{
 		auto stagingBuffer = BufferBuilder()
-			.Size(totalSize)
+			.Size(totalSize * pixelsize)
 			.Usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY)
 			.DebugName("VkTextureManager.PrefiltermapStagingBuffer")
 			.Create(fb->GetDevice());
 
 		uint16_t one = 0x3c00; // half-float 1.0
 		const uint16_t* src = newPixelData.Data();
-		uint16_t* data = (uint16_t*)stagingBuffer->Map(0, totalSize);
-		for (int i = w * h * count; i > 0; i--)
+		uint16_t* data = (uint16_t*)stagingBuffer->Map(0, totalSize * pixelsize);
+		for (int i = 0; i < totalSize; i++)
 		{
 			*(data++) = *(src++);
 			*(data++) = *(src++);
@@ -368,26 +418,29 @@ void VkTextureManager::CreatePrefiltermap(int size, int count, TArray<uint16_t>&
 			.Execute(cmdbuffer);
 
 		int offset = 0;
-		for (int level = 0; level < miplevels; level++)
+		for (int i = 0; i < count; ++i)
 		{
-			VkBufferImageCopy region = {};
-			region.bufferOffset = offset;
-			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.layerCount = count;
-			region.imageSubresource.mipLevel = level;
-			region.imageExtent.depth = 1;
-			region.imageExtent.width = w;
-			region.imageExtent.height = h;
-			cmdbuffer->copyBufferToImage(stagingBuffer->buffer, Prefiltermap.Image.Image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+			for (int level = 0; level < miplevels; level++)
+			{
+				int mipwidth = std::max(w >> level, 1);
+				int mipheight = std::max(h >> level, 1);
 
-			int mipwidth = std::max(w >> level, 1);
-			int mipheight = std::max(h >> level, 1);
-			offset += mipwidth * mipheight * count * pixelsize;
+				VkBufferImageCopy region = {};
+				region.bufferOffset = offset;
+				region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				region.imageSubresource.layerCount = 1;
+				region.imageSubresource.baseArrayLayer = i;
+				region.imageSubresource.mipLevel = level;
+				region.imageExtent.depth = 1;
+				region.imageExtent.width = mipwidth;
+				region.imageExtent.height = mipheight;
+				cmdbuffer->copyBufferToImage(stagingBuffer->buffer, Prefiltermap.Image.Image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+				offset += mipwidth * mipheight * pixelsize;
+			}
 		}
 
 		fb->GetCommands()->TransferDeleteList->Add(std::move(stagingBuffer));
-
-		newPixelData.Clear();
 	}
 
 	VkImageTransition()

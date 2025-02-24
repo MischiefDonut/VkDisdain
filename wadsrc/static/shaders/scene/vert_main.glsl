@@ -34,13 +34,14 @@
 			attenuation *= spotLightAttenuation(light.pos.xyz, light.spotDir.xyz, light.spotInnerAngle, light.spotOuterAngle);
 		}
 		
-		#ifndef LIGHT_NONORMALS
+		#uifdef(LIGHT_NONORMALS)
+		#uelse
 			if ((light.flags & LIGHTINFO_ATTENUATED) != 0)
 			{
 				float dotprod = dot(vWorldNormal.xyz, lightdir);
 				attenuation *= clamp(dotprod, 0.0, 1.0);
 			}
-		#endif
+		#uendif
 		
 		if (attenuation > 0.0) // Skip shadow map test if possible
 		{
@@ -159,8 +160,8 @@ void main()
 			ClipDistance4 = worldcoord.y - ((uSplitBottomPlane.w + uSplitBottomPlane.x * worldcoord.x + uSplitBottomPlane.y * worldcoord.z) * uSplitBottomPlane.z);
 		}
 
-		vWorldNormal = NormalModelMatrix * vec4(normalize(bones.Normal), 1.0);
-		vEyeNormal = NormalViewMatrix * vec4(normalize(vWorldNormal.xyz), 1.0);
+		vWorldNormal = vec4(normalize((NormalModelMatrix * vec4(normalize(bones.Normal), 1.0)).xyz), 1.0);
+		vEyeNormal = vec4(normalize((NormalViewMatrix * vec4(normalize(vWorldNormal.xyz), 1.0)).xyz), 1.0);
 	#endif
 	
 	#ifdef SPHEREMAP
