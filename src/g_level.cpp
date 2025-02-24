@@ -849,7 +849,7 @@ void FLevelLocals::ChangeLevel(const char *levelname, int position, int inflags,
 					player->mo->special1 = 0;
 				}
 				// ]]
-				DoReborn(i, false);
+				DoReborn(i, true);
 			}
 		}
 	}
@@ -1622,6 +1622,7 @@ void FLevelLocals::StartTravel ()
 			if (Players[i]->health > 0)
 			{
 				pawn->UnlinkFromWorld (nullptr);
+				pawn->UnlinkBehaviorsFromLevel();
 				int tid = pawn->tid;	// Save TID
 				pawn->SetTID(0);
 				pawn->tid = tid;		// Restore TID (but no longer linked into the hash chain)
@@ -1632,6 +1633,7 @@ void FLevelLocals::StartTravel ()
 				{
 					inv->ChangeStatNum (STAT_TRAVELLING);
 					inv->UnlinkFromWorld (nullptr);
+					inv->UnlinkBehaviorsFromLevel();
 					inv->DeleteAttachedLights();
 				}
 			}
@@ -1737,6 +1739,7 @@ int FLevelLocals::FinishTravel ()
 			pawndup->Destroy();
 		}
 		pawn->LinkToWorld (nullptr);
+		pawn->LinkBehaviorsToLevel();
 		pawn->ClearInterpolation();
 		pawn->ClearFOVInterpolation();
 		const int tid = pawn->tid;	// Save TID (actor isn't linked into the hash chain yet)
@@ -1750,6 +1753,7 @@ int FLevelLocals::FinishTravel ()
 			inv->ChangeStatNum (STAT_INVENTORY);
 			inv->LinkToWorld (nullptr);
 			P_FindFloorCeiling(inv, FFCF_ONLYSPAWNPOS);
+			inv->LinkBehaviorsToLevel();
 
 			IFVIRTUALPTRNAME(inv, NAME_Inventory, Travelled)
 			{

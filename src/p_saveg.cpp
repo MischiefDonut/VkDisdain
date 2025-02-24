@@ -994,6 +994,7 @@ void FLevelLocals::Serialize(FSerializer &arc, bool hubload)
 		("interpolator", interpolator)
 		("frozenstate", frozenstate)
 		("visualthinkerhead", VisualThinkerHead)
+		("actorbehaviors", ActorBehaviors)
 		("suncolor", SunColor)
 		("sundirection", SunDirection)
 		("sunintensity", SunIntensity);
