@@ -45,6 +45,7 @@
 #include "vulkan/vk_postprocess.h"
 #include "vulkan/vk_levelmesh.h"
 #include "vulkan/vk_lightmapper.h"
+#include "vulkan/vk_lightprober.h"
 #include "vulkan/pipelines/vk_renderpass.h"
 #include "vulkan/descriptorsets/vk_descriptorset.h"
 #include "vulkan/shaders/vk_shader.h"
@@ -247,6 +248,7 @@ void VulkanRenderDevice::InitializeState()
 	mRenderPassManager.reset(new VkRenderPassManager(this));
 	mLevelMesh.reset(new VkLevelMesh(this));
 	mLightmapper.reset(new VkLightmapper(this));
+	mLightprober.reset(new VkLightprober(this));
 
 	mBufferManager->Init();
 
@@ -317,6 +319,19 @@ void VulkanRenderDevice::RenderTextureView(FCanvasTexture* tex, std::function<vo
 	mRenderState->SetRenderTarget(&GetBuffers()->SceneColor, GetBuffers()->SceneDepthStencil.View.get(), GetBuffers()->GetWidth(), GetBuffers()->GetHeight(), VK_FORMAT_R16G16B16A16_SFLOAT, GetBuffers()->GetSceneSamples());
 
 	tex->SetUpdated(true);
+}
+
+void VulkanRenderDevice::RenderEnvironmentMap(std::function<void(IntRect& bounds, int side)> renderFunc, TArrayView<uint16_t>& irradianceMap, TArrayView<uint16_t>& prefilterMap)
+{
+	mLightprober->RenderEnvironmentMap(std::move(renderFunc));
+	mLightprober->GenerateIrradianceMap(irradianceMap);
+	mLightprober->GeneratePrefilterMap(prefilterMap);
+}
+
+void VulkanRenderDevice::UploadEnvironmentMaps(int cubemapCount, const TArray<uint16_t>& irradianceMaps, const TArray<uint16_t>& prefilterMaps)
+{
+	mTextureManager->CreateIrradiancemap(32, 6 * cubemapCount, irradianceMaps);
+	mTextureManager->CreatePrefiltermap(128, 6 * cubemapCount, prefilterMaps);
 }
 
 void VulkanRenderDevice::PostProcessScene(bool swscene, int fixedcm, float flash, const std::function<void()> &afterBloomDrawEndScene2D)

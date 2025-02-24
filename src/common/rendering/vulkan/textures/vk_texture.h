@@ -24,8 +24,8 @@ public:
 	void BeginFrame();
 
 	void CreateLightmap(int size, int count, TArray<uint16_t>&& data);
-	void CreateIrradiancemap(int size, int count, TArray<uint16_t>&& data);
-	void CreatePrefiltermap(int size, int count, TArray<uint16_t>&& data);
+	void CreateIrradiancemap(int size, int count, const TArray<uint16_t>& data);
+	void CreatePrefiltermap(int size, int count, const TArray<uint16_t>& data);
 	void DownloadLightmap(int arrayIndex, uint16_t* buffer);
 
 	VkTextureImage* GetTexture(const PPTextureType& type, PPTexture* tex);
@@ -39,6 +39,9 @@ public:
 
 	VulkanImage* GetNullTexture() { return NullTexture.get(); }
 	VulkanImageView* GetNullTextureView() { return NullTextureView.get(); }
+
+	VulkanImage* GetBrdfLutTexture() { return BrdfLutTexture.get(); }
+	VulkanImageView* GetBrdfLutTextureView() { return BrdfLutTextureView.get(); }
 
 	int GetHWTextureCount() { return (int)Textures.size(); }
 
@@ -55,6 +58,7 @@ public:
 
 private:
 	void CreateNullTexture();
+	void CreateBrdfLutTexture();
 	void CreateShadowmap();
 	void CreateLightmap();
 	void CreateIrradiancemap();
@@ -69,4 +73,7 @@ private:
 
 	std::unique_ptr<VulkanImage> NullTexture;
 	std::unique_ptr<VulkanImageView> NullTextureView;
+
+	std::unique_ptr<VulkanImage> BrdfLutTexture;
+	std::unique_ptr<VulkanImageView> BrdfLutTextureView;
 };

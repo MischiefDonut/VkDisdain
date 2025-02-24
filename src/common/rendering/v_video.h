@@ -130,6 +130,14 @@ public:
 	int mPipelineNbr = 1;						// Number of HW buffers to pipeline
 	int mPipelineType = 0;
 
+	// Lightprobes
+	constexpr static const int irrandiaceMapTexelCount = 32 * 32 * 6;
+	constexpr static const int prefilterMapLevelsSize = 128 * 128 + 64 * 64 + 32 * 32 + 16 * 16 + 8 * 8;
+	constexpr static const int prefilterMapTexelCount = prefilterMapLevelsSize * 6;
+
+	constexpr static const int irradianceMapChannelCount = 3;
+	constexpr static const int prefilterMapChannelCount = 3;
+
 public:
 	DFrameBuffer (int width=1, int height=1);
 	virtual ~DFrameBuffer();
@@ -220,6 +228,9 @@ public:
 
 	// Get the array index for the material in the textures array accessible from shaders
 	virtual int GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation) { return -1; }
+
+	virtual void RenderEnvironmentMap(std::function<void(IntRect& bounds, int side)> renderFunc, TArrayView<uint16_t>& irradianceMap, TArrayView<uint16_t>& prefilterMap) {}
+	virtual void UploadEnvironmentMaps(int cubemapCount, const TArray<uint16_t>& irradianceMaps, const TArray<uint16_t>& prefilterMaps) {}
 
 	// Screen wiping
 	virtual FTexture *WipeStartScreen();

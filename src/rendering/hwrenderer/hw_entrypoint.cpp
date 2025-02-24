@@ -56,6 +56,7 @@ EXTERN_CVAR(Bool, gl_bandedswlight)
 EXTERN_CVAR(Bool, lm_dynlights);
 
 CVAR(Bool, gl_raytrace, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
+CVAR(Bool, gl_lightprobe, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
 
 extern bool NoInterpolateView;
 
@@ -108,11 +109,11 @@ void CollectLights(FLevelLocals* Level)
 //
 //-----------------------------------------------------------------------------
 
-sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bounds, float fov, float ratio, float fovratio, bool mainview, bool toscreen)
+sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bounds, float fov, float ratio, float fovratio, bool mainview, bool toscreen, int side)
 {
 	auto& RenderState = *screen->RenderState();
 
-	R_SetupFrame(mainvp, r_viewwindow, camera);
+	R_SetupFrame(mainvp, r_viewwindow, camera, side);
 
 	if (mainview && toscreen && !(camera->Level->flags3 & LEVEL3_NOSHADOWMAP) && camera->Level->HasDynamicLights && gl_light_shadows > 0 && !lm_dynlights)
 	{
@@ -332,6 +333,7 @@ static void CheckTimer(FRenderState &state, uint64_t ShaderStartTime)
 		state.firstFrame = screen->FrameTime - 1;
 }
 
+LightProbeIncrementalBuilder lightProbeBuilder(DFrameBuffer::irrandiaceMapTexelCount, DFrameBuffer::prefilterMapTexelCount, DFrameBuffer::irradianceMapChannelCount, DFrameBuffer::prefilterMapChannelCount);
 
 sector_t* RenderView(player_t* player)
 {
@@ -399,6 +401,48 @@ sector_t* RenderView(player_t* player)
 						});
 				});
 		}
+
+		if (gl_lightprobe)
+		{
+			// Render the light probes if not found in a lump
+			// To do: we need light probe actors
+
+			AActor* lightprobe = level.GetThinkerIterator<AActor>(NAME_LightProbe, STAT_INFO).Next();
+			if (lightprobe)
+			{
+				auto renderEnvMap = [&](const LightProbe& probe, TArrayView<uint16_t>& irradianceMap, TArrayView<uint16_t>& prefilteredMap) {
+					lightprobe->SetOrigin(DVector3(probe.position), false); // crime against nature
+
+					// The renderer interpolates camera in its own mechanism that has to be disabled when moving around the single probe
+					bool noInterpolate = r_NoInterpolate;
+					r_NoInterpolate = true;
+
+					screen->RenderEnvironmentMap([&](IntRect& bounds, int side) {
+						FRenderViewpoint probevp;
+						RenderViewpoint(probevp, lightprobe, &bounds, 90.0, 1.0f, 1.0f, false, false, side);
+					}, irradianceMap, prefilteredMap);
+
+					r_NoInterpolate = noInterpolate;
+				};
+
+				auto renderEnvScreen = [&](const TArray<uint16_t>& irradianceMaps, const TArray<uint16_t>& prefilteredMaps) {
+					screen->UploadEnvironmentMaps(level.lightProbes.size(), irradianceMaps, prefilteredMaps);
+				};
+
+				lightProbeBuilder.Step(
+					level.lightProbes,
+					renderEnvMap,
+					renderEnvScreen
+				);
+			}
+			else
+			{
+				Printf("Warning: spawning LightProbe\n");
+				auto probe = Spawn(&level, NAME_LightProbe);
+				probe->ChangeStatNum(STAT_INFO);
+			}
+		}
+
 		NoInterpolateView = saved_niv;
 
 		// now render the main view
@@ -421,3 +465,9 @@ sector_t* RenderView(player_t* player)
 	return retsec;
 }
 
+ADD_STAT(lightprobes)
+{
+	FString out;
+	out.Format("Rendering probe: %d / %d", lightProbeBuilder.GetStep(), level.lightProbes.Size());
+	return out;
+}

@@ -5,26 +5,26 @@
 
 // material types
 #if defined(SPECULAR)
-#define normaltexture texture2
-#define speculartexture texture3
-#define brighttexture texture4
-#define detailtexture texture5
-#define glowtexture texture6
+	#define normaltexture texture2
+	#define speculartexture texture3
+	#define brighttexture texture4
+	#define detailtexture texture5
+	#define glowtexture texture6
 #elif defined(PBR)
-#define normaltexture texture2
-#define metallictexture texture3
-#define roughnesstexture texture4
-#define aotexture texture5
-#define brighttexture texture6
-#define detailtexture texture7
-#define glowtexture texture8
+	#define normaltexture texture2
+	#define metallictexture texture3
+	#define roughnesstexture texture4
+	#define aotexture texture5
+	#define brighttexture texture6
+	#define detailtexture texture7
+	#define glowtexture texture8
 #else
-#define brighttexture texture2
-#define detailtexture texture3
-#define glowtexture texture4
+	#define brighttexture texture2
+	#define detailtexture texture3
+	#define glowtexture texture4
 #endif
 
-#define BrdfLUT 0 // the BRDF convoluted texture is always in this texture slot
+#define BrdfLUT 1 // the BRDF convoluted texture is always in this texture slot
 
 #define uObjectColor data[uDataIndex].uObjectColor
 #define uObjectColor2 data[uDataIndex].uObjectColor2
@@ -57,16 +57,17 @@
 #define uTextureIndex data[uDataIndex].uTextureIndex
 #define uDepthFadeThreshold data[uDataIndex].uDepthFadeThreshold
 #define uActorCenter data[uDataIndex].uActorCenter
+#define uLightProbeIndex data[uDataIndex].uLightProbeIndex
 
 #if defined(USE_LEVELMESH)
-#define uVertexColor lightdata[uDataIndex].uVertexColor
-#define uDesaturationFactor lightdata[uDataIndex].uDesaturationFactor
-#define uLightLevel lightdata[uDataIndex].uLightLevel
-int uLightIndex;
+	#define uVertexColor lightdata[uDataIndex].uVertexColor
+	#define uDesaturationFactor lightdata[uDataIndex].uDesaturationFactor
+	#define uLightLevel lightdata[uDataIndex].uLightLevel
+	int uLightIndex;
 #else
-#define uVertexColor data[uDataIndex].uVertexColor
-#define uDesaturationFactor data[uDataIndex].uDesaturationFactor
-#define uLightLevel data[uDataIndex].uLightLevel
+	#define uVertexColor data[uDataIndex].uVertexColor
+	#define uDesaturationFactor data[uDataIndex].uDesaturationFactor
+	#define uLightLevel data[uDataIndex].uLightLevel
 #endif
 
 #define VULKAN_COORDINATE_SYSTEM
@@ -88,7 +89,7 @@ vec4 texture(int index, vec2 p)
 #ifndef FRAGSHADER
 	return textureLod(textures[uTextureIndex + index], p, 0.0);
 #else
-	return texture(textures[uTextureIndex + index], p);
+	return texture(textures[nonuniformEXT(uTextureIndex + index)], p);
 #endif
 }
 
@@ -97,26 +98,26 @@ vec4 texture(int index, vec2 p, float bias)
 #ifndef FRAGSHADER
 	return textureLod(textures[uTextureIndex + index], p, 0.0);
 #else
-	return texture(textures[uTextureIndex + index], p, bias);
+	return texture(textures[nonuniformEXT(uTextureIndex + index)], p, bias);
 #endif
 }
 
 ivec2 textureSize(int index, int lod)
 {
-	return textureSize(textures[uTextureIndex + index], lod);
+	return textureSize(textures[nonuniformEXT(uTextureIndex + index)], lod);
 }
 
 vec4 textureGrad(int index, vec2 P, vec2 dPdx, vec2 dPdy)
 {
-	return textureGrad(textures[uTextureIndex + index], P, dPdx, dPdy);
+	return textureGrad(textures[nonuniformEXT(uTextureIndex + index)], P, dPdx, dPdy);
 }
 
 vec4 textureLod(int index, vec2 P, float lod)
 {
-	return textureLod(textures[uTextureIndex + index], P, lod);
+	return textureLod(textures[nonuniformEXT(uTextureIndex + index)], P, lod);
 }
 
 vec4 texelFetch(int index, ivec2 P, int lod)
 {
-	return texelFetch(textures[uTextureIndex + index], P, lod);
+	return texelFetch(textures[nonuniformEXT(uTextureIndex + index)], P, lod);
 }

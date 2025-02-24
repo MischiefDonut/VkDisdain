@@ -2,6 +2,7 @@
 
 #include "zvulkan/vulkanobjects.h"
 #include "vectors.h"
+#include "vulkan/textures/vk_imagetransition.h"
 
 class VulkanRenderDevice;
 class FString;
@@ -9,16 +10,22 @@ class ShaderIncludeResult;
 
 struct IrradianceMapPushConstants
 {
-	FVector4 topLeft;
-	FVector4 bottomRight;
+	FVector3 dir;
+	float padding0;
+	FVector3 up;
+	float padding1;
+	FVector3 side;
+	float padding2;
 };
 
 struct PrefilterMapPushConstants
 {
-	FVector4 topLeft;
-	FVector4 bottomRight;
+	FVector3 dir;
 	float roughness;
-	float padding1, padding2, padding3;
+	FVector3 up;
+	float padding0;
+	FVector3 side;
+	float padding1;
 };
 
 class VkLightprober
@@ -27,13 +34,16 @@ public:
 	VkLightprober(VulkanRenderDevice* fb);
 	~VkLightprober();
 
+	void RenderEnvironmentMap(std::function<void(IntRect& bounds, int side)> renderFunc);
+	bool GenerateIrradianceMap(TArrayView<uint16_t>& databuffer);
+	bool GeneratePrefilterMap(TArrayView<uint16_t>& databuffer);
+
 private:
 	void CreateBrdfLutResources();
+	void CreateEnvironmentMap();
 	void CreateIrradianceMap();
 	void CreatePrefilterMap();
 	void GenerateBrdfLut();
-	void GenerateIrradianceMap(VulkanImageView* environmentcubemap);
-	void GeneratePrefilterMap(VulkanImageView* environmentcubemap);
 
 	std::unique_ptr<VulkanShader> CompileShader(const std::string& name, const std::string& filename, const char* debugName);
 
@@ -55,6 +65,19 @@ private:
 
 	struct
 	{
+		enum
+		{
+			textureSize = 256
+		};
+		std::unique_ptr<VulkanImage> cubeimage;
+		std::unique_ptr<VulkanImageView> cubeview;
+		std::unique_ptr<VulkanImage> zbuffer;
+		std::unique_ptr<VulkanImageView> zbufferview;
+		VkTextureImage renderTargets[6];
+	} environmentMap;
+
+	struct
+	{
 		std::unique_ptr<VulkanShader> shader;
 		std::unique_ptr<VulkanDescriptorSetLayout> descriptorSetLayout;
 		std::unique_ptr<VulkanDescriptorPool> descriptorPool;
@@ -66,12 +89,12 @@ private:
 		std::unique_ptr<VulkanImageView> views[6];
 	} irradianceMap;
 
-	struct
+	struct PrefilterMap
 	{
 		enum
 		{
 			maxlevels = 5,
-			levelsSize = (128 * 128 + 64 * 64 + 32 * 32 + 16 * 16 + 8 * 8) * 8
+			levelsSize = DFrameBuffer::prefilterMapLevelsSize
 		};
 		std::unique_ptr<VulkanShader> shader;
 		std::unique_ptr<VulkanDescriptorSetLayout> descriptorSetLayout;
