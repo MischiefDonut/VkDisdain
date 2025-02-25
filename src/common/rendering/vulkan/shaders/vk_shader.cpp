@@ -22,6 +22,7 @@
 
 #include "vk_shader.h"
 #include "vk_ppshader.h"
+#include "vk_shadercache.h"
 #include "vulkan/vk_renderdevice.h"
 #include "vulkan/pipelines/vk_renderpass.h"
 #include <zvulkan/vulkanbuilders.h>
@@ -34,39 +35,49 @@
 VkShaderManager::VkShaderManager(VulkanRenderDevice* fb) : fb(fb)
 {
 	ZMinMax.vert = ShaderBuilder()
-		.Type(ShaderType::Vertex)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Vertex)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("shaders/scene/vert_zminmax.glsl", LoadPrivateShaderLump("shaders/scene/vert_zminmax.glsl").GetChars())
+			.Compile(fb))
 		.DebugName("ZMinMax.vert")
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("shaders/scene/vert_zminmax.glsl", LoadPrivateShaderLump("shaders/scene/vert_zminmax.glsl").GetChars())
 		.Create("ZMinMax.vert", fb->GetDevice());
 
 	ZMinMax.frag[0] = ShaderBuilder()
-		.Type(ShaderType::Fragment)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Fragment)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
+			.Compile(fb))
 		.DebugName("ZMinMax0.frag")
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
 		.Create("ZMinMax0.frag", fb->GetDevice());
 
 	ZMinMax.frag[1] = ShaderBuilder()
-		.Type(ShaderType::Fragment)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Fragment)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("DefinesBlock", "#define MULTISAMPLE\n")
+			.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
+			.Compile(fb))
 		.DebugName("ZMinMax0.frag")
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("DefinesBlock", "#define MULTISAMPLE\n")
-		.AddSource("shaders/scene/frag_zminmax0.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax0.glsl").GetChars())
 		.Create("ZMinMax0.frag", fb->GetDevice());
 
 	ZMinMax.frag[2] = ShaderBuilder()
-		.Type(ShaderType::Fragment)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Fragment)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("shaders/scene/frag_zminmax1.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax1.glsl").GetChars())
+			.Compile(fb))
 		.DebugName("ZMinMax1.frag")
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("shaders/scene/frag_zminmax1.glsl", LoadPrivateShaderLump("shaders/scene/frag_zminmax1.glsl").GetChars())
 		.Create("ZMinMax1.frag", fb->GetDevice());
 
 	LightTiles = ShaderBuilder()
-		.Type(ShaderType::Compute)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Compute)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("shaders/scene/comp_lighttiles.glsl", LoadPrivateShaderLump("shaders/scene/comp_lighttiles.glsl").GetChars())
+			.Compile(fb))
 		.DebugName("LightTiles.comp")
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("shaders/scene/comp_lighttiles.glsl", LoadPrivateShaderLump("shaders/scene/comp_lighttiles.glsl").GetChars())
 		.Create("LightTiles.comp", fb->GetDevice());
 }
 
@@ -308,6 +319,9 @@ void VkShaderManager::BuildLayoutBlock(FString &layoutBlock, bool isFrag, const 
 		layoutBlock << "    int unused3;\n";
 	}
 
+	layoutBlock << "    int padding0;\n";
+	layoutBlock << "    int padding1;\n";
+
 	if(shader && shader->Uniforms.UniformStructSize)
 	{
 		for(auto &field : shader->Uniforms.Fields)
@@ -370,7 +384,7 @@ void VkShaderManager::BuildDefinesBlock(FString &definesBlock, const char *defin
 	{
 		//ugh EffectState also controls layout, because specular/pbr/etc defines switch texture indices around for normal/specular/etc
 
-		definesBlock << LoadPrivateShaderLump("shaders/shaderkey.glsl").GetChars() << "\n";
+		definesBlock << SubstituteDefines(LoadPrivateShaderLump("shaders/shaderkey.glsl")).GetChars() << "\n";
 
 		definesBlock << "#define UBERSHADERS\n";
 
@@ -557,27 +571,28 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 	BuildLayoutBlock(layoutBlock, false, key, shader);
 
 	FString codeBlock;
-	codeBlock << LoadPrivateShaderLump(vert_lump).GetChars() << "\n";
+	codeBlock << SubstituteDefines(LoadPrivateShaderLump(vert_lump)).GetChars() << "\n";
 	if(vert_lump_custom)
 	{
 		codeBlock << "\n#line 1\n";
-		codeBlock << LoadPublicShaderLump(vert_lump_custom).GetChars() << "\n";
+		codeBlock << SubstituteDefines(LoadPublicShaderLump(vert_lump_custom)).GetChars() << "\n";
 	}
 	else
 	{
-		codeBlock << LoadPrivateShaderLump("shaders/scene/vert_nocustom.glsl").GetChars() << "\n";
+		codeBlock << SubstituteDefines(LoadPrivateShaderLump("shaders/scene/vert_nocustom.glsl")).GetChars() << "\n";
 	}
 
 	return ShaderBuilder()
-		.Type(ShaderType::Vertex)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Vertex)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("DefinesBlock", definesBlock.GetChars())
+			.AddSource("LayoutBlock", layoutBlock.GetChars())
+			.AddSource("shaders/scene/layout_shared.glsl", SubstituteDefines(LoadPrivateShaderLump("shaders/scene/layout_shared.glsl")).GetChars())
+			.AddSource(vert_lump_custom ? vert_lump_custom : vert_lump, codeBlock.GetChars())
+			.IncludeFilter([](FString s) { return SubstituteDefines(std::move(s), false); })
+			.Compile(fb))
 		.DebugName(shadername.GetChars())
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("DefinesBlock", definesBlock.GetChars())
-		.AddSource("LayoutBlock", layoutBlock.GetChars())
-		.AddSource("shaders/scene/layout_shared.glsl", LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars())
-		.AddSource(vert_lump_custom ? vert_lump_custom : vert_lump, codeBlock.GetChars())
-		.OnIncludeLocal([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); })
-		.OnIncludeSystem([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); })
 		.Create(shadername.GetChars(), fb->GetDevice());
 }
 
@@ -590,7 +605,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	BuildLayoutBlock(layoutBlock, true, key, shader);
 
 	FString codeBlock;
-	codeBlock << LoadPrivateShaderLump(frag_lump).GetChars() << "\n";
+	codeBlock << SubstituteDefines(LoadPrivateShaderLump(frag_lump)).GetChars() << "\n";
 
 	FString materialname = "MaterialBlock";
 	FString materialBlock;
@@ -602,7 +617,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 	if (material_lump)
 	{
 		materialname = material_lump;
-		materialBlock = LoadPublicShaderLump(material_lump);
+		materialBlock = SubstituteDefines(LoadPublicShaderLump(material_lump));
 
 		// Attempt to fix old custom shaders:
 
@@ -621,15 +636,15 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 			FString code;
 			if (materialBlock.IndexOf("ProcessTexel") >= 0)
 			{
-				code = LoadPrivateShaderLump("shaders/scene/material_legacy_ptexel.glsl");
+				code = SubstituteDefines(LoadPrivateShaderLump("shaders/scene/material_legacy_ptexel.glsl"));
 			}
 			else if (materialBlock.IndexOf("Process") >= 0)
 			{
-				code = LoadPrivateShaderLump("shaders/scene/material_legacy_process.glsl");
+				code = SubstituteDefines(LoadPrivateShaderLump("shaders/scene/material_legacy_process.glsl"));
 			}
 			else
 			{
-				code = LoadPrivateShaderLump("shaders/scene/material_default.glsl");
+				code = SubstituteDefines(LoadPrivateShaderLump("shaders/scene/material_default.glsl"));
 			}
 			code << "\n#line 1\n";
 
@@ -641,7 +656,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 
 			definesBlock << "#define LEGACY_USER_SHADER\n";
 
-			FString code = LoadPrivateShaderLump("shaders/scene/material_legacy_pmaterial.glsl");
+			FString code = SubstituteDefines(LoadPrivateShaderLump("shaders/scene/material_legacy_pmaterial.glsl"));
 			code << "\n#line 1\n";
 
 			materialBlock = code + materialBlock;
@@ -654,33 +669,34 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 
 		if(light_lump_shared)
 		{
-			lightBlock << LoadPrivateShaderLump(light_lump_shared).GetChars();
+			lightBlock << SubstituteDefines(LoadPrivateShaderLump(light_lump_shared)).GetChars();
 		}
 
-		lightBlock << LoadPrivateShaderLump(light_lump).GetChars();
+		lightBlock << SubstituteDefines(LoadPrivateShaderLump(light_lump)).GetChars();
 		
 	}
 
 	if (mateffect_lump && mateffectBlock.IsEmpty())
 	{
 		mateffectname = mateffect_lump;
-		mateffectBlock << LoadPrivateShaderLump(mateffect_lump).GetChars();
+		mateffectBlock << SubstituteDefines(LoadPrivateShaderLump(mateffect_lump)).GetChars();
 	}
 
 	return ShaderBuilder()
-		.Type(ShaderType::Fragment)
+		.Code(CachedGLSLCompiler()
+			.Type(ShaderType::Fragment)
+			.AddSource("VersionBlock", GetVersionBlock().GetChars())
+			.AddSource("DefinesBlock", definesBlock.GetChars())
+			.AddSource("LayoutBlock", layoutBlock.GetChars())
+			.AddSource("shaders/scene/layout_shared.glsl", SubstituteDefines(LoadPrivateShaderLump("shaders/scene/layout_shared.glsl")).GetChars())
+			.AddSource("shaders/scene/includes.glsl", SubstituteDefines(LoadPrivateShaderLump("shaders/scene/includes.glsl")).GetChars())
+			.AddSource(mateffectname.GetChars(), mateffectBlock.GetChars())
+			.AddSource(materialname.GetChars(), materialBlock.GetChars())
+			.AddSource(lightname.GetChars(), lightBlock.GetChars())
+			.AddSource(frag_lump, codeBlock.GetChars())
+			.IncludeFilter([](FString s) { return SubstituteDefines(std::move(s), false); })
+			.Compile(fb))
 		.DebugName(shadername.GetChars())
-		.AddSource("VersionBlock", GetVersionBlock().GetChars())
-		.AddSource("DefinesBlock", definesBlock.GetChars())
-		.AddSource("LayoutBlock", layoutBlock.GetChars())
-		.AddSource("shaders/scene/layout_shared.glsl", LoadPrivateShaderLump("shaders/scene/layout_shared.glsl").GetChars())
-		.AddSource("shaders/scene/includes.glsl", LoadPrivateShaderLump("shaders/scene/includes.glsl").GetChars())
-		.AddSource(mateffectname.GetChars(), mateffectBlock.GetChars())
-		.AddSource(materialname.GetChars(), materialBlock.GetChars())
-		.AddSource(lightname.GetChars(), lightBlock.GetChars())
-		.AddSource(frag_lump, codeBlock.GetChars())
-		.OnIncludeLocal([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, false); })
-		.OnIncludeSystem([=](std::string headerName, std::string includerName, size_t depth) { return OnInclude(headerName.c_str(), includerName.c_str(), depth, true); })
 		.Create(shadername.GetChars(), fb->GetDevice());
 }
 
@@ -708,52 +724,19 @@ FString VkShaderManager::GetVersionBlock()
 	return versionBlock;
 }
 
-ShaderIncludeResult VkShaderManager::OnInclude(FString headerName, FString includerName, size_t depth, bool system)
+FString VkShaderManager::LoadPublicShaderLump(const char* lumpname)
 {
-	if (depth > 8)
-		I_Error("Too much include recursion!");
-
-	FString includeguardname;
-	includeguardname << "_HEADERGUARD_" << headerName.GetChars();
-	includeguardname.ReplaceChars("/\\.", '_');
-
-	FString code;
-	code << "#ifndef " << includeguardname.GetChars() << "\n";
-	code << "#define " << includeguardname.GetChars() << "\n";
-	code << "#line 1\n";
-
-	if (system)
-		code << LoadPrivateShaderLump(headerName.GetChars()).GetChars() << "\n";
-	else
-		code << LoadPublicShaderLump(headerName.GetChars()).GetChars() << "\n";
-
-	code << "#endif\n";
-
-	return ShaderIncludeResult(headerName.GetChars(), code.GetChars());
+	return fb->GetShaderCache()->GetPublicFile(lumpname).Code;
 }
 
-FString VkShaderManager::LoadPublicShaderLump(const char *lumpname, bool isUberShader)
+FString VkShaderManager::LoadPrivateShaderLump(const char* lumpname)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
-	if (lump == -1) lump = fileSystem.CheckNumForFullName(lumpname);
-	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
-
-	return LoadShaderLump(lump, isUberShader);
+	return fb->GetShaderCache()->GetPrivateFile(lumpname).Code;
 }
 
-FString VkShaderManager::LoadPrivateShaderLump(const char *lumpname, bool isUberShader)
+FString VkShaderManager::SubstituteDefines(FString str, bool isUberShader)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
-	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
-
-	return LoadShaderLump(lump, isUberShader);
-}
-
-FString VkShaderManager::LoadShaderLump(int lumpnum, bool isUberShader)
-{
-	FString str = GetStringFromLump(lumpnum);
-	
-	if(isUberShader)
+	if (isUberShader)
 	{
 		str.Substitute("#uifdef", "if");
 		str.Substitute("#uelifdef", "else if");
@@ -771,7 +754,6 @@ FString VkShaderManager::LoadShaderLump(int lumpnum, bool isUberShader)
 		str.Substitute("#uelse", "#else");
 		str.Substitute("#uendif", "#endif");
 	}
-	
 	return str;
 }
 
