@@ -1,4 +1,4 @@
-version "4.12"
+version "4.14.1"
 
 // Generic engine code
 #include "zscript/engine/base.zs"
@@ -125,6 +125,10 @@ version "4.12"
 #include "zscript/actors/doom/weaponplasma.zs"
 #include "zscript/actors/doom/weaponbfg.zs"
 #include "zscript/actors/doom/dehacked.zs"
+
+#include "zscript/actors/doom/id24/id24ammo.zs"
+#include "zscript/actors/doom/id24/id24incinerator.zs"
+#include "zscript/actors/doom/id24/id24calamityblade.zs"
 
 #include "zscript/actors/doom/deadthings.zs"
 #include "zscript/actors/doom/doomammo.zs"

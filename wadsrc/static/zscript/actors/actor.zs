@@ -588,7 +588,7 @@ class Actor : Thinker native
 	}
 
 	// This is called when a missile bounces off something.
-	virtual int SpecialBounceHit(Actor bounceMobj, Line bounceLine, readonly<SecPlane> bouncePlane)
+	virtual int SpecialBounceHit(Actor bounceMobj, Line bounceLine, readonly<SecPlane> bouncePlane, bool is3DFloor = false)
 	{
 		return MHIT_DEFAULT;
 	}
@@ -709,7 +709,7 @@ class Actor : Thinker native
 	native clearscope bool HasConversation() const;
 	native clearscope bool CanTalk() const;
 	native bool StartConversation(Actor player, bool faceTalker = true, bool saveAngle = true);
-		
+
 	native clearscope string GetTag(string defstr = "") const;
 	native clearscope string GetCharacterName() const;
 	native void SetTag(string defstr = "");
@@ -879,7 +879,7 @@ class Actor : Thinker native
 	native bool BounceActor(Actor blocking, bool onTop);
 	native bool BounceWall(Line l = null);
 	native bool BouncePlane(readonly<SecPlane> plane, bool is3DFloor = false);
-	native void PlayBounceSound(bool onFloor);
+	native void PlayBounceSound(bool onFloor, double volume = 1.0);
 	native bool ReflectOffActor(Actor blocking);
 
 	clearscope double PitchTo(Actor target, double zOfs = 0, double targZOfs = 0, bool absolute = false) const
@@ -1308,9 +1308,9 @@ class Actor : Thinker native
 	native bool A_SetVisibleRotation(double anglestart = 0, double angleend = 0, double pitchstart = 0, double pitchend = 0, int flags = 0, int ptr = AAPTR_DEFAULT);
 	native void A_SetTranslation(name transname);
 	native bool A_SetSize(double newradius = -1, double newheight = -1, bool testpos = false);
-	native void A_SprayDecal(String name, double dist = 172, vector3 offset = (0, 0, 0), vector3 direction = (0, 0, 0), bool useBloodColor = false, color decalColor = 0);
+	native void A_SprayDecal(String name, double dist = 172, vector3 offset = (0, 0, 0), vector3 direction = (0, 0, 0), bool useBloodColor = false, color decalColor = 0, TranslationID translation = 0);
 	native void A_SetMugshotState(String name);
-	native void CopyBloodColor(Actor other);
+	native void CopyBloodColor(readonly<Actor> other);
 
 	native void A_RearrangePointers(int newtarget, int newmaster = AAPTR_DEFAULT, int newtracer = AAPTR_DEFAULT, int flags=0);
 	native void A_TransferPointer(int ptr_source, int ptr_recipient, int sourcefield, int recipientfield=AAPTR_DEFAULT, int flags=0);

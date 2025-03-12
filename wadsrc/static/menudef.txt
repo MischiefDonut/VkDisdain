@@ -1061,15 +1061,15 @@ OptionMenu "LightOptions" protected
 	Option "$GLPREFMNU_FOGMODE",				gl_fogmode,						"FogMode"
 	Option "$DSPLYMNU_FAKECONTRAST",			"r_fakecontrast", "Contrast"
 	StaticText " "
-	Option "$GLLIGHTMNU_LIGHTSENABLED",			gl_lights,				"OnOff"
-	Option "$GLLIGHTMNU_LIGHTSPRITES",			gl_light_sprites,		"YesNo"
-	Option "$GLLIGHTMNU_LIGHTPARTICLES",		gl_light_particles,		"YesNo"
-	Option "$GLLIGHTMNU_SPRITELIGHT",			gl_spritelight,			"SpriteLightModes"
-	Option "$GLPREFMNU_CORONAS",				gl_coronas,				"OnOff"
+	Option "$GLLIGHTMNU_LIGHTSENABLED",			gl_lights,						"OnOff"
+	Option "$GLLIGHTMNU_LIGHTSPRITES",			gl_light_sprites,				"YesNo"
+	Option "$GLLIGHTMNU_LIGHTPARTICLES",		gl_light_particles,				"YesNo"
+	Option "$GLLIGHTMNU_SPRITELIGHT",			gl_spritelight,					"SpriteLightModes"
+	Option "$GLPREFMNU_CORONAS",				gl_coronas,						"OnOff"
 	StaticText " "
-	Option "$GLLIGHTMNU_LIGHTSHADOWS",			gl_light_shadows,		"ShadowMode"
-	Option "$GLLIGHTMNU_LIGHTSHADOWFILTER", 	gl_light_shadow_filter,	"ShadowFilter"
-	Option "$GLLIGHTMNU_LIGHTSHADOWMAPQUALITY", gl_shadowmap_quality,	"ShadowMapQuality"
+	Option "$GLLIGHTMNU_LIGHTSHADOWS",			gl_light_shadows,				"ShadowMode"
+	Option "$GLLIGHTMNU_LIGHTSHADOWFILTER", 	gl_light_shadow_filter,			"ShadowFilter"
+	Option "$GLLIGHTMNU_LIGHTSHADOWMAPQUALITY", gl_shadowmap_quality,			"ShadowMapQuality"
 	Option "$GLLIGHTMNU_PRECISEMIDTEXTRACE",	gl_precise_midtextures_trace,	"YesNo"
 	StaticText " "
 	Option "$GLPREFMNU_SWLMBANDED",				gl_bandedswlight,				"OnOff"
@@ -1080,7 +1080,7 @@ OptionMenu "LightOptions" protected
 	Option "$GLPREFMNU_ENV",					gl_enhanced_nightvision,		"OnOff"
 	Option "$GLPREFMNU_ENVSTEALTH",				gl_enhanced_nv_stealth,			"EnhancedStealth"
 	StaticText " "
-	Option "$DSPLYMNU_CUSTOMINVERTMAP",			"cl_customizeinvulmap", "OnOff"
+	Option "$DSPLYMNU_CUSTOMINVERTMAP",			"cl_customizeinvulmap", 		"OnOff"
 	ColorPicker "$DSPLYMNU_CUSTOMINVERTC1",		"cl_custominvulmapcolor1"
 	ColorPicker "$DSPLYMNU_CUSTOMINVERTC2",		"cl_custominvulmapcolor2"
 }
@@ -1348,6 +1348,12 @@ OptionValue AlwaysTally
 	2,	"$OPTVAL_WITHHUBS"
 }
 
+OptionValue SaveOrder
+{
+	0,	"$OPTVAL_ALPHABETICAL"
+	1,	"$OPTVAL_LASTSAVEDTIME"
+}
+
 OptionMenu "MiscOptions" protected
 {
 	Title "$MISCMNU_TITLE"
@@ -1360,6 +1366,7 @@ OptionMenu "MiscOptions" protected
 	Slider "$MISCMNU_AUTOSAVECOUNT",			"autosavecount", 1, 20, 1, 0
 	Option "$MISCMNU_QUICKSAVEROTATION",		"quicksaverotation", "OnOff"
 	Slider "$MISCMNU_QUICKSAVECOUNT",			"quicksaverotationcount", 1, 20, 1, 0
+	Option "$MISCMNU_SAVEORDER",				"save_sort_order", "SaveOrder"
 	Option "$MISCMNU_DEHLOAD",					"dehload", "dehopt"
 	Option "$MISCMNU_ENABLESCRIPTSCREENSHOTS",	"enablescriptscreenshot", "OnOff"
 	Option "$MISCMNU_SETSLOTSTRICT",			"setslotstrict", "YesNo"
@@ -2065,6 +2072,7 @@ OptionMenu SoundOptions protected
 	StaticText " "
 	Slider "$SNDMNU_SFXVOLUME",			"snd_sfxvolume", 0, 1, 0.05, 2
 	Slider "$SNDMNU_MUSICVOLUME",		"snd_musicvolume", 0, 1, 0.05, 2
+	Slider "$SNDMNU_FOOTSTEPVOLUME",	"snd_footstepvolume", 0, 1, 0.05, 2
 	StaticText " "
 	Slider "$SNDMNU_MENUVOLUME",		"snd_menuvolume", 0, 1, 0.05, 2
 	StaticText " "
@@ -2392,6 +2400,7 @@ OptionValue ScaleModes
 	4, "1280x800"
 	5, "$OPTVAL_CUSTOM"
 	1, "$OPTVAL_LOWEST"
+	7, "$OPTVAL_LOWEST12"
 }
 OptionValue CropAspect
 {
