@@ -274,35 +274,86 @@ VulkanRenderPass *VkRenderPassSetup::GetRenderPass(int clearTargets)
 	return RenderPasses[clearTargets].get();
 }
 
+CVAR(Bool, gl_ubershaders, false, 0); // development variable
+
 VulkanPipeline *VkRenderPassSetup::GetPipeline(const VkPipelineKey &key, UniformStructHolder &Uniforms)
 {
-	auto item = Pipelines.find(key);
-	if (item == Pipelines.end())
+	// To do:
+	// Build the generalized pipelines in the VkRenderPassSetup constructor
+	// Then build the specialized ones on a worker thread
+
+	if (gl_ubershaders)
 	{
-		Uniforms.Clear();
-		auto pipeline = CreatePipeline(key, Uniforms);
-		auto ptr = pipeline.get();
-		Pipelines.insert(std::pair<VkPipelineKey, PipelineData>{key, PipelineData{std::move(pipeline), Uniforms}});
-		return ptr;
+		VkPipelineKey gkey = key;
+		gkey.ShaderKey.AsQWORD = 0;
+
+		auto item = GeneralizedPipelines.find(gkey);
+		if (item == GeneralizedPipelines.end())
+		{
+			auto pipeline = CreatePipeline(gkey, true, Uniforms);
+			auto ptr = pipeline.get();
+			GeneralizedPipelines.insert(std::pair<VkPipelineKey, PipelineData>{gkey, PipelineData{ std::move(pipeline), Uniforms }});
+			return ptr;
+		}
+		else
+		{
+			Uniforms = item->second.Uniforms;
+			return item->second.pipeline.get();
+		}
 	}
 	else
 	{
-		Uniforms = item->second.Uniforms;
-		return item->second.pipeline.get();
+		auto item = SpecializedPipelines.find(key);
+		if (item == SpecializedPipelines.end())
+		{
+			auto pipeline = CreatePipeline(key, false, Uniforms);
+			auto ptr = pipeline.get();
+			SpecializedPipelines.insert(std::pair<VkPipelineKey, PipelineData>{key, PipelineData{std::move(pipeline), Uniforms}});
+			return ptr;
+		}
+		else
+		{
+			Uniforms = item->second.Uniforms;
+			return item->second.pipeline.get();
+		}
 	}
 }
 
-std::unique_ptr<VulkanPipeline> VkRenderPassSetup::CreatePipeline(const VkPipelineKey &key, UniformStructHolder &Uniforms)
+// Pipeline creation tracking and printing
+int Printf(const char* fmt, ...);
+CVAR(Bool, vk_debug_pipeline_creation, false, 0);
+static double pipeline_time;
+static int pipeline_count;
+ADD_STAT(pipelines)
 {
+	FString out;
+	out.Format(
+		"Pipelines created: %d\n"
+		"Pipeline time: %.3f\n"
+		"Pipeline average: %.3f",
+		pipeline_count, pipeline_time, pipeline_time / pipeline_count);
+	return out;
+}
+
+std::unique_ptr<VulkanPipeline> VkRenderPassSetup::CreatePipeline(const VkPipelineKey &key, bool isUberShader, UniformStructHolder &Uniforms)
+{
+	Uniforms.Clear();
+
 	GraphicsPipelineBuilder builder;
 	builder.Cache(fb->GetRenderPassManager()->GetCache());
 
 	builder.PolygonMode(key.DrawLine ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL);
 
-	VkShaderProgram *program = fb->GetShaderManager()->Get(key.ShaderKey);
+	VkShaderProgram *program = fb->GetShaderManager()->Get(key.ShaderKey, isUberShader);
 	builder.AddVertexShader(program->vert.get());
+	builder.AddConstant(0, (uint32_t)key.ShaderKey.AsQWORD);
+	builder.AddConstant(1, (uint32_t)(key.ShaderKey.AsQWORD >> 32));
 	if (program->frag)
+	{
 		builder.AddFragmentShader(program->frag.get());
+		builder.AddConstant(0, (uint32_t)key.ShaderKey.AsQWORD);
+		builder.AddConstant(1, (uint32_t)(key.ShaderKey.AsQWORD >> 32));
+	}
 
 	const VkVertexFormat &vfmt = *fb->GetRenderPassManager()->GetVertexFormat(key.ShaderKey.VertexFormat);
 
@@ -368,13 +419,28 @@ std::unique_ptr<VulkanPipeline> VkRenderPassSetup::CreatePipeline(const VkPipeli
 
 	builder.RasterizationSamples((VkSampleCountFlagBits)PassKey.Samples);
 
-	builder.Layout(fb->GetRenderPassManager()->GetPipelineLayout(key.ShaderKey.UseLevelMesh, program->Uniforms.sz));
+	builder.Layout(fb->GetRenderPassManager()->GetPipelineLayout(key.ShaderKey.Layout.UseLevelMesh, program->Uniforms.sz));
 	builder.RenderPass(GetRenderPass(0));
 	builder.DebugName("VkRenderPassSetup.Pipeline");
 
 	Uniforms = program->Uniforms;
 
-	return builder.Create(fb->GetDevice());
+	cycle_t ct;
+	ct.ResetAndClock();
+	
+	auto pipeline = builder.Create(fb->GetDevice());
+
+	ct.Unclock();
+	const auto duration = ct.TimeMS();
+	pipeline_time += duration;
+	++pipeline_count;
+
+	if (vk_debug_pipeline_creation)
+	{
+		Printf(">>> Pipeline created in %.3fms\n", duration);
+	}
+
+	return pipeline;
 }
 
 /////////////////////////////////////////////////////////////////////////////
