@@ -130,9 +130,8 @@ FString M_GetAppDataPath(bool create)
 
 FString M_GetCachePath(bool create)
 {
-	// Don't use GAME_DIR and such so that ZDoom and its child ports can
-	// share the node cache.
-	FString path = NicePath("$HOME/.config/zdoom/cache");
+	// [Disdain] use our own cache directory
+	FString path = NicePath("$HOME/.config/disdain/engine/cache");
 	if (create)
 	{
 		CreatePath(path.GetChars());

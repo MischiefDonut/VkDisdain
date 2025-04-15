@@ -126,7 +126,8 @@ FString M_GetCachePath(bool create)
 		path = progdir;
 	}
 
-	path += "/zdoom/cache";
+	// [Disdain] use our own cache directory
+	path += "/disdain/engine/cache";
 	if (create) CreatePath(path.GetChars());
 	return path;
 }

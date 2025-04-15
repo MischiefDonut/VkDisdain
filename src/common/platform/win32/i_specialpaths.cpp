@@ -163,9 +163,8 @@ FString M_GetCachePath(bool create)
 {
 	FString path = GetKnownFolder(CSIDL_LOCAL_APPDATA, FOLDERID_LocalAppData, create);
 
-	// Don't use GAME_DIR and such so that ZDoom and its child ports can
-	// share the node cache.
-	path += "/zdoom/cache";
+	// [Disdain] use our own cache directory
+	path += "/disdain/engine/cache";
 	if (create)
 	{
 		CreatePath(path.GetChars());
