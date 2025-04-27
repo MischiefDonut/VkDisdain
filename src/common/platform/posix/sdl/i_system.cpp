@@ -137,6 +137,12 @@ void Unix_I_FatalError(const char* errortext)
 		}
 	}
 }
+
+void I_CloseMainWindow()
+{
+	// To do: close the window but do NOT call SDL_QuitSubSystem as ZWidget may also be using it
+}
+
 #endif
 
 
@@ -144,10 +150,8 @@ void I_ShowFatalError(const char *message)
 {
 #ifdef __APPLE__
 	Mac_I_FatalError(message);
-#elif defined __unix__
-	Unix_I_FatalError(message);
 #else
-	// ???
+	Unix_I_FatalError(message);
 #endif
 }
 

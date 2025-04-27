@@ -4,6 +4,7 @@
 #include <memory>
 #include <list>
 #include <map>
+#include <mutex>
 #include "vectors.h"
 #include "matrix.h"
 #include "name.h"
@@ -154,8 +155,8 @@ static_assert(sizeof(VkShaderKey) == 24, "sizeof(VkShaderKey) is not its expecte
 class VkShaderProgram
 {
 public:
-	std::unique_ptr<VulkanShader> vert;
-	std::unique_ptr<VulkanShader> frag;
+	std::vector<uint32_t> vert;
+	std::vector<uint32_t> frag;
 
 	UniformStructHolder Uniforms;
 };
@@ -168,7 +169,7 @@ public:
 
 	void Deinit();
 
-	VkShaderProgram* Get(const VkShaderKey& key, bool isUberShader);
+	VkShaderProgram* GetProgram(const VkShaderKey& key, bool isUberShader);
 
 	bool CompileNextShader() { return true; }
 
@@ -177,13 +178,17 @@ public:
 	void AddVkPPShader(VkPPShader* shader);
 	void RemoveVkPPShader(VkPPShader* shader);
 
-	VulkanShader* GetZMinMaxVertexShader() { return ZMinMax.vert.get(); }
-	VulkanShader* GetZMinMaxFragmentShader(int index) { return ZMinMax.frag[index].get(); }
-	VulkanShader* GetLightTilesShader() { return LightTiles.get(); }
+	const std::vector<uint32_t>& GetZMinMaxVertexShader() const { return ZMinMax.vert; }
+	const std::vector<uint32_t>& GetZMinMaxFragmentShader(int index) const { return ZMinMax.frag[index]; }
+	const std::vector<uint32_t>& GetLightTilesShader() const { return LightTiles; }
 
 private:
-	std::unique_ptr<VulkanShader> LoadVertShader(FString shadername, const char *vert_lump, const char *vert_lump_custom, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader, bool isUberShader);
-	std::unique_ptr<VulkanShader> LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *light_lump_shared, const char *lightmodel_lump, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader, bool isUberShader);
+	VkShaderProgram* GetFromCache(const VkShaderKey& key, bool isUberShader);
+	VkShaderProgram* AddToCache(const VkShaderKey& key, bool isUberShader, std::unique_ptr<VkShaderProgram> program);
+	std::unique_ptr<VkShaderProgram> CompileProgram(const VkShaderKey& key, bool isUberShader);
+
+	std::vector<uint32_t> LoadVertShader(FString shadername, const char *vert_lump, const char *vert_lump_custom, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader, bool isUberShader);
+	std::vector<uint32_t> LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char* mateffect_lump, const char *light_lump_shared, const char *lightmodel_lump, const char *defines, const VkShaderKey& key, const UserShaderDesc *shader, bool isUberShader);
 
 	FString GetVersionBlock();
 	FString LoadPublicShaderLump(const char *lumpname);
@@ -194,16 +199,17 @@ private:
 
 	VulkanRenderDevice* fb = nullptr;
 
-	std::map<uint64_t, VkShaderProgram> generic;
-	std::map<VkShaderKey, VkShaderProgram> specialized;
+	std::mutex mutex;
+	std::map<uint64_t, std::unique_ptr<VkShaderProgram>> generic;
+	std::map<VkShaderKey, std::unique_ptr<VkShaderProgram>> specialized;
 
 	std::list<VkPPShader*> PPShaders;
 
 	struct
 	{
-		std::unique_ptr<VulkanShader> vert;
-		std::unique_ptr<VulkanShader> frag[3];
+		std::vector<uint32_t> vert;
+		std::vector<uint32_t> frag[3];
 	} ZMinMax;
 
-	std::unique_ptr<VulkanShader> LightTiles;
+	std::vector<uint32_t> LightTiles;
 };
