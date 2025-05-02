@@ -620,13 +620,13 @@ static inline void RenderModelFrame(FModelRenderer *renderer, int i, const FSpri
 
 void RenderFrameModels(FModelRenderer *renderer, FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, const int curTics, FTranslationID translation, AActor* actor, HWSprite *spr)
 {
-	double tic = actor->Level->totaltime;
-	if ((ConsoleState == c_up || ConsoleState == c_rising) && (menuactive == MENU_Off || menuactive == MENU_OnNoPause) && !actor->isFrozen())
+	double tic = Level->totaltime;
+	if ((ConsoleState == c_up || ConsoleState == c_rising) && (menuactive == MENU_Off || menuactive == MENU_OnNoPause) && (!actor || !actor->isFrozen()))
 	{
 		tic += I_GetTimeFrac();
 	}
 
-	bool is_decoupled = (actor->flags9 & MF9_DECOUPLEDANIMATIONS);
+	bool is_decoupled = actor && (actor->flags9 & MF9_DECOUPLEDANIMATIONS);
 
 	DActorModelData* modelData = actor ? actor->modelData.ForceGet() : nullptr;
 
