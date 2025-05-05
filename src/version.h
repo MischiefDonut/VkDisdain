@@ -132,6 +132,6 @@ const int VID_MIN_HEIGHT = 200;
 #define LIGHTMAPVER 4
 
 // [Disdain]
-#define DISDAINVERSION "101"
+#define DISDAINVERSION "100"
 
 #endif //__VERSION_H__
