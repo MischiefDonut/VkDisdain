@@ -114,8 +114,8 @@ void BSPWalkCircle(FLevelLocals *Level, float x, float y, float radiusSquared, c
 		BSPNodeWalkCircle(Level->HeadNode(), x, y, radiusSquared, callback);
 }
 
-void RenderModel(FModelRenderer* renderer, float x, float y, float z, FSpriteModelFrame* smf, AActor* actor, class HWSprite *spr,double ticFrac);
-void RenderHUDModel(FModelRenderer* renderer, DPSprite* psp, FVector3 translation, FVector3 rotation, FVector3 rotation_pivot, FSpriteModelFrame *smf);
+void RenderModel(FModelRenderer* renderer, float x, float y, float z, FSpriteModelFrame* smf, AActor* actor, class HWSprite *spr, double ticFrac);
+void RenderHUDModel(FModelRenderer* renderer, DPSprite* psp, FVector3 translation, FVector3 rotation, FVector3 rotation_pivot, FSpriteModelFrame *smf, double ticFrac);
 
 struct CalcModelFrameInfo
 {
@@ -140,7 +140,7 @@ struct ModelDrawInfo
 
 class DActorModelData;
 
-CalcModelFrameInfo CalcModelFrame(FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, const int curTics, DActorModelData* modelData, AActor* actor, bool is_decoupled, double tic);
+CalcModelFrameInfo CalcModelFrame(FLevelLocals *Level, const FSpriteModelFrame *smf, const FState *curState, int curTics, DActorModelData* modelData, AActor* actor, bool is_decoupled, double tic, double ticFrac);
 
 // returns true if the model isn't removed
 bool CalcModelOverrides(int modelindex, const FSpriteModelFrame *smf, DActorModelData* modelData, const CalcModelFrameInfo &frameinfo, ModelDrawInfo &drawinfo, bool is_decoupled, HWSprite *spr = nullptr);

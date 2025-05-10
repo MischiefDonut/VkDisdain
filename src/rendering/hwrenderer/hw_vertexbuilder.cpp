@@ -29,6 +29,16 @@
 #include "earcut.hpp"
 #include "v_video.h"
 
+struct SectorVertexOrigin
+{
+	SectorVertexOrigin() = default;
+	SectorVertexOrigin(subsector_t* sub, int plane, int lightmapSlot) : sub(sub), plane(plane), lightmapSlot(lightmapSlot) { }
+	subsector_t* sub;
+	int plane;
+	int lightmapSlot;
+};
+
+static TArray<SectorVertexOrigin> sector_origins;
 TArray<FFlatVertex> sector_vertices;
 TArray<uint32_t> sector_indexes;
 
@@ -232,7 +242,9 @@ static int CreateIndexedSectorVerticesLM(sector_t* sec, const secplane_t& plane,
 	}
 
 	auto& vbo_shadowdata = sector_vertices;
+	auto& vbo_origins = sector_origins;
 	int vi = vbo_shadowdata.Reserve(pos);
+	vbo_origins.Reserve(pos);
 	int idx = ibo_data.Reserve((pos - 2 * sec->subsectorcount) * 3);
 
 	// Create the actual vertices.
@@ -255,6 +267,7 @@ static int CreateIndexedSectorVerticesLM(sector_t* sec, const secplane_t& plane,
 					FVector2 luv = tile.ToUV(FVector3((float)vt->fX(), (float)vt->fY(), (float)plane.ZatPoint(vt)), textureSize);
 					SetFlatVertex(vbo_shadowdata[vi + pos], vt, plane, luv.X, luv.Y, lindex);
 					vbo_shadowdata[vi + pos].z += diff;
+					vbo_origins[vi + pos] = SectorVertexOrigin(sub, h, lightmapIndex);
 					pos++;
 				}
 			}
@@ -264,6 +277,7 @@ static int CreateIndexedSectorVerticesLM(sector_t* sec, const secplane_t& plane,
 				{
 					SetFlatVertex(vbo_shadowdata[vi + pos], sub->firstline[j].v1, plane);
 					vbo_shadowdata[vi + pos].z += diff;
+					vbo_origins[vi + pos] = SectorVertexOrigin(sub, h, lightmapIndex);
 					pos++;
 				}
 			}
@@ -297,7 +311,9 @@ static int CreateIndexedSectorVertices(sector_t* sec, const secplane_t& plane, i
 		return CreateIndexedSectorVerticesLM(sec, plane, floor, h, lightmapIndex);
 
 	auto& vbo_shadowdata = sector_vertices;
+	auto& vbo_origins = sector_origins;
 	unsigned vi = vbo_shadowdata.Reserve(verts.vertices.Size());
+	vbo_origins.Reserve(verts.vertices.Size());
 	float diff;
 
 	// Create the actual vertices.
@@ -307,6 +323,7 @@ static int CreateIndexedSectorVertices(sector_t* sec, const secplane_t& plane, i
 	{
 		SetFlatVertex(vbo_shadowdata[vi + i], verts.vertices[i].vertex, plane);
 		vbo_shadowdata[vi + i].z += diff;
+		vbo_origins[vi + i] = SectorVertexOrigin(nullptr, h, lightmapIndex);
 	}
 
 	auto& ibo_data = sector_indexes;
@@ -451,9 +468,42 @@ static void UpdatePlaneVertices(FRenderState& renderstate, sector_t* sec, int pl
 //
 //==========================================================================
 
+static void UpdatePlaneLightmap(FRenderState& renderstate, sector_t* sec, int plane)
+{
+	int startvt = sec->vboindex[plane];
+	int countvt = sec->vbocount[plane];
+	FFlatVertex* vt = &sector_vertices[startvt];
+	SectorVertexOrigin* origin = &sector_origins[startvt];
+	for (int i = 0; i < countvt; i++, vt++, origin++)
+	{
+		if (origin->sub)
+		{
+			int lightmap = origin->sub->LightmapTiles[origin->plane].Size() > origin->lightmapSlot ? origin->sub->LightmapTiles[origin->plane][origin->lightmapSlot] : -1;
+			if (lightmap >= 0) // tile may be missing if the subsector is degenerate triangle
+			{
+				const auto& tile = level.levelMesh->Lightmap.Tiles[lightmap];
+				float textureSize = (float)level.levelMesh->Lightmap.TextureSize;
+				float lindex = (float)tile.AtlasLocation.ArrayIndex;
+				FVector2 luv = tile.ToUV(FVector3(vt->x, vt->y, vt->z), textureSize);
+				vt->lu = luv.X;
+				vt->lv = luv.Y;
+				vt->lindex = lindex;
+			}
+		}
+	}
+	renderstate.UpdateShadowData(startvt, &sector_vertices[startvt], countvt);
+}
+
+//==========================================================================
+//
+//
+//
+//==========================================================================
+
 static void CreateVertices(TArray<sector_t>& sectors)
 {
 	sector_vertices.Clear();
+	sector_origins.Clear();
 	CreateIndexedFlatVertices(sectors);
 }
 
@@ -495,6 +545,31 @@ void CheckUpdate(FRenderState& renderstate, sector_t* sector)
 
 //==========================================================================
 //
+// Update the lightmap UV coordinates for the sector
+//
+//==========================================================================
+
+void UpdateVBOLightmap(FRenderState& renderstate, sector_t* sector)
+{
+	UpdatePlaneLightmap(renderstate, sector, sector_t::ceiling);
+	UpdatePlaneLightmap(renderstate, sector, sector_t::floor);
+
+	sector_t* hs = sector->GetHeightSec();
+	if (hs)
+	{
+		UpdatePlaneLightmap(renderstate, hs, sector_t::ceiling);
+		UpdatePlaneLightmap(renderstate, hs, sector_t::floor);
+	}
+
+	for (unsigned i = 0; i < sector->e->XFloor.ffloors.Size(); i++)
+	{
+		UpdatePlaneLightmap(renderstate, sector->e->XFloor.ffloors[i]->model, sector_t::ceiling);
+		UpdatePlaneLightmap(renderstate, sector->e->XFloor.ffloors[i]->model, sector_t::floor);
+	}
+}
+
+//==========================================================================
+//
 //
 //
 //==========================================================================
@@ -502,6 +577,7 @@ void CheckUpdate(FRenderState& renderstate, sector_t* sector)
 void CreateVBO(FRenderState& renderstate, TArray<sector_t>& sectors)
 {
 	sector_vertices.Clear();
+	sector_origins.Clear();
 	CreateVertices(sectors);
 	renderstate.SetShadowData(sector_vertices, sector_indexes);
 }
