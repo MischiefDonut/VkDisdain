@@ -105,9 +105,9 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	float scaleFactorZ = Scale.Y * smf->zscale;
 	float orientation = scaleFactorX * scaleFactorY * scaleFactorZ;
 
-	renderer->BeginDrawModel(actor->RenderStyle, smf_flags, objectToWorldMatrix, orientation < 0);
+	renderer->BeginDrawModel(RenderStyle, smf_flags, objectToWorldMatrix, orientation < 0);
 	RenderFrameModels(renderer, Level, smf, actor ? actor->state : nullptr, actor ? actor->tics : -1, ticFrac, translation, actor, spr);
-	renderer->EndDrawModel(actor->RenderStyle, smf_flags);
+	renderer->EndDrawModel(RenderStyle, smf_flags);
 }
 
 VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, int smf_flags, DRotator angles, DVector3 Pos, DVector3 Vel, DVector2 Scale, double tic)
