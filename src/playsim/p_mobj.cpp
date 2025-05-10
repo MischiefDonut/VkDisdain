@@ -4026,10 +4026,10 @@ void AActor::GetBonePosition(int model_index, int bone_index, bool with_override
 
 		FSpriteModelFrame *smf = FindModelFrame(this, sprite, frame, false); // dropped flag is for voxels
 
-		FVector3 objPos = FVector3(Pos() + WorldOffset);
+		DVector3 objPos = Pos() + WorldOffset;
 
 		VSMatrix boneMatrix = (with_override ? modelData->modelBoneInfo[model_index].positions_with_override : modelData->modelBoneInfo[model_index].positions)[bone_index];
-		VSMatrix worldMatrix = smf->ObjectToWorldMatrix(this, objPos.X, objPos.Y, objPos.Z, 1.0);
+		VSMatrix worldMatrix = smf->ObjectToWorldMatrix(Level, smf->getFlags(this->modelData), Angles, objPos, Vel, Scale, 1.0);
 
 		FVector4 oldPos(pos.X, pos.Z, pos.Y, 1.0);
 		FVector4 newPos;
@@ -4058,9 +4058,9 @@ void AActor::GetObjectToWorldMatrix(double *outMat)
 
 		FSpriteModelFrame *smf = FindModelFrame(this, sprite, frame, false); // dropped flag is for voxels
 
-		FVector3 pos = FVector3(Pos() + WorldOffset);
+		DVector3 objPos = Pos() + WorldOffset;
 
-		VSMatrix outMatrix = smf->ObjectToWorldMatrix(this, pos.X, pos.Y, pos.Z, 1.0);
+		VSMatrix outMatrix = smf->ObjectToWorldMatrix(Level, smf->getFlags(this->modelData), Angles, objPos, Vel, Scale, 1.0);
 
 		for(int i = 0; i < 16; i++)
 		{

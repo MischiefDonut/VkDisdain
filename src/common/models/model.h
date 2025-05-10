@@ -62,7 +62,7 @@ public:
 	friend void InitModels();
 	friend void ParseModelDefLump(int Lump);
 
-	VSMatrix ObjectToWorldMatrix(AActor * actor, float x, float y, float z, double ticFrac);
+	VSMatrix ObjectToWorldMatrix(FLevelLocals *Level, int smf_flags, DRotator angles, DVector3 Pos, DVector3 Vel, DVector2 Scale, double tic);
 	VSMatrix ObjectToWorldMatrix(FLevelLocals *Level, DVector3 translation, DRotator rotation, DVector2 scaling, unsigned int flags, double tic);
 };
 

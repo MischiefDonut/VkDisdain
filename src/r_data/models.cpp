@@ -77,8 +77,10 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	assert(actor || spr->spr);
 
 	DVector2 Scale = actor ? actor->Scale : spr->spr->InterpolatedScale(ticFrac);
+	DVector3 Vel = actor ? actor->Vel : DVector3(spr->spr->PT.Vel);
 	FLevelLocals * Level = actor ? actor->Level : spr->spr->Level;
 	FRenderStyle RenderStyle;
+
 	if(actor)
 	{
 		RenderStyle = actor->RenderStyle;
@@ -88,7 +90,15 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 		RenderStyle = spr->RenderStyle;
 	}
 
-	VSMatrix objectToWorldMatrix = smf->ObjectToWorldMatrix(actor, x, y, z, ticFrac);
+	double tic = Level->totaltime;
+
+	if ((ConsoleState == c_up || ConsoleState == c_rising) && (menuactive == MENU_Off || menuactive == MENU_OnNoPause) && (!actor || !actor->isFrozen()))
+	{
+		tic += ticFrac;
+	}
+	
+
+	VSMatrix objectToWorldMatrix = smf->ObjectToWorldMatrix(Level, smf_flags, spr->Angles, DVector3(x, y, z), Vel, Scale, tic);
 
 	float scaleFactorX = Scale.X * smf->xscale;
 	float scaleFactorY = Scale.X * smf->yscale;
@@ -96,25 +106,12 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 	float orientation = scaleFactorX * scaleFactorY * scaleFactorZ;
 
 	renderer->BeginDrawModel(actor->RenderStyle, smf_flags, objectToWorldMatrix, orientation < 0);
-	RenderFrameModels(renderer, Level, smf, actor ? actor->state : nullptr, actor ? actor->tics : -1, ticFrac, translation, actor);
+	RenderFrameModels(renderer, Level, smf, actor ? actor->state : nullptr, actor ? actor->tics : -1, ticFrac, translation, actor, spr);
 	renderer->EndDrawModel(actor->RenderStyle, smf_flags);
 }
 
-VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(AActor * actor, HWSprite *spr, float x, float y, float z, double ticFrac)
+VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, int smf_flags, DRotator angles, DVector3 Pos, DVector3 Vel, DVector2 Scale, double tic)
 {
-	int smf_flags = getFlags(actor ? (DActorModelData *)actor->modelData : (DActorModelData *)nullptr);
-
-	// Setup transformation.
-	DVector2 Scale = actor ? actor->Scale : spr->spr->InterpolatedScale(ticFrac);
-	DVector3 Vel = actor ? actor->Vel : DVector3(spr->spr->PT.Vel);
-	FLevelLocals * Level = actor ? actor->Level : spr->spr->Level;
-	DRotator angles;
-
-	if (actor->renderflags & RF_INTERPOLATEANGLES) // [Nash] use interpolated angles
-		angles = actor->InterpolatedAngles(ticFrac);
-	else
-		angles = actor->Angles;
-
 	float angle = angles.Yaw.Degrees();
 	float pitch = 0;
 	float roll = 0;
@@ -150,17 +147,7 @@ VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(AActor * actor, HWSprite *spr, f
 	}
 	if (smf_flags & MDL_USEACTORROLL) roll += angles.Roll.Degrees();
 
-	// [Nash] take SpriteRotation into account
-	if(actor) angle += actor->SpriteRotation.Degrees();
-
-	double tic = actor->Level->totaltime;
-
-	if ((ConsoleState == c_up || ConsoleState == c_rising) && (menuactive == MENU_Off || menuactive == MENU_OnNoPause) && !actor->isFrozen())
-	{
-		tic += ticFrac;
-	}
-
-	return ObjectToWorldMatrix(Level, DVector3(x, y, z), DRotator(DAngle::fromDeg(pitch), DAngle::fromDeg(angle), DAngle::fromDeg(roll)), actor->Scale, smf_flags, tic);
+	return ObjectToWorldMatrix(Level, Pos, DRotator(DAngle::fromDeg(pitch), DAngle::fromDeg(angle), DAngle::fromDeg(roll)), Scale, smf_flags, tic);
 }
 
 VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, DVector3 translation, DRotator rotation, DVector2 scaling, unsigned int flags, double tic)
