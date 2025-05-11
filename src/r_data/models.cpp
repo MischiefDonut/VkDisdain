@@ -208,7 +208,7 @@ VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, DVector3 tr
 	// 1) Applying actor angle, pitch and roll to the model
 	if (flags & MDL_USEROTATIONCENTER)
 	{
-		objectToWorldMatrix.translate(rotationCenterX, rotationCenterY/stretch, rotationCenterZ);
+		objectToWorldMatrix.translate(rotationCenterX, rotationCenterZ/stretch, rotationCenterY);
 
 		objectToWorldMatrix.rotate(-rotation.Yaw.Degrees(), 0, 1, 0);
 		objectToWorldMatrix.rotate(rotation.Pitch.Degrees(), 0, 0, 1);
@@ -221,7 +221,7 @@ VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, DVector3 tr
 			objectToWorldMatrix.rotate(rotateOffset, xrotate, yrotate, zrotate);
 		}
 
-		objectToWorldMatrix.translate(-rotationCenterX, -rotationCenterY/stretch, -rotationCenterZ);
+		objectToWorldMatrix.translate(-rotationCenterX, -rotationCenterZ/stretch, -rotationCenterY);
 	}
 	else
 	{
@@ -234,9 +234,9 @@ VSMatrix FSpriteModelFrame::ObjectToWorldMatrix(FLevelLocals *Level, DVector3 tr
 		// The rotation angle is based on the elapsed time.
 		if(flags & MDL_ROTATING)
 		{
-			objectToWorldMatrix.translate(rotationCenterX, rotationCenterY/stretch, rotationCenterZ);
+			objectToWorldMatrix.translate(rotationCenterX, rotationCenterZ/stretch, rotationCenterY);
 			objectToWorldMatrix.rotate(rotateOffset, xrotate, yrotate, zrotate);
-			objectToWorldMatrix.translate(-rotationCenterX, -rotationCenterY/stretch, -rotationCenterZ);
+			objectToWorldMatrix.translate(-rotationCenterX, -rotationCenterZ/stretch, -rotationCenterY);
 		}
 	}
 
