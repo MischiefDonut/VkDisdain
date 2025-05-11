@@ -1792,11 +1792,11 @@ void HWSprite::AdjustVisualThinker(HWDrawInfo* di, DVisualThinker* spr, sector_t
 		
 		if (!(spr->flags & VTF_DontInterpolate))
 			Angles = DRotator(
-						DRotator(DAngle::fromDeg(spr->PrevAngle), DAngle::fromDeg(spr->PrevPitch), DAngle::fromDeg(spr->PrevRoll)),
-						DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll)),
+						DRotator(DAngle::fromDeg(spr->PrevPitch), DAngle::fromDeg(spr->PrevAngle), DAngle::fromDeg(spr->PrevRoll)),
+						DRotator(DAngle::fromDeg(spr->Pitch),DAngle::fromDeg(spr->Angle),  DAngle::fromDeg(spr->PT.Roll)),
 						vp.TicFrac);
 		else
-			Angles = DRotator(DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->PT.Roll));
+			Angles = DRotator(DAngle::fromDeg(spr->Pitch), DAngle::fromDeg(spr->Angle), DAngle::fromDeg(spr->PT.Roll));
 
 	}
 	else if(spr->PT.texture.isValid())
