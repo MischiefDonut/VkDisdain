@@ -77,8 +77,8 @@ ADD_STAT(lightmap)
 	int indexBufferUsed = levelMesh->FreeLists.Index.GetUsedSize();
 
 	out.Format(
-		"Surfaces: %u (awaiting updates: %u static, %u dynamic)\n"
-		"Surface pixel area to update: %u static, %u dynamic\n"
+		"Surfaces: %u (awaiting updates: %u)\n"
+		"Surface pixel area to update: %u\n"
 		"Surface pixel area: %u\nAtlas pixel area:   %u\n"
 		"Atlas efficiency: %.4f%%\n"
 		"Dynamic BLAS time: %2.3f ms\n"
@@ -86,8 +86,8 @@ ADD_STAT(lightmap)
 		"Level mesh index buffer: %d K used (%d%%)\n"
 		"Lightmap tiles in use: %d\n"
 		"Lightmap texture count: %d",
-		stats.tiles.total, stats.tiles.dirty, stats.tiles.dirtyDynamic,
-		stats.pixels.dirty, stats.pixels.dirtyDynamic,
+		stats.tiles.total, stats.tiles.dirty,
+		stats.pixels.dirty,
 		stats.pixels.total,
 		atlasPixelCount,
 		float(stats.pixels.total) / float(atlasPixelCount) * 100.0f,
@@ -159,7 +159,6 @@ void DoomLevelMesh::PrintSurfaceInfo(const LevelMeshSurface* surface)
 		Printf("    Pixels: %dx%d (area: %d)\n", tile->AtlasLocation.Width, tile->AtlasLocation.Height, tile->AtlasLocation.Area());
 		Printf("    Sample dimension: %d\n", tile->SampleDimension);
 		Printf("    Needs update?: %d\n", tile->NeedsUpdate);
-		Printf("    Always update?: %d\n", tile->AlwaysUpdate);
 	}
 	Printf("    Sector group: %d\n", surface->SectorGroup);
 	Printf("    Texture: '%s'\n", gameTexture ? gameTexture->GetName().GetChars() : "<nullptr>");
@@ -307,9 +306,19 @@ void DoomLevelMesh::BeginFrame(FLevelLocals& doomMap)
 
 	for (int sideIndex : SideUpdateList)
 	{
-		if (Sides[sideIndex].UpdateType == SurfaceUpdateType::LightsOnly)
+		if (Sides[sideIndex].UpdateType == SurfaceUpdateType::LightLevel)
 		{
 			SetSideLights(doomMap, sideIndex);
+		}
+		else if (Sides[sideIndex].UpdateType == SurfaceUpdateType::Shadows)
+		{
+			// Todo: we can get away with just setting NeedUpdate to true for the tile
+			CreateSide(doomMap, sideIndex);
+		}
+		else if (Sides[sideIndex].UpdateType == SurfaceUpdateType::LightList)
+		{
+			// Todo: we only need to call CreateLightList again for all the surfaces. No need to recreate everything
+			CreateSide(doomMap, sideIndex);
 		}
 		else // SurfaceUpdateType::Full
 		{
@@ -321,9 +330,19 @@ void DoomLevelMesh::BeginFrame(FLevelLocals& doomMap)
 
 	for (int flatIndex : FlatUpdateList)
 	{
-		if (Flats[flatIndex].UpdateType == SurfaceUpdateType::LightsOnly)
+		if (Flats[flatIndex].UpdateType == SurfaceUpdateType::LightLevel)
 		{
 			SetFlatLights(doomMap, flatIndex);
+		}
+		else if (Flats[flatIndex].UpdateType == SurfaceUpdateType::Shadows)
+		{
+			// Todo: we can get away with just setting NeedUpdate to true for the tile
+			CreateFlat(doomMap, flatIndex);
+		}
+		else if (Flats[flatIndex].UpdateType == SurfaceUpdateType::LightList)
+		{
+			// Todo: we only need to call CreateLightList again for all the surfaces. No need to recreate everything
+			CreateFlat(doomMap, flatIndex);
 		}
 		else // SurfaceUpdateType::Full
 		{
@@ -625,6 +644,41 @@ void DoomLevelMesh::FreeFlat(FLevelLocals& doomMap, unsigned int sectorIndex)
 	Flats[sectorIndex].Uniforms.Clear();
 }
 
+void DoomLevelMesh::UpdateLightShadows(sector_t* sector)
+{
+	for (FSection& section : level.sections.SectionsForSector(sector))
+	{
+		int lightcount = 0;
+		FLightNode* cur = section.lighthead;
+		while (cur)
+		{
+			FDynamicLight* light = cur->lightsource;
+			if (light && light->IsActive() && (light->Trace() || lm_dynlights))
+			{
+				UpdateLightShadows(light);
+			}
+			cur = cur->nextLight;
+		}
+	}
+}
+
+void DoomLevelMesh::UpdateLightShadows(FDynamicLight* light)
+{
+	auto touching_sector = light->touching_sector;
+	while (touching_sector)
+	{
+		UpdateFlat(touching_sector->targSection->sector->Index(), SurfaceUpdateType::LightList);
+		touching_sector = touching_sector->nextTarget;
+	}
+
+	auto touching_sides = light->touching_sides;
+	while (touching_sides)
+	{
+		UpdateSide(touching_sides->targLine->Index(), SurfaceUpdateType::LightList);
+		touching_sides = touching_sides->nextTarget;
+	}
+}
+
 void DoomLevelMesh::OnFloorHeightChanged(sector_t* sector)
 {
 	UpdateFlat(sector->Index(), SurfaceUpdateType::Full);
@@ -635,6 +689,7 @@ void DoomLevelMesh::OnFloorHeightChanged(sector_t* sector)
 		if (line->sidedef[1])
 			UpdateSide(line->sidedef[1]->Index(), SurfaceUpdateType::Full);
 	}
+	UpdateLightShadows(sector);
 }
 
 void DoomLevelMesh::OnCeilingHeightChanged(sector_t* sector)
@@ -647,6 +702,7 @@ void DoomLevelMesh::OnCeilingHeightChanged(sector_t* sector)
 		if (line->sidedef[1])
 			UpdateSide(line->sidedef[1]->Index(), SurfaceUpdateType::Full);
 	}
+	UpdateLightShadows(sector);
 }
 
 void DoomLevelMesh::OnMidTex3DHeightChanged(sector_t* sector)
@@ -688,13 +744,13 @@ void DoomLevelMesh::OnSideDecalsChanged(side_t* side)
 
 void DoomLevelMesh::OnSectorLightChanged(sector_t* sector)
 {
-	UpdateFlat(sector->Index(), SurfaceUpdateType::LightsOnly);
+	UpdateFlat(sector->Index(), SurfaceUpdateType::LightLevel);
 	for (line_t* line : sector->Lines)
 	{
 		if (line->sidedef[0] && line->sidedef[0]->sector == sector)
-			UpdateSide(line->sidedef[0]->Index(), SurfaceUpdateType::LightsOnly);
+			UpdateSide(line->sidedef[0]->Index(), SurfaceUpdateType::LightLevel);
 		else if (line->sidedef[1] && line->sidedef[1]->sector == sector)
-			UpdateSide(line->sidedef[1]->Index(), SurfaceUpdateType::LightsOnly);
+			UpdateSide(line->sidedef[1]->Index(), SurfaceUpdateType::LightLevel);
 	}
 }
 
@@ -706,21 +762,45 @@ void DoomLevelMesh::OnSectorLightThinkerDestroyed(sector_t* sector, DLighting* l
 {
 }
 
+void DoomLevelMesh::OnSectorLightListChanged(sector_t* sector)
+{
+	UpdateFlat(sector->Index(), SurfaceUpdateType::LightList);
+}
+
+void DoomLevelMesh::OnSideLightListChanged(side_t* side)
+{
+	UpdateSide(side->Index(), SurfaceUpdateType::LightList);
+}
+
 void DoomLevelMesh::UpdateSide(unsigned int sideIndex, SurfaceUpdateType updateType)
 {
-	if (Sides[sideIndex].UpdateType == SurfaceUpdateType::None)
+	SurfaceUpdateType value = Sides[sideIndex].UpdateType;
+	if (value == SurfaceUpdateType::None)
 	{
+		// First update request
 		SideUpdateList.Push(sideIndex);
 		Sides[sideIndex].UpdateType = updateType;
+	}
+	else if (value != updateType)
+	{
+		// Upgrade to full update if we get multiple upgrade requests of different types
+		Sides[sideIndex].UpdateType = SurfaceUpdateType::Full;
 	}
 }
 
 void DoomLevelMesh::UpdateFlat(unsigned int sectorIndex, SurfaceUpdateType updateType)
 {
-	if (Flats[sectorIndex].UpdateType == SurfaceUpdateType::None)
+	SurfaceUpdateType value = Flats[sectorIndex].UpdateType;
+	if (value == SurfaceUpdateType::None)
 	{
+		// First update request
 		FlatUpdateList.Push(sectorIndex);
 		Flats[sectorIndex].UpdateType = updateType;
+	}
+	else if (value != updateType)
+	{
+		// Upgrade to full update if we get multiple upgrade requests of different types
+		Flats[sectorIndex].UpdateType = SurfaceUpdateType::Full;
 	}
 }
 
@@ -1213,7 +1293,6 @@ int DoomLevelMesh::AddSurfaceToTile(const DoomSurfaceInfo& info, const LevelMesh
 		tile.Bounds.max.X = std::max(tile.Bounds.max.X, surf.Bounds.max.X);
 		tile.Bounds.max.Y = std::max(tile.Bounds.max.Y, surf.Bounds.max.Y);
 		tile.Bounds.max.Z = std::max(tile.Bounds.max.Z, surf.Bounds.max.Z);
-		tile.AlwaysUpdate = max<uint8_t>(tile.AlwaysUpdate, alwaysUpdate);
 		tile.UseCount++;
 
 		return index;
@@ -1225,7 +1304,6 @@ int DoomLevelMesh::AddSurfaceToTile(const DoomSurfaceInfo& info, const LevelMesh
 		tile.Bounds = surf.Bounds;
 		tile.Plane = surf.Plane;
 		tile.SampleDimension = GetSampleDimension(sampleDimension);
-		tile.AlwaysUpdate = alwaysUpdate;
 		tile.UseCount = 1;
 
 		int index = AllocTile(tile);

@@ -58,7 +58,9 @@ struct DrawRangeInfo
 enum SurfaceUpdateType
 {
 	None,
-	LightsOnly,
+	LightLevel,
+	Shadows,
+	LightList,
 	Full
 };
 
@@ -125,6 +127,8 @@ public:
 	void OnSectorLightChanged(sector_t* sector) override;
 	void OnSectorLightThinkerCreated(sector_t* sector, DLighting* lightthinker) override;
 	void OnSectorLightThinkerDestroyed(sector_t* sector, DLighting* lightthinker) override;
+	void OnSectorLightListChanged(sector_t* sector) override;
+	void OnSideLightListChanged(side_t* side) override;
 
 	void Reset(const LevelMeshLimits& limits) override
 	{
@@ -147,6 +151,9 @@ private:
 	void SetLimits(FLevelLocals& doomMap);
 
 	void CreateSurfaces(FLevelLocals& doomMap);
+
+	void UpdateLightShadows(sector_t* sector);
+	void UpdateLightShadows(FDynamicLight* light);
 
 	void UpdateSide(unsigned int sideIndex, SurfaceUpdateType updateType);
 	void UpdateFlat(unsigned int sectorIndex, SurfaceUpdateType updateType);
