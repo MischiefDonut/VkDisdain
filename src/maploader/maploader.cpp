@@ -2942,7 +2942,7 @@ void MapLoader::CalcIndices()
 //
 //==========================================================================
 
-void MapLoader::InitLevelMesh(MapData* map)
+void MapLoader::InitLightmapTiles(MapData* map)
 {
 	// Propagate sample distance where it isn't yet set
 	for (auto& line : Level->lines)
@@ -3017,7 +3017,10 @@ void MapLoader::InitLevelMesh(MapData* map)
 		subsector.LightmapTiles[1] = TArrayView<int>(&Level->LightmapTiles[offset + count], count);
 		offset += count * 2;
 	}
+}
 
+void MapLoader::InitLevelMesh(MapData* map)
+{
 	// Create the levelmesh
 	Level->levelMesh = new DoomLevelMesh(*Level);
 
@@ -3046,7 +3049,7 @@ bool MapLoader::LoadLightmap(MapData* map)
 	int version = fr.ReadInt32();
 	if (version < LIGHTMAPVER)
 	{
-		Printf(PRINT_HIGH, "LoadLightmap: This is an old unsupported version of the lightmap lump. Please rebuild the map with the console commands 'deletelightmap', and then 'savelightmap'.\n");
+		Printf(PRINT_HIGH, "LoadLightmap: This is an old unsupported version of the lightmap lump. Please rebuild the map with %s.\n", TOOLNAMELOWERCASE);
 		return false;
 	}
 	else if (version != LIGHTMAPVER)
@@ -3173,7 +3176,9 @@ bool MapLoader::LoadLightmap(MapData* map)
 		tile->Transform.TranslateWorldToLocal = entry.translateWorldToLocal;
 		tile->Transform.ProjLocalToU = entry.projLocalToU;
 		tile->Transform.ProjLocalToV = entry.projLocalToV;
-		tile->NeedsUpdate = false;
+		tile->NeedsInitialBake = false;
+		tile->GeometryUpdate = false;
+		tile->ReceivedNewLight = false;
 
 		foundBindings.Push({ &entry, tile });
 	}
@@ -3210,7 +3215,9 @@ bool MapLoader::LoadLightmap(MapData* map)
 			memcpy(dstline, srcline, width * 3 * sizeof(uint16_t));
 		}
 
-		tile->NeedsUpdate = false;
+		tile->NeedsInitialBake = false;
+		tile->GeometryUpdate = false;
+		tile->ReceivedNewLight = false;
 	}
 
 	if (errors > 0)
@@ -3549,7 +3556,7 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 	if (!Level->IsReentering())
 		Level->FinalizePortals();	// finalize line portals after polyobjects have been initialized. This info is needed for properly flagging them.
 
-	InitLevelMesh(map);
+	InitLightmapTiles(map);
 
 	Level->ClearDynamic3DFloorData();	// CreateVBO must be run on the plain 3D floor data.
 	CreateVBO(*screen->RenderState(), Level->sectors);
@@ -3557,6 +3564,10 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 	{
 		P_Recalculate3DFloors(&sec);
 	}
+
+	InitLevelMesh(map);
+
+	UpdateVBOLightmap(*screen->RenderState(), Level->sectors);
 
 	Level->aabbTree = new DoomLevelAABBTree(Level);
 

@@ -46,6 +46,8 @@ thread_local FDynLightData lightdata;
 CVAR (Bool, gl_light_sprites, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 CVAR (Bool, gl_light_particles, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 
+CVAR (Bool, gl_light_shadow_nearest_dither, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+
 
 //==========================================================================
 //
@@ -98,6 +100,9 @@ void AddLightToList(FDynLightData &dld, int group, FDynamicLight * light, bool f
 
 	if (light->target && (light->target->renderflags2 & RF2_LIGHTMULTALPHA))
 		cs *= (float)light->target->Alpha;
+
+	// Multiply intensity from GLDEFS
+	cs *= (float)light->GetLightDefIntensity();
 
 	info.r = light->GetRed() / 255.0f * cs;
 	info.g = light->GetGreen() / 255.0f * cs;
@@ -154,7 +159,7 @@ void AddLightToList(FDynLightData &dld, int group, FDynamicLight * light, bool f
 	info.z = float(pos.Y);
 	info.y = float(pos.Z);
 
-	info.softShadowRadius = light->GetSoftShadowRadius();
+	info.softShadowRadius = (gl_light_shadow_filter == 0 && !gl_light_shadow_nearest_dither)? 0 : light->GetSoftShadowRadius();
 
 	info.linearity = std::clamp(light->GetLinearity(), 0.0f, 1.0f);
 

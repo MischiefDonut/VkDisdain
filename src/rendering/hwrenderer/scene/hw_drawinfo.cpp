@@ -139,11 +139,13 @@ void HWDrawInfo::StartScene(FRenderViewpoint &parentvp, HWViewpointUniforms *uni
 	for (int i = 0; i < GLDL_TYPES; i++) drawlists[i].Reset();
 	hudsprites.Clear();
 	Fogballs.Clear();
-	VisibleTiles.Clear();
 	vpIndex = 0;
 
-	static int counter = 1;
-	TileSeenCounter = ++counter;
+	if (!outer)
+	{
+		static int counter = 1;
+		TileSeenCounter = ++counter;
+	}
 
 	// Fullbright information needs to be propagated from the main view.
 	if (outer != nullptr) FullbrightFlags = outer->FullbrightFlags;
@@ -717,35 +719,61 @@ void HWDrawInfo::PutWallPortal(HWWall wall, FRenderState& state)
 void HWDrawInfo::UpdateLightmaps()
 {
 	if (outer)
-		return;
-	/*
-	if (VisibleTiles.size() > (size_t)lm_max_updates)
-		VisibleTiles.resize(lm_max_updates);
+		outer->UpdateLightmaps();
 
-	if (VisibleTiles.size() < (size_t)lm_background_updates)
+	VisibleTiles.Result.Clear();
+
+	size_t max_updates = (size_t)lm_max_updates;
+
+	// We always must bake tiles that received new geometry
+	for (auto tile : VisibleTiles.Geometry)
+		VisibleTiles.Result.Push(tile);
+
+	if (VisibleTiles.Result.size() < max_updates)
 	{
-		for (auto& e : level.levelMesh->Lightmap.Tiles)
+		// We got room for more. Include some visible tiles that are being background updated
+		for (auto tile : VisibleTiles.Background)
+			VisibleTiles.Result.Push(tile);
+
+		if (VisibleTiles.Result.size() < max_updates)
 		{
-			if (e.NeedsUpdate && e.LastSeen != TileSeenCounter)
+			// We still have room. Add tiles that received new light
+			for (auto tile : VisibleTiles.ReceivedNewLight)
+				VisibleTiles.Result.Push(tile);
+
+			if (VisibleTiles.Result.size() < max_updates)
 			{
-				VisibleTiles.Push(&e);
-				if (VisibleTiles.size() >= (size_t)lm_background_updates)
-					break;
+				max_updates = VisibleTiles.Result.size() + (size_t)lm_background_updates;
+
+				// Look for more background updates
+				for (auto& e : level.levelMesh->Lightmap.Tiles)
+				{
+					if (e.NeedsInitialBake && e.LastSeen != TileSeenCounter)
+					{
+						VisibleTiles.Result.Push(&e);
+						if (VisibleTiles.Result.size() >= max_updates)
+							break;
+					}
+				}
+			}
+			else
+			{
+				VisibleTiles.Result.resize(max_updates);
 			}
 		}
+		else
+		{
+			VisibleTiles.Result.resize(max_updates);
+		}
 	}
-	*/
 
-	screen->UpdateLightmaps(VisibleTiles);
+	screen->UpdateLightmaps(VisibleTiles.Result);
+
+	VisibleTiles.Geometry.Clear();
+	VisibleTiles.Background.Clear();
+	VisibleTiles.ReceivedNewLight.Clear();
+	VisibleTiles.Result.Clear();
 }
-
-//-----------------------------------------------------------------------------
-//
-// RenderScene
-//
-// Draws the current draw lists for the non GLSL renderer
-//
-//-----------------------------------------------------------------------------
 
 void HWDrawInfo::RenderScene(FRenderState &state)
 {

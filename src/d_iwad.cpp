@@ -494,6 +494,7 @@ void FIWadManager::CollectSearchPaths()
 void FIWadManager::AddIWADCandidates(const char *dir)
 {
 	FileSys::FileList list;
+	FString iwadinfoName = "iwadinfo";
 
 	if (FileSys::ScanDirectory(list, dir, "*", true))
 	{
@@ -515,6 +516,23 @@ void FIWadManager::AddIWADCandidates(const char *dir)
 					if (!name.CompareNoCase(entry.FileName.c_str()))
 					{
 						mFoundWads.Push(FFoundWadInfo{ entry.FilePath.c_str(), "", -1 });
+					}
+				}
+			}
+			else
+			{
+				FileSys::FileList list;
+				if (FileSys::ScanDirectory(list, entry.FilePath.c_str(), "*", true))
+				{
+					for (auto& entry2 : list)
+					{
+						std::string s = entry2.FileName;
+						s.resize(std::min(s.size(), iwadinfoName.Len()));
+						if (iwadinfoName.CompareNoCase(s.c_str()) == 0)
+						{
+							mFoundWads.Push(FFoundWadInfo{ entry.FilePath.c_str(), "", -1 });
+							break;
+						}
 					}
 				}
 			}
@@ -544,7 +562,12 @@ void FIWadManager::ValidateIWADs()
 		}
 		else
 		{
-			index = ScanIWAD(p.mFullPath.GetChars());
+			bool isdir = false;
+			bool exists = FileSys::FS_DirEntryExists(p.mFullPath.GetChars(), &isdir);
+			if (exists && isdir)
+				index = CheckIWADInfo(p.mFullPath.GetChars());
+			else
+				index = ScanIWAD(p.mFullPath.GetChars());
 		}
 		p.mInfoIndex = index;
 	}
@@ -584,6 +607,8 @@ FString FIWadManager::IWADPathFileSearch(const FString &file)
 
 	return "";
 }
+
+CVAR(String, extra_args, "", CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
 
 int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char *iwad, const char *zdoom_wad, const char *optional_wad)
 {
@@ -849,13 +874,15 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 				if (autoloadbrightmaps) flags |= 4;
 				if (autoloadwidescreen) flags |= 8;
 
-				FString extraArgs;
+				FString extraArgs = *extra_args;
 
 				pick = I_PickIWad(&wads[0], (int)wads.Size(), queryiwad, pick, flags, extraArgs);
 				if (pick >= 0)
 				{
 					extraArgs.StripLeftRight();
 
+					extra_args = extraArgs.GetChars();
+					
 					if(extraArgs.Len() > 0)
 					{
 						Args->AppendArgsString(extraArgs);

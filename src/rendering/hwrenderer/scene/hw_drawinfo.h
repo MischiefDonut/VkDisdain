@@ -157,7 +157,13 @@ struct HWDrawInfo
 	TArray<HWDecal *> Decals[2];	// the second slot is for mirrors which get rendered in a separate pass.
 	TArray<HUDSprite> hudsprites;	// These may just be stored by value.
 	TArray<Fogball> Fogballs;
-	TArray<LightmapTile*> VisibleTiles;
+	struct
+	{
+		TArray<LightmapTile*> Geometry;
+		TArray<LightmapTile*> ReceivedNewLight;
+		TArray<LightmapTile*> Background;
+		TArray<LightmapTile*> Result;
+	} VisibleTiles;
 	int TileSeenCounter = 0;
 	uint64_t LastFrameTime = 0;
 
@@ -244,7 +250,35 @@ public:
 		if (tile->LastSeen != TileSeenCounter)
 		{
 			tile->LastSeen = TileSeenCounter;
-			VisibleTiles.Push(tile);
+
+			if (lm_always_update || tile->GeometryUpdate)
+			{
+				VisibleTiles.Geometry.Push(tile);
+			}
+			else if (tile->NeedsInitialBake)
+			{
+				VisibleTiles.Background.Push(tile);
+			}
+			else if (tile->ReceivedNewLight)
+			{
+				// Only update light changes if the mapper requested it
+				if (tile->Binding.Type == ST_UPPERSIDE || tile->Binding.Type == ST_MIDDLESIDE || tile->Binding.Type == ST_LOWERSIDE)
+				{
+					sector_t* sector = Level->sides[tile->Binding.TypeIndex].sector;
+					if (sector && sector->Flags & SECF_LM_DYNAMIC)
+					{
+						VisibleTiles.ReceivedNewLight.Push(tile);
+					}
+				}
+				else if (tile->Binding.Type == ST_CEILING || tile->Binding.Type == ST_FLOOR)
+				{
+					sector_t* sector = Level->subsectors[tile->Binding.TypeIndex].sector;
+					if (sector && sector->Flags & SECF_LM_DYNAMIC)
+					{
+						VisibleTiles.ReceivedNewLight.Push(tile);
+					}
+				}
+			}
 		}
 	}
 

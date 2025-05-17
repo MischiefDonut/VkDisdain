@@ -53,14 +53,17 @@ void LightmapBuildCmdlet::OnCommand(FArgs args)
 			Printf("Lightmap is not enabled in this level.\n");
 		}
 
+		if (level.levelMesh)
+			level.levelMesh->BeginFrame(level);
+
 		Printf("Baking lightmaps. Please wait...\n");
 
 		uint32_t atlasPixelCount = level.levelMesh->AtlasPixelCount();
 		auto stats = level.levelMesh->GatherTilePixelStats();
 
-		Printf("Surfaces: %u (awaiting updates: %u)\n", stats.tiles.total, stats.tiles.dirty);
-		Printf("Surface pixel area to update: %u\n", stats.pixels.dirty);
-		Printf("Surface pixel area: %u\nAtlas pixel area: %u\n", stats.pixels.total, atlasPixelCount);
+		Printf("Tiles: %u (%u out of date)\n", stats.tiles.total, stats.tiles.dirty);
+		Printf("Tile pixel area to update: %u\n", stats.pixels.dirty);
+		Printf("Tile pixel area: %u\nAtlas pixel area: %u\n", stats.pixels.total, atlasPixelCount);
 		Printf("Atlas efficiency: %.4f%%\n", float(stats.pixels.total) / float(atlasPixelCount) * 100.0f);
 
 		Printf("Baking lightmap. Please wait...\n");
@@ -72,7 +75,7 @@ void LightmapBuildCmdlet::OnCommand(FArgs args)
 			tiles.Clear();
 			for (auto& e : level.levelMesh->Lightmap.Tiles)
 			{
-				if (e.NeedsUpdate)
+				if (e.NeedsInitialBake)
 				{
 					tiles.Push(&e);
 					if (tiles.Size() == 1001)

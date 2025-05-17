@@ -92,11 +92,10 @@ const GlobalShaderDesc * GetGlobalShader(int shaderNum, PClass * curActor, Globa
 			}
 		}
 
-		FName MapName = level.MapName;
-		shader = mapshaders[shaderNum].CheckKey(MapName);
+		shader = mapshaders[shaderNum].CheckKey(level.MapFName);
 		if(shader && shader->shaderindex > 0)
 		{
-			addr = {int16_t(shaderNum), 1, MapName.GetIndex()};
+			addr = {int16_t(shaderNum), 1, level.MapFName.GetIndex()};
 			return shader;
 		}
 
@@ -127,7 +126,7 @@ const GlobalShaderDesc * GetGlobalShader(int shaderNum, PClass * curActor)
 
 const GlobalShaderDesc * GetGlobalShader(GlobalShaderAddr index)
 {
-	if(index.num > NUM_BUILTIN_SHADERS || index.type > 2) return &nullglobalshader;
+	if(index.num >= NUM_BUILTIN_SHADERS || index.type > 2) return &nullglobalshader;
 
 	if(index.type == 0) return &globalshaders[index.num];
 
@@ -553,6 +552,9 @@ static const char *LightTags[]=
    "dontlightmap",
    "trace",
    "shadowminquality",
+   "intensity",
+   "softshadowradius",
+   "linearity",
    nullptr
 };
 
@@ -581,6 +583,9 @@ enum {
    LIGHTTAG_DONTLIGHTMAP,
    LIGHTTAG_TRACE,
    LIGHTTAG_SHADOW_MINQUALITY,
+   LIGHTTAG_INTENSITY,
+   LIGHTTAG_SOFTSHADOWRADIUS,
+   LIGHTTAG_LINEARITY,
 };
 
 //==========================================================================
@@ -904,6 +909,15 @@ class GLDefsParser
 						defaults->SetSpotOuterAngle(outerAngle);
 					}
 					break;
+				case LIGHTTAG_INTENSITY:
+					defaults->SetLightDefIntensity(ParseFloat(sc));
+					break;
+				case LIGHTTAG_SOFTSHADOWRADIUS:
+					defaults->SetSoftShadowRadius(ParseFloat(sc));
+					break;
+				case LIGHTTAG_LINEARITY:
+					defaults->SetLinearity(ParseFloat(sc));
+					break;
 				default:
 					sc.ScriptError("Unknown tag: %s\n", sc.String);
 				}
@@ -1011,6 +1025,15 @@ class GLDefsParser
 						defaults->SetSpotInnerAngle(innerAngle);
 						defaults->SetSpotOuterAngle(outerAngle);
 					}
+					break;
+				case LIGHTTAG_INTENSITY:
+					defaults->SetLightDefIntensity(ParseFloat(sc));
+					break;
+				case LIGHTTAG_SOFTSHADOWRADIUS:
+					defaults->SetSoftShadowRadius(ParseFloat(sc));
+					break;
+				case LIGHTTAG_LINEARITY:
+					defaults->SetLinearity(ParseFloat(sc));
 					break;
 				default:
 					sc.ScriptError("Unknown tag: %s\n", sc.String);
@@ -1123,6 +1146,15 @@ class GLDefsParser
 						defaults->SetSpotOuterAngle(outerAngle);
 					}
 					break;
+				case LIGHTTAG_INTENSITY:
+					defaults->SetLightDefIntensity(ParseFloat(sc));
+					break;
+				case LIGHTTAG_SOFTSHADOWRADIUS:
+					defaults->SetSoftShadowRadius(ParseFloat(sc));
+					break;
+				case LIGHTTAG_LINEARITY:
+					defaults->SetLinearity(ParseFloat(sc));
+					break;
 				default:
 					sc.ScriptError("Unknown tag: %s\n", sc.String);
 				}
@@ -1233,6 +1265,15 @@ class GLDefsParser
 						defaults->SetSpotOuterAngle(outerAngle);
 					}
 					break;
+				case LIGHTTAG_INTENSITY:
+					defaults->SetLightDefIntensity(ParseFloat(sc));
+					break;
+				case LIGHTTAG_SOFTSHADOWRADIUS:
+					defaults->SetSoftShadowRadius(ParseFloat(sc));
+					break;
+				case LIGHTTAG_LINEARITY:
+					defaults->SetLinearity(ParseFloat(sc));
+					break;
 				default:
 					sc.ScriptError("Unknown tag: %s\n", sc.String);
 				}
@@ -1339,6 +1380,15 @@ class GLDefsParser
 						defaults->SetSpotInnerAngle(innerAngle);
 						defaults->SetSpotOuterAngle(outerAngle);
 					}
+					break;
+				case LIGHTTAG_INTENSITY:
+					defaults->SetLightDefIntensity(ParseFloat(sc));
+					break;
+				case LIGHTTAG_SOFTSHADOWRADIUS:
+					defaults->SetSoftShadowRadius(ParseFloat(sc));
+					break;
+				case LIGHTTAG_LINEARITY:
+					defaults->SetLinearity(ParseFloat(sc));
 					break;
 				default:
 					sc.ScriptError("Unknown tag: %s\n", sc.String);

@@ -6,6 +6,7 @@
 class VulkanRenderDevice;
 class FString;
 class ShaderIncludeResult;
+class RectPacker;
 
 struct Uniforms
 {
@@ -163,6 +164,7 @@ private:
 		const int BufferSize = 100'000;
 		std::unique_ptr<VulkanBuffer> Buffer;
 		CopyTileInfo* Tiles = nullptr;
+		int Pos = 0;
 	} copytiles;
 
 	struct
@@ -230,5 +232,6 @@ private:
 	} copy;
 
 	LightmapBakeImage bakeImage;
-	static const int bakeImageSize = 2048;
+	enum { bakeImageSize = 2048 };
+	std::unique_ptr<RectPacker> packer;
 };

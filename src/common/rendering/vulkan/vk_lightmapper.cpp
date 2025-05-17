@@ -85,6 +85,7 @@ void VkLightmapper::SetLevelMesh(LevelMesh* level)
 void VkLightmapper::BeginFrame()
 {
 	drawindexed.Pos = 0;
+	copytiles.Pos = 0;
 }
 
 void VkLightmapper::Raytrace(const TArray<LightmapTile*>& tiles)
@@ -97,6 +98,7 @@ void VkLightmapper::Raytrace(const TArray<LightmapTile*>& tiles)
 		fb->GetCommands()->PushGroup(fb->GetCommands()->GetTransferCommands(), "lightmap.total");
 		UploadUniforms();
 
+		bool firstCall = true;
 		while (true)
 		{
 			SelectTiles(tiles);
@@ -108,6 +110,15 @@ void VkLightmapper::Raytrace(const TArray<LightmapTile*>& tiles)
 			if (lm_blur)
 				Blur();
 			CopyResult();
+
+			if (drawindexed.Pos == drawindexed.BufferSize || copytiles.Pos == drawindexed.BufferSize)
+			{
+				fb->GetCommands()->PopGroup(fb->GetCommands()->GetTransferCommands());
+				fb->WaitForCommands(false);
+				fb->GetCommands()->PushGroup(fb->GetCommands()->GetTransferCommands(), "lightmap.total");
+				drawindexed.Pos = 0;
+				copytiles.Pos = 0;
+			}
 		}
 
 		fb->GetCommands()->PopGroup(fb->GetCommands()->GetTransferCommands());
@@ -122,17 +133,20 @@ void VkLightmapper::SelectTiles(const TArray<LightmapTile*>& tiles)
 	selectedTiles.Clear();
 
 	// We use a 3 texel spacing between rectangles so that the blur pass will not pick up anything from a neighbour tile.
-	RectPacker packer(bakeImageSize, bakeImageSize, 3);
+	if (!packer)
+		packer = std::make_unique<RectPacker>(bakeImageSize, bakeImageSize, 3);
+	else
+		packer->Clear();
 
 	for (int i = 0, count = tiles.Size(); i < count; i++)
 	{
 		LightmapTile* tile = tiles[i];
 
-		if (!tile->NeedsUpdate)
+		if (!tile->ReceivedNewLight)
 			continue;
 
 		// Only grab surfaces until our bake texture is full
-		auto result = packer.Alloc(tile->AtlasLocation.Width, tile->AtlasLocation.Height);
+		auto result = packer->Alloc(tile->AtlasLocation.Width, tile->AtlasLocation.Height);
 		if (result->PageIndex == 0)
 		{
 			SelectedTile selected;
@@ -144,7 +158,9 @@ void VkLightmapper::SelectTiles(const TArray<LightmapTile*>& tiles)
 			bakeImage.maxX = std::max<uint16_t>(bakeImage.maxX, uint16_t(result->X + tile->AtlasLocation.Width));
 			bakeImage.maxY = std::max<uint16_t>(bakeImage.maxY, uint16_t(result->Y + tile->AtlasLocation.Height));
 
-			tile->NeedsUpdate = false;
+			tile->ReceivedNewLight = false;
+			tile->NeedsInitialBake = false;
+			tile->GeometryUpdate = false;
 		}
 	}
 
@@ -158,6 +174,10 @@ void VkLightmapper::Render()
 	auto cmdbuffer = fb->GetCommands()->GetTransferCommands();
 
 	fb->GetCommands()->PushGroup(cmdbuffer, "lightmap.raytrace");
+
+	PipelineBarrier()
+		.AddImage(bakeImage.raytrace.Image.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.Execute(cmdbuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
 	RenderPassBegin()
 		.RenderPass(raytrace.renderPass.get())
@@ -179,6 +199,8 @@ void VkLightmapper::Render()
 	viewport.width = (float)bakeImageSize;
 	viewport.height = (float)bakeImageSize;
 	cmdbuffer->setViewport(0, 1, &viewport);
+
+	int startPos = drawindexed.Pos;
 
 	for (int i = 0, count = selectedTiles.Size(); i < count; i++)
 	{
@@ -228,7 +250,7 @@ void VkLightmapper::Render()
 		{
 			while (i < count)
 			{
-				selectedTiles[i].Tile->NeedsUpdate = true;
+				selectedTiles[i].Tile->ReceivedNewLight = true;
 				i++;
 			}
 			break;
@@ -237,7 +259,7 @@ void VkLightmapper::Render()
 		selectedTile.Rendered = true;
 	}
 
-	cmdbuffer->drawIndexedIndirect(drawindexed.CommandsBuffer->buffer, 0, drawindexed.Pos, sizeof(VkDrawIndexedIndirectCommand));
+	cmdbuffer->drawIndexedIndirect(drawindexed.CommandsBuffer->buffer, startPos * sizeof(VkDrawIndexedIndirectCommand), drawindexed.Pos - startPos, sizeof(VkDrawIndexedIndirectCommand));
 
 	cmdbuffer->endRenderPass();
 
@@ -270,7 +292,8 @@ void VkLightmapper::Resolve()
 
 	PipelineBarrier()
 		.AddImage(bakeImage.raytrace.Image.get(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)
-		.Execute(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		.AddImage(bakeImage.resolve.Image.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+		.Execute(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
 	RenderPassBegin()
 		.RenderPass(resolve.renderPass.get())
@@ -400,8 +423,8 @@ void VkLightmapper::CopyResult()
 	barrier0.Execute(cmdbuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
 	// Copy into the lightmap images
-	int start = 0;
-	int pos = 0;
+	int start = copytiles.Pos;
+	int pos = copytiles.Pos;
 	for (unsigned int i = 0, count = copylists.Size(); i < count; i++)
 	{
 		auto& list = copylists[i];
@@ -476,6 +499,8 @@ void VkLightmapper::CopyResult()
 
 		cmdbuffer->endRenderPass();
 	}
+
+	copytiles.Pos = pos;
 
 	// Transition lightmap destination images back to be used for fragment shader sampling
 	PipelineBarrier barrier1;
