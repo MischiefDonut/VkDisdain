@@ -4026,10 +4026,10 @@ DVector3 AActor::GetBoneEulerAngles(int model_index, int bone_index, bool with_o
 
 		FSpriteModelFrame *smf = FindModelFrame(this, sprite, frame, false); // dropped flag is for voxels
 
-		FVector3 objPos = FVector3(Pos() + WorldOffset);
+		DVector3 objPos = Pos() + WorldOffset;
 
 		VSMatrix boneMatrix = (with_override ? modelData->modelBoneInfo[model_index].positions_with_override : modelData->modelBoneInfo[model_index].positions)[bone_index];
-		VSMatrix worldMatrix = smf->ObjectToWorldMatrix(this, objPos.X, objPos.Y, objPos.Z, 1.0);
+		VSMatrix worldMatrix = smf->ObjectToWorldMatrix(Level, smf->getFlags(this->modelData), Angles, objPos, Vel, Scale, 1.0);
 
 		FVector4 oldFwd(1.0, 0.0, 0.0, 0.0);
 		FVector4 newFwd;
