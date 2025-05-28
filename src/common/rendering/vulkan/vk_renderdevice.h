@@ -66,7 +66,7 @@ public:
 	void StartPrecaching() override;
 	void BeginFrame() override;
 	void BlurScene(float amount) override;
-	void PostProcessScene(bool swscene, int fixedcm, float flash, const std::function<void()> &afterBloomDrawEndScene2D) override;
+	void PostProcessScene(bool swscene, int fixedcm, float flash, bool palettePostprocess, const std::function<void()> &afterBloomDrawEndScene2D) override;
 	void UpdateLinearDepthTexture() override;
 	void AmbientOccludeScene(float m5) override;
 	void SetSceneRenderTarget(bool useSSAO) override;
@@ -95,7 +95,7 @@ public:
 
 	void WaitForCommands(bool finish) override;
 
-	int GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation) override;
+	int GetBindlessTextureIndex(FMaterial* material, int clampmode, int translation, bool paletteMode) override;
 
 	int GetLevelMeshPipelineID(const MeshApplyData& applyData, const SurfaceUniforms& surfaceUniforms, const FMaterialState& material) override;
 	void DownloadLightmap(int arrayIndex, uint16_t* buffer) override;

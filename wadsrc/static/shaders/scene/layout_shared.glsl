@@ -25,6 +25,7 @@
 #endif
 
 #define BrdfLUT 1 // the BRDF convoluted texture is always in this texture slot
+#define PaletteLUT 2 // the RGB666 lookup table from a color to the game palette is always in this texture slot
 
 #define uObjectColor data[uDataIndex].uObjectColor
 #define uObjectColor2 data[uDataIndex].uObjectColor2
@@ -55,6 +56,7 @@
 #define uLightDist data[uDataIndex].uLightDist
 #define uAlphaThreshold data[uDataIndex].uAlphaThreshold
 #define uTextureIndex data[uDataIndex].uTextureIndex
+#define uColormapIndex data[uDataIndex].uColormapIndex
 #define uDepthFadeThreshold data[uDataIndex].uDepthFadeThreshold
 #define uActorCenter data[uDataIndex].uActorCenter
 #define uLightProbeIndex data[uDataIndex].uLightProbeIndex

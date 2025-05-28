@@ -343,6 +343,8 @@ void VkRenderState::ApplyRenderPass(int dt)
 	pipelineKey.ShaderKey.LightBlendMode = (level.info ? static_cast<int>(level.info->lightblendmode) : 0);
 	pipelineKey.ShaderKey.LightAttenuationMode = (level.info ? static_cast<int>(level.info->lightattenuationmode) : 0);
 
+	pipelineKey.ShaderKey.PaletteMode = mPaletteMode;
+
 	// Is this the one we already have?
 	bool inRenderPass = mCommandBuffer;
 	bool changingPipeline = (!inRenderPass) || (pipelineKey != mPipelineKey);
@@ -440,6 +442,21 @@ void VkRenderState::ApplySurfaceUniforms()
 		mSurfaceUniforms.timer = static_cast<float>((double)(screen->FrameTime - firstFrame) * (double)mMaterial.mMaterial->Source()->GetShaderSpeed() / 1000.);
 	else
 		mSurfaceUniforms.timer = 0.0f;
+
+	if (mMaterial.mPaletteMode != mPaletteMode)
+	{
+		mMaterial.mPaletteMode = mPaletteMode;
+		mMaterial.mChanged = true;
+	}
+
+	if (mPaletteMode && mSWColormap)
+	{
+		mSurfaceUniforms.uColormapIndex = fb->GetDescriptorSetManager()->GetSWColormapTextureIndex(mSWColormap);
+	}
+	else
+	{
+		mSurfaceUniforms.uColormapIndex = 0;
+	}
 
 	if (mMaterial.mChanged)
 	{
@@ -902,11 +919,17 @@ void VkRenderState::ApplyLevelMesh()
 	ApplyStencilRef();
 	ApplyDepthBias();
 	mNeedApply = true;
+	mLevelMeshPipelineID = -1;
 
 	VkBuffer vertexBuffers[2] = { fb->GetLevelMesh()->GetVertexBuffer()->buffer, fb->GetLevelMesh()->GetUniformIndexBuffer()->buffer };
 	VkDeviceSize vertexBufferOffsets[] = { 0, 0 };
 	mCommandBuffer->bindVertexBuffers(0, 2, vertexBuffers, vertexBufferOffsets);
-	mCommandBuffer->bindIndexBuffer(fb->GetLevelMesh()->GetDrawIndexBuffer()->buffer, 0, VK_INDEX_TYPE_UINT32);
+	mCommandBuffer->bindIndexBuffer(fb->GetLevelMesh()->GetIndexBuffer()->buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	// Force rebind everything on next Apply
+	mLastViewpointOffset = 0xffffffff;
+	mLastVertexOffsets[0] = 0xffffffff;
+	mIndexBufferNeedsBind = true;
 }
 
 void VkRenderState::RunZMinMaxPass()
@@ -1038,23 +1061,16 @@ void VkRenderState::DispatchLightTiles(const VSMatrix& worldToView, float m5)
 	fb->GetCommands()->PopGroup(cmdbuffer);
 }
 
-void VkRenderState::DrawLevelMesh(LevelMeshDrawType drawType, bool noFragmentShader)
+void VkRenderState::DrawLevelMeshRange(int firstIndex, int indexCount, int pipelineID, LevelMeshDrawType drawType, bool noFragmentShader)
 {
-	ApplyLevelMesh();
-
-	auto mesh = fb->GetLevelMesh()->GetMesh();
-	for (auto& it : mesh->DrawList[(int)drawType])
+	if (pipelineID != mLevelMeshPipelineID)
 	{
-		int pipelineID = it.first;
 		const VkPipelineKey& key = fb->GetLevelMeshPipelineKey(pipelineID);
-
 		ApplyLevelMeshPipeline(mCommandBuffer, key, drawType, noFragmentShader);
-
-		for (const MeshBufferRange& range : it.second.GetRanges())
-		{
-			mCommandBuffer->drawIndexed(range.End - range.Start, 1, range.Start, 0, 0);
-		}
+		mLevelMeshPipelineID = pipelineID;
 	}
+
+	mCommandBuffer->drawIndexed(indexCount, 1, firstIndex, 0, 0);
 }
 
 void VkRenderState::BeginQuery()

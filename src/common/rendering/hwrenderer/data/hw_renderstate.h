@@ -16,6 +16,7 @@ struct FColormap;
 class IBuffer;
 struct HWViewpointUniforms;
 struct FDynLightData;
+struct FSWColormap;
 enum class LevelMeshDrawType;
 
 enum EClearTarget
@@ -159,6 +160,9 @@ protected:
 	int mColorMapSpecial;
 	float mColorMapFlash;
 
+	bool mPaletteMode = false;
+	FSWColormap* mSWColormap = nullptr;
+
 	SurfaceUniforms mSurfaceUniforms = {};
 	PalEntry mFogColor;
 
@@ -223,6 +227,8 @@ public:
 		mMaterial.Reset();
 		mBias.Reset();
 		mPassType = NORMAL_PASS;
+		mPaletteMode = false;
+		mSWColormap = nullptr;
 
 		mColorMapSpecial = 0;
 		mColorMapFlash = 1;
@@ -621,6 +627,16 @@ public:
 		SetMaterial(tex, upscalemask, scaleflags, clampmode, translation.index(), overrideshader, cls);
 	}
 
+	void SetPaletteMode(bool palette)
+	{
+		mPaletteMode = palette;
+	}
+
+	void SetSWColormap(FSWColormap* cm)
+	{
+		mSWColormap = cm;
+	}
+
 	void SetClipSplit(float bottom, float top)
 	{
 		mSurfaceUniforms.uClipSplit.X = bottom;
@@ -811,8 +827,9 @@ public:
 	}
 
 	// Draw level mesh
+	virtual void ApplyLevelMesh() { }
+	virtual void DrawLevelMeshRange(int firstIndex, int indexCount, int pipelineID, LevelMeshDrawType drawType, bool noFragmentShader) {}
 	virtual void DispatchLightTiles(const VSMatrix& worldToView, float m5) { }
-	virtual void DrawLevelMesh(LevelMeshDrawType drawType, bool noFragmentShader) { }
 	virtual int GetNextQueryIndex() { return 0; }
 	virtual void BeginQuery() { }
 	virtual void EndQuery() { }
