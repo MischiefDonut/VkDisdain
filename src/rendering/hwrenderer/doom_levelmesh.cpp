@@ -334,7 +334,7 @@ void DoomLevelMesh::CreateModelSurfaces(AActor* thing, FSpriteModelFrame* modelf
 	state.AlphaFunc(Alpha_GEqual, 0.f);
 
 	MeshBuilderModelRender renderer(state);
-	RenderModel(&renderer, x, y, z, modelframe, thing, 0.0);
+	RenderModel(&renderer, x, y, z, modelframe, thing, nullptr, 0.0);
 
 	// Flatten the model as we need lightmap UV coordinates uniquely for every vertex for each surface.
 	int numUniforms = 0;
