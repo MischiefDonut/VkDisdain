@@ -97,8 +97,9 @@ void RenderModel(FModelRenderer *renderer, float x, float y, float z, FSpriteMod
 		tic += ticFrac;
 	}
 	
+	DRotator angles = (actor && !spr) ? actor->Angles : spr->Angles;
 
-	VSMatrix objectToWorldMatrix = smf->ObjectToWorldMatrix(Level, smf_flags, spr->Angles, DVector3(x, y, z), Vel, Scale, tic);
+	VSMatrix objectToWorldMatrix = smf->ObjectToWorldMatrix(Level, smf_flags, angles, DVector3(x, y, z), Vel, Scale, tic);
 
 	float scaleFactorX = Scale.X * smf->xscale;
 	float scaleFactorY = Scale.X * smf->yscale;
