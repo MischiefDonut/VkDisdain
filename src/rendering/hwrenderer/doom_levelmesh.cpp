@@ -334,6 +334,7 @@ void DoomLevelMesh::CreateModelSurfaces(AActor* thing, FSpriteModelFrame* modelf
 	state.AlphaFunc(Alpha_GEqual, 0.f);
 
 	MeshBuilderModelRender renderer(state);
+	// [Disdain] Need a placeholder HWSprite here due to our RenderModel modification for model visual thinkers
 	HWSprite dummy;
 	dummy.spr = nullptr;
 	dummy.Angles = thing->Angles;
