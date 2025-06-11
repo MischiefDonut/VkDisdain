@@ -304,6 +304,11 @@ public:
 	{
 		return TThinkerIterator<T>(this, subtype, statnum, prev);
 	}
+	template<class T> TThinkerIterator<T> GetThinkerIterator(PClass * subtype, int statnum = MAX_STATNUM+1, bool forceSearch = false)
+	{
+		assert(subtype);
+		return TThinkerIterator<T>(this, subtype, statnum, forceSearch);
+	}
 	FActorIterator GetActorIterator(int tid)
 	{
 		return FActorIterator(TIDHash, tid);
@@ -477,6 +482,7 @@ public:
 	uint16_t LightmapSampleDistance = 0;
 	bool LightBounce = false;
 	bool AmbientOcclusion = true;
+	bool LevelWideLMDynamic = false; // Whole map has dynamic lightmaps enabled via ZDRayInfo (no need to set it per sector)
 
 	// Portal information.
 	FDisplacementTable Displacements;

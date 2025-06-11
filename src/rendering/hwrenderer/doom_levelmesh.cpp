@@ -22,6 +22,7 @@
 #include "vm.h"
 #include "p_setup.h"
 
+static void UpdateLightmapTiles();
 static int InvalidateLightmap();
 static void InvalidateActorLightTraceCache();
 
@@ -72,6 +73,16 @@ static bool RequireLightmap()
 
 	Printf("Lightmap is not enabled in this level.\n");
 	return false;
+}
+
+// Forces lightmap tiles update
+static void UpdateLightmapTiles()
+{
+	for (auto& tile : level.levelMesh->Lightmap.Tiles)
+	{
+		if (!tile.NeedsInitialBake)
+			tile.ReceivedNewLight = true;
+	}
 }
 
 static int InvalidateLightmap()
@@ -251,6 +262,7 @@ DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
 	Lightmap.SampleDistance = doomMap.LightmapSampleDistance;
 	LightBounce = doomMap.LightBounce;
 	AmbientOcclusion = doomMap.AmbientOcclusion;
+	LevelWideLMDynamic = doomMap.LevelWideLMDynamic;
 
 	// HWWall and HWFlat still looks at r_viewpoint when doing calculations,
 	// but we aren't rendering a specific viewpoint when this function gets called
@@ -283,20 +295,16 @@ DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
 	// Collect all the models we want to bake into the level mesh
 	if (lm_models)
 	{
-		PClass * cls = PClass::FindClass("StaticMapModel");
-		auto it = doomMap.GetThinkerIterator<AActor>();
+		TThinkerIterator<AActor> it(&doomMap, PClass::FindClass("StaticMapModel"), STAT_STATIC, true);
 		AActor* thing;
 		while ((thing = it.Next()) != nullptr)
 		{
-			if(thing->GetClass()->IsDescendantOf(cls))
+			bool isPicnumOverride = thing->picnum.isValid();
+			int spritenum = thing->sprite;
+			FSpriteModelFrame* modelframe = isPicnumOverride ? nullptr : FindModelFrame(thing, spritenum, thing->frame, !!(thing->flags & MF_DROPPED));
+			if (modelframe && modelframe->modelIDs.size() != 0)
 			{
-				bool isPicnumOverride = thing->picnum.isValid();
-				int spritenum = thing->sprite;
-				FSpriteModelFrame* modelframe = isPicnumOverride ? nullptr : FindModelFrame(thing, spritenum, thing->frame, !!(thing->flags & MF_DROPPED));
-				if (modelframe && modelframe->modelIDs.size() != 0)
-				{
-					CreateModelSurfaces(thing, modelframe);
-				}
+				CreateModelSurfaces(thing, modelframe);
 			}
 		}
 	}
@@ -2723,6 +2731,14 @@ static void InvalidateActorLightTraceCache()
 	{
 		ac->InvalidateLightTraceCache();
 	}
+}
+
+DEFINE_ACTION_FUNCTION(_Lightmap, Update)
+{
+	PARAM_PROLOGUE;
+	UpdateLightmapTiles();
+	InvalidateActorLightTraceCache();
+	return 0;
 }
 
 DEFINE_ACTION_FUNCTION(_Lightmap, Invalidate)
