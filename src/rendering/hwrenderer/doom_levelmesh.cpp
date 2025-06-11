@@ -5,11 +5,13 @@
 #include "texturemanager.h"
 #include "playsim/p_lnspec.h"
 #include "c_dispatch.h"
-#include "g_levellocals.h"
+#include "models.h"
 #include "a_dynlight.h"
+#include "r_sky.h"
 #include "hw_renderstate.h"
 #include "hw_vertexbuilder.h"
 #include "hw_dynlightdata.h"
+#include "hwrenderer/scene/hw_fakeflat.h"
 #include "hwrenderer/scene/hw_lighting.h"
 #include "hwrenderer/scene/hw_drawstructs.h"
 #include "hwrenderer/scene/hw_drawinfo.h"
@@ -18,8 +20,38 @@
 #include <unordered_map>
 
 #include "vm.h"
+#include "p_setup.h"
 
-EXTERN_CVAR(Bool, lm_dynlights);
+static int InvalidateLightmap();
+static void InvalidateActorLightTraceCache();
+
+static void RefreshLightmap()
+{
+	if(level.levelMesh)
+	{
+		level.levelMesh->FullRefresh();
+		InvalidateLightmap();
+		InvalidateActorLightTraceCache();
+		screen->SetLevelMesh(level.levelMesh); // force lightmap texture binding update
+	}
+}
+
+CUSTOM_CVAR(Bool, lm_dynlights, false, CVAR_ARCHIVE)
+{
+	if(*self)
+	{
+		level.lightmaps = true;
+		RefreshLightmap();
+	}
+	else
+	{
+		level.lightmaps = level.orig_lightmapped;
+		if(level.lightmaps)
+		{
+			RefreshLightmap();
+		}
+	}
+}
 
 static bool RequireLevelMesh()
 {
@@ -205,6 +237,8 @@ CCMD(surfaceinfo)
 
 EXTERN_CVAR(Float, lm_scale);
 
+CVAR(Bool, lm_models, true, CVAR_NOSAVE); // CVar-gated for debugging convenience
+
 /////////////////////////////////////////////////////////////////////////////
 
 DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
@@ -246,6 +280,27 @@ DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
 		tile.NeedsInitialBake = true;
 	}
 
+	// Collect all the models we want to bake into the level mesh
+	if (lm_models)
+	{
+		PClass * cls = PClass::FindClass("StaticMapModel");
+		auto it = doomMap.GetThinkerIterator<AActor>();
+		AActor* thing;
+		while ((thing = it.Next()) != nullptr)
+		{
+			if(thing->GetClass()->IsDescendantOf(cls))
+			{
+				bool isPicnumOverride = thing->picnum.isValid();
+				int spritenum = thing->sprite;
+				FSpriteModelFrame* modelframe = isPicnumOverride ? nullptr : FindModelFrame(thing, spritenum, thing->frame, !!(thing->flags & MF_DROPPED));
+				if (modelframe && modelframe->modelIDs.size() != 0)
+				{
+					CreateModelSurfaces(thing, modelframe);
+				}
+			}
+		}
+	}
+
 	CreateCollision();
 	UploadPortals();
 
@@ -255,6 +310,162 @@ DoomLevelMesh::DoomLevelMesh(FLevelLocals& doomMap)
 
 DoomLevelMesh::~DoomLevelMesh()
 {
+}
+
+void DoomLevelMesh::CreateModelSurfaces(AActor* thing, FSpriteModelFrame* modelframe)
+{
+	DVector3 thingpos = thing->Pos();
+	double x = thingpos.X + thing->WorldOffset.X;
+	double z = thingpos.Z + thing->WorldOffset.Z;
+	double y = thingpos.Y + thing->WorldOffset.Y;
+
+	state.mSortedLists.clear();
+	state.mVertices.Clear();
+	state.mIndexes.Clear();
+
+	state.SetDepthMask(true);
+	state.EnableFog(true);
+	state.SetRenderStyle(STYLE_Source);
+
+	state.SetDepthFunc(DF_LEqual);
+	state.ClearDepthBias();
+	state.EnableTexture(true);
+	state.EnableBrightmap(true);
+	state.AlphaFunc(Alpha_GEqual, 0.f);
+
+	MeshBuilderModelRender renderer(state);
+	RenderModel(&renderer, x, y, z, modelframe, thing, 0.0);
+
+	// Flatten the model as we need lightmap UV coordinates uniquely for every vertex for each surface.
+	int numUniforms = 0;
+	int numSurfaces = 0;
+	for (auto& it : state.mSortedLists)
+	{
+		numUniforms++;
+		for (MeshDrawCommand& command : it.second.mDraws)
+		{
+			if (command.DrawType == DT_Triangles)
+			{
+				numSurfaces += command.Count / 3;
+			}
+		}
+		for (MeshDrawCommand& command : it.second.mIndexedDraws)
+		{
+			if (command.DrawType == DT_Triangles)
+			{
+				numSurfaces += command.Count / 3;
+			}
+		}
+	}
+
+	VSMatrix objectToWorld = state.objectToWorld;
+	//VSMatrix normalToWorld = state.normalToWorld;
+
+	GeometryAllocInfo ginfo = AllocGeometry(numSurfaces * 3, numSurfaces * 3);
+	UniformsAllocInfo uinfo = AllocUniforms(numUniforms);
+	SurfaceAllocInfo sinfo = AllocSurface(numUniforms); // Note: this is not a typo. We currently only create a SurfaceInfo for each apply state.
+
+	SurfaceUniforms* curUniforms = uinfo.Uniforms;
+	SurfaceLightUniforms* curLightUniforms = uinfo.LightUniforms;
+	FMaterialState* curMaterial = uinfo.Materials;
+
+	int pipelineID = 0;
+	int uniformsIndex = uinfo.Start;
+	int vertIndex = ginfo.VertexStart;
+	for (auto& it : state.mSortedLists)
+	{
+		const MeshApplyState& applyState = it.first;
+
+		pipelineID = screen->GetLevelMeshPipelineID(applyState.applyData, applyState.surfaceUniforms, applyState.material);
+
+		auto indexBuffer = applyState.indexBuffer->Data.data();
+		auto vertexBuffer = applyState.vertexBuffer->Data.data();
+
+		for (MeshDrawCommand& command : it.second.mDraws)
+		{
+			if (command.DrawType == DT_Triangles)
+			{
+				int numVertices = command.Count / 3 * 3;
+				for (int i = 0; i < numVertices; i++)
+				{
+					*(ginfo.Indexes++) = vertIndex + i;
+				}
+				for (int i = command.Start, end = command.Start + numVertices; i < end; i++)
+				{
+					const FModelVertex& vertIn = vertexBuffer[i];
+					FVector4 pos = objectToWorld * FVector4(vertIn.x, vertIn.y, vertIn.z, 1.0f);
+					FFlatVertex vertOut;
+					vertOut.x = pos.X;
+					vertOut.y = pos.Z;
+					vertOut.z = pos.Y;
+					vertOut.u = vertIn.u;
+					vertOut.v = vertIn.v;
+					vertOut.lindex = -1.0f;
+					*(ginfo.Vertices++) = vertOut;
+					*(ginfo.UniformIndexes++) = uniformsIndex;
+				}
+				vertIndex += numVertices;
+			}
+		}
+
+		for (MeshDrawCommand& command : it.second.mIndexedDraws)
+		{
+			if (command.DrawType == DT_Triangles)
+			{
+				int numVertices = command.Count / 3 * 3;
+				for (int i = 0; i < numVertices; i++)
+				{
+					*(ginfo.Indexes++) = vertIndex + i;
+				}
+				for (int i = command.Start, end = command.Start + numVertices; i < end; i++)
+				{
+					const FModelVertex& vertIn = vertexBuffer[indexBuffer[i]];
+					FVector4 pos = objectToWorld * FVector4(vertIn.x, vertIn.y, vertIn.z, 1.0f);
+					FFlatVertex vertOut;
+					vertOut.x = pos.X;
+					vertOut.y = pos.Z;
+					vertOut.z = pos.Y;
+					vertOut.u = vertIn.u;
+					vertOut.v = vertIn.v;
+					vertOut.lindex = -1.0f;
+					*(ginfo.Vertices++) = vertOut;
+					*(ginfo.UniformIndexes++) = uniformsIndex;
+				}
+				vertIndex += numVertices;
+			}
+		}
+
+		*(curUniforms++) = applyState.surfaceUniforms;
+		*(curMaterial++) = applyState.material;
+
+		curLightUniforms->uVertexColor = applyState.surfaceUniforms.uVertexColor;
+		curLightUniforms->uDesaturationFactor = applyState.surfaceUniforms.uDesaturationFactor;
+		curLightUniforms->uLightLevel = applyState.surfaceUniforms.uLightLevel;
+		curLightUniforms++;
+
+		sinfo.Surface->PipelineID = pipelineID;
+		sinfo.Surface->SectorGroup = thing->Sector ? sectorGroup[thing->Sector->Index()] : 0;
+		sinfo.Surface->Alpha = float(thing->Alpha);
+		sinfo.Surface->MeshLocation.StartVertIndex = ginfo.VertexStart;
+		sinfo.Surface->MeshLocation.StartElementIndex = ginfo.IndexStart;
+		sinfo.Surface->MeshLocation.NumVerts = ginfo.VertexCount;
+		sinfo.Surface->MeshLocation.NumElements = ginfo.IndexCount;
+		sinfo.Surface->Plane = FVector4(0.0f, 0.0f, 0.0f, 0.0f);
+		sinfo.Surface->Texture = TexMan.GetGameTexture(skyflatnum); // To do: how to get a FGameTexture from a material? 
+		sinfo.Surface->PortalIndex = 0;
+		sinfo.Surface->IsSky = false;
+		sinfo.Surface->Bounds = GetBoundsFromSurface(*sinfo.Surface);
+		sinfo.Surface->LightList.Pos = 0; // To do: how to manage the light list for baked models?
+		sinfo.Surface->LightList.Count = 0;
+		sinfo.Surface->LightmapTileIndex = -1; // To do: create tiles for the model surfaces? Current SurfaceInfo is too big for this
+
+		for (int i = ginfo.IndexStart / 3, end = (ginfo.IndexStart + ginfo.IndexCount) / 3; i < end; i++)
+			Mesh.SurfaceIndexes[i] = sinfo.Index;
+
+		uniformsIndex++;
+	}
+
+	// To do: save ginfo, uinfo and sinfo in a Models list like we are doing for sides and flats? We need that if we are to ever update them
 }
 
 void DoomLevelMesh::BuildSideVisibilityLists(FLevelLocals& doomMap)
@@ -318,24 +529,61 @@ void DoomLevelMesh::SetLimits(FLevelLocals& doomMap)
 	Reset(limits);
 }
 
-void DoomLevelMesh::DrawSector(FRenderState& renderstate, int sectorIndex, LevelMeshDrawType drawType, bool noFragmentShader)
+void DoomLevelMesh::AddSectorsToDrawLists(const TArray<int>& sectors, LevelMeshDrawLists& lists)
 {
-	for (const DrawRangeInfo& di : Flats[sectorIndex].DrawRanges)
+	for (int sectorIndex : sectors)
 	{
-		if (di.DrawType == drawType)
+		for (const DrawRangeInfo& di : Flats[sectorIndex].DrawRanges)
 		{
-			renderstate.DrawLevelMeshRange(di.IndexStart, di.IndexCount, di.PipelineID, drawType, noFragmentShader);
+			lists.Add(di.DrawType, di.PipelineID, { di.IndexStart, di.IndexStart + di.IndexCount });
 		}
 	}
 }
 
-void DoomLevelMesh::DrawSide(FRenderState& renderstate, int sideIndex, LevelMeshDrawType drawType, bool noFragmentShader)
+void DoomLevelMesh::AddSidesToDrawLists(const TArray<int>& sides, LevelMeshDrawLists& lists, HWDrawInfo* di, FRenderState& state)
 {
-	for (const DrawRangeInfo& di : Sides[sideIndex].DrawRanges)
+	for (int sideIndex : sides)
 	{
-		if (di.DrawType == drawType)
+		auto& sideInfo = Sides[sideIndex];
+
+		if (!sideInfo.NeedsImmediateRendering)
 		{
-			renderstate.DrawLevelMeshRange(di.IndexStart, di.IndexCount, di.PipelineID, drawType, noFragmentShader);
+			for (const DrawRangeInfo& di : sideInfo.DrawRanges)
+			{
+				lists.Add(di.DrawType, di.PipelineID, { di.IndexStart, di.IndexStart + di.IndexCount });
+			}
+
+			for (const HWMissing& missing : sideInfo.MissingUpper)
+			{
+				di->AddUpperMissingTexture(missing.side, missing.sub, missing.plane);
+			}
+
+			for (const HWMissing& missing : sideInfo.MissingLower)
+			{
+				di->AddLowerMissingTexture(missing.side, missing.sub, missing.plane);
+			}
+
+			auto& decals = sideInfo.Decals;
+			if (decals.Size() != 0)
+			{
+				int dynlightindex = -1;
+				if (di->Level->HasDynamicLights && !di->isFullbrightScene() && decals[0].texture != nullptr && !lm_dynlights)
+				{
+					dynlightindex = decals[0].SetupLights(di, state, lightdata, level.sides[sideIndex].lighthead);
+				}
+
+				for (const HWDecalCreateInfo& info : decals)
+				{
+					info.ProcessDecal(di, state, dynlightindex);
+				}
+			}
+		}
+		else
+		{
+			// To do: is it good enough to just grab the first seg here?
+			side_t* side = &di->Level->sides[sideIndex];
+			seg_t* seg = side->segs[0];
+			di->ProcessSeg(seg, state);
 		}
 	}
 }
@@ -471,27 +719,6 @@ void DoomLevelMesh::UploadDynLights(FLevelLocals& doomMap)
 TArray<HWWall>& DoomLevelMesh::GetSidePortals(int sideIndex)
 {
 	return Sides[sideIndex].WallPortals;
-}
-
-void DoomLevelMesh::ProcessDecals(HWDrawInfo* di, FRenderState& state)
-{
-	for (int sideIndex : level.levelMesh->SideDecals)
-	{
-		const auto& side = Sides[sideIndex];
-		if (side.Decals.Size() == 0)
-			continue;
-
-		int dynlightindex = -1;
-		if (di->Level->HasDynamicLights && !di->isFullbrightScene() && side.Decals[0].texture != nullptr && !lm_dynlights)
-		{
-			dynlightindex = side.Decals[0].SetupLights(di, state, lightdata, level.sides[sideIndex].lighthead);
-		}
-
-		for (const HWDecalCreateInfo& info : side.Decals)
-		{
-			info.ProcessDecal(di, state, dynlightindex);
-		}
-	}
 }
 
 int DoomLevelMesh::GetLightIndex(FDynamicLight* light, int portalgroup)
@@ -660,7 +887,11 @@ void DoomLevelMesh::FreeSide(FLevelLocals& doomMap, unsigned int sideIndex)
 	Sides[sideIndex].Uniforms.Clear();
 
 	Sides[sideIndex].WallPortals.Clear();
+	Sides[sideIndex].MissingUpper.Clear();
+	Sides[sideIndex].MissingLower.Clear();
 	Sides[sideIndex].Decals.Clear();
+
+	Sides[sideIndex].NeedsImmediateRendering = false;
 }
 
 void DoomLevelMesh::FreeFlat(FLevelLocals& doomMap, unsigned int sectorIndex)
@@ -1043,13 +1274,11 @@ void DoomLevelMesh::CreateSide(FLevelLocals& doomMap, unsigned int sideIndex)
 	wall.Process(&disp, state, seg, front, back);
 
 	// Grab the decals generated
-	if (result.decals.Size() != 0 && !sideBlock.InSideDecalsList)
-	{
-		SideDecals.Push(sideIndex);
-		sideBlock.InSideDecalsList = true;
-	}
-
 	sideBlock.Decals = result.decals;
+
+	state.SetDepthMask(true);
+	state.EnableFog(true);
+	state.SetRenderStyle(STYLE_Source);
 
 	// Part 1: solid geometry. This is set up so that there are no transparent parts
 	state.SetDepthFunc(DF_LEqual);
@@ -1057,30 +1286,62 @@ void DoomLevelMesh::CreateSide(FLevelLocals& doomMap, unsigned int sideIndex)
 	state.EnableTexture(true);
 	state.EnableBrightmap(true);
 	state.AlphaFunc(Alpha_GEqual, 0.f);
-	CreateWallSurface(side, disp, state, result.list, back ? LevelMeshDrawType::Masked : LevelMeshDrawType::Opaque, true, sideIndex, sideBlock.Lights);
+	CreateWallSurface(side, disp, state, result.opaque, LevelMeshDrawType::Opaque, sideIndex, sideBlock.Lights);
 
-	if (result.portals.Size() != 0 && !sideBlock.InSidePortalsList)
+	// Part 2: masked geometry. This is set up so that only pixels with alpha>gl_mask_threshold will show
+	state.AlphaFunc(Alpha_GEqual, gl_mask_threshold);
+	CreateWallSurface(side, disp, state, result.masked, LevelMeshDrawType::Masked, sideIndex, sideBlock.Lights);
+
+	// Part 3: masked geometry with polygon offset.
+	state.SetDepthBias(-1, -128);
+	CreateWallSurface(side, disp, state, result.maskedOffset, LevelMeshDrawType::MaskedOffset, sideIndex, sideBlock.Lights);
+	state.ClearDepthBias();
+
+	// These things aren't working properly with the level mesh.
+	bool incompatible = false;
+	for (const HWWall& wall : result.opaque)
+		if ((wall.flags & HWWall::HWF_SKYHACK) != 0)
+			incompatible = true;
+	for (const HWWall& wall : result.masked)
+		if ((wall.flags & HWWall::HWF_SKYHACK) != 0)
+			incompatible = true;
+	for (const HWWall& wall : result.maskedOffset)
+		if ((wall.flags & HWWall::HWF_SKYHACK) != 0)
+			incompatible = true;
+
+	if (result.translucent.size() != 0 || result.translucentBorder.size() != 0 || incompatible)
 	{
-		// Register side having portals
-		SidePortals.Push(sideIndex);
-		sideBlock.InSidePortalsList = true;
+		// For things that HWWall doesn't do correctly when drawn into the level mesh for one reason or another.
+		sideBlock.NeedsImmediateRendering = true;
 	}
-
-	for (HWWall& portal : result.portals)
+	else
 	{
-		sideBlock.WallPortals.Push(portal);
+		for (const HWWall& portal : result.portals)
+			sideBlock.WallPortals.Push(portal);
 	}
-
-	CreateWallSurface(side, disp, state, result.portals, LevelMeshDrawType::Portal, false, sideIndex, sideBlock.Lights);
 
 	/*
 	// final pass: translucent stuff
 	state.AlphaFunc(Alpha_GEqual, gl_mask_sprite_threshold);
 	state.SetRenderStyle(STYLE_Translucent);
-	CreateWallSurface(side, disp, state, result.translucent, LevelMeshDrawType::Translucent, true, sideIndex);
+	state.EnableBrightmap(true);
+	CreateWallSurface(side, disp, state, result.translucent, LevelMeshDrawType::TranslucentBorder, sideIndex);
+	state.SetDepthMask(false);
+	CreateWallSurface(side, disp, state, result.translucent, LevelMeshDrawType::Translucent, sideIndex);
+	state.EnableBrightmap(false);
 	state.AlphaFunc(Alpha_GEqual, 0.f);
+	state.SetDepthMask(true);
 	state.SetRenderStyle(STYLE_Normal);
 	*/
+
+	for (const HWMissing& missing : result.upper)
+		sideBlock.MissingUpper.Push(missing);
+
+	for (const HWMissing& missing : result.lower)
+		sideBlock.MissingLower.Push(missing);
+
+	// Add portal surface to the level mesh so raytraces can see them
+	CreateWallSurface(side, disp, state, result.portals, LevelMeshDrawType::Portal, sideIndex, sideBlock.Lights);
 }
 
 void DoomLevelMesh::CreateFlat(FLevelLocals& doomMap, unsigned int sectorIndex)
@@ -1215,7 +1476,7 @@ void DoomLevelMesh::SetFlatLights(FLevelLocals& doomMap, unsigned int sectorInde
 	}
 }
 
-void DoomLevelMesh::CreateWallSurface(side_t* side, HWWallDispatcher& disp, MeshBuilder& state, TArray<HWWall>& list, LevelMeshDrawType drawType, bool translucent, unsigned int sideIndex, const LightListAllocInfo& lightlist)
+void DoomLevelMesh::CreateWallSurface(side_t* side, HWWallDispatcher& disp, MeshBuilder& state, TArray<HWWall>& list, LevelMeshDrawType drawType, unsigned int sideIndex, const LightListAllocInfo& lightlist)
 {
 	for (HWWall& wallpart : list)
 	{
@@ -1241,16 +1502,7 @@ void DoomLevelMesh::CreateWallSurface(side_t* side, HWWallDispatcher& disp, Mesh
 		}
 		else
 		{
-			if (wallpart.texture && wallpart.texture->isMasked())
-			{
-				state.AlphaFunc(Alpha_GEqual, gl_mask_threshold);
-			}
-			else
-			{
-				state.AlphaFunc(Alpha_GEqual, 0.f);
-			}
-
-			wallpart.DrawWall(&disp, state, translucent);
+			wallpart.DrawWall(&disp, state, drawType == LevelMeshDrawType::Translucent || drawType == LevelMeshDrawType::TranslucentBorder);
 		}
 
 		int numVertices = 0;
@@ -1377,16 +1629,16 @@ void DoomLevelMesh::CreateWallSurface(side_t* side, HWWallDispatcher& disp, Mesh
 		Sides[sideIndex].Geometries.Push(ginfo);
 		Sides[sideIndex].Uniforms.Push(uinfo);
 
-		AddToDrawList(Sides[sideIndex].DrawRanges, pipelineID, ginfo.IndexStart, ginfo.IndexCount, drawType);
+		AddToDrawList(Sides[sideIndex].DrawRanges, drawType, pipelineID, ginfo.IndexStart, ginfo.IndexCount);
 	}
 }
 
-void DoomLevelMesh::AddToDrawList(TArray<DrawRangeInfo>& drawRanges, int pipelineID, int indexStart, int indexCount, LevelMeshDrawType drawType)
+void DoomLevelMesh::AddToDrawList(TArray<DrawRangeInfo>& drawRanges, LevelMeshDrawType drawType, int pipelineID, int indexStart, int indexCount)
 {
 	DrawRangeInfo info;
+	info.DrawType = drawType;
 	info.IndexStart = indexStart;
 	info.IndexCount = indexCount;
-	info.DrawType = drawType;
 	info.PipelineID = pipelineID;
 	drawRanges.Push(info);
 }
@@ -1662,7 +1914,7 @@ void DoomLevelMesh::CreateFlatSurface(HWFlatDispatcher& disp, MeshBuilder& state
 			SetSubsectorLightmap(sinfo.Index);
 		}
 
-		AddToDrawList(Flats[sectorIndex].DrawRanges, pipelineID, ginfo.IndexStart, ginfo.IndexCount, drawType);
+		AddToDrawList(Flats[sectorIndex].DrawRanges, drawType, pipelineID, ginfo.IndexStart, ginfo.IndexCount);
 	}
 }
 

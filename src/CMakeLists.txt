@@ -718,6 +718,7 @@ set( FASTMATH_SOURCES
 	common/textures/hires/xbr/xbrz_old.cpp
 	rendering/hwrenderer/hw_dynlightdata.cpp
 	rendering/hwrenderer/scene/hw_bsp.cpp
+	rendering/hwrenderer/scene/hw_visibleset.cpp
 	rendering/hwrenderer/scene/hw_fakeflat.cpp
 	rendering/hwrenderer/scene/hw_decal.cpp
 	rendering/hwrenderer/scene/hw_drawcontext.cpp
@@ -1489,6 +1490,16 @@ install(TARGETS zdoom
 install(TARGETS ztool
 		DESTINATION ${INSTALL_PATH}
 		COMPONENT "Tool executable")
+
+# Install Linux desktop launcher, icon and metadata
+if(UNIX AND NOT APPLE)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/posix/unix/org.vkdoom.vkdoom.desktop DESTINATION share/applications
+					PERMISSIONS WORLD_EXECUTE WORLD_READ GROUP_READ GROUP_EXECUTE OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/posix/unix/org.vkdoom.vkdoom.metainfo.xml DESTINATION share/metainfo
+					PERMISSIONS WORLD_READ GROUP_READ GROUP_EXECUTE OWNER_READ OWNER_WRITE)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/posix/unix/org.vkdoom.vkdoom.svg DESTINATION share/icons/hicolor/scalable/apps
+					PERMISSIONS WORLD_READ GROUP_READ GROUP_EXECUTE OWNER_READ OWNER_WRITE)
+endif()
 
 source_group("Commandlets" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/commandlets/.+")
 source_group("Audio Files" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/sound/.+")

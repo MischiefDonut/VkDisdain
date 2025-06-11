@@ -996,3 +996,5 @@ struct Lightmap
     // Calling this does NOT recalculate the lightmap.
     native static void SetSunIntensity(double intensity);
 };
+
+class StaticMapModel : Actor {}

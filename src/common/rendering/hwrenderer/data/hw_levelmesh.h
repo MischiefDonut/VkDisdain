@@ -42,6 +42,7 @@ struct SurfaceAllocInfo
 {
 	LevelMeshSurface* Surface = nullptr;
 	int Index = 0;
+	int Count = 0;
 };
 
 struct LightAllocInfo
@@ -92,17 +93,6 @@ private:
 	TArray<MeshBufferRange> Ranges;
 };
 
-class LevelMeshDrawList
-{
-public:
-	void Add(int position, int count);
-	void Remove(int position, int count);
-	const TArray<MeshBufferRange>& GetRanges() const { return Ranges; }
-
-private:
-	TArray<MeshBufferRange> Ranges;
-};
-
 struct LevelMeshLimits
 {
 	int MaxVertices = 0;
@@ -111,20 +101,14 @@ struct LevelMeshLimits
 	int MaxIndexes = 0;
 };
 
-enum class LevelMeshDrawType
-{
-	Opaque,
-	Masked,
-	Portal,
-	Translucent,
-	NumDrawTypes
-};
-
 class LevelMesh
 {
 public:
 	LevelMesh();
 	virtual ~LevelMesh() = default;
+
+
+	virtual void FullRefresh() {};
 
 	LevelMeshSurface* Trace(const FVector3& start, FVector3 direction, float maxDist);
 
@@ -141,14 +125,14 @@ public:
 
 	GeometryAllocInfo AllocGeometry(int vertexCount, int indexCount);
 	UniformsAllocInfo AllocUniforms(int count);
-	SurfaceAllocInfo AllocSurface();
+	SurfaceAllocInfo AllocSurface(int count = 1);
 	LightAllocInfo AllocLight();
 	LightListAllocInfo AllocLightList(int count);
 	int AllocTile(const LightmapTile& tile);
 
 	void FreeGeometry(int vertexStart, int vertexCount, int indexStart, int indexCount);
 	void FreeUniforms(int start, int count);
-	void FreeSurface(unsigned int surfaceIndex);
+	void FreeSurface(unsigned int surfaceIndex, int count = 1);
 	void FreeLightList(int start, int count);
 	void FreeTile(int index);
 
@@ -305,12 +289,13 @@ inline LightAllocInfo LevelMesh::AllocLight()
 	return info;
 }
 
-inline SurfaceAllocInfo LevelMesh::AllocSurface()
+inline SurfaceAllocInfo LevelMesh::AllocSurface(int count)
 {
 	SurfaceAllocInfo info;
-	info.Index = FreeLists.Surface.Alloc(1);
+	info.Index = FreeLists.Surface.Alloc(count);
 	info.Surface = &Mesh.Surfaces[info.Index];
-	UploadRanges.Surface.Add(info.Index, 1);
+	info.Count = count;
+	UploadRanges.Surface.Add(info.Index, info.Count);
 	return info;
 }
 
@@ -350,9 +335,9 @@ inline void LevelMesh::FreeLightList(int start, int count)
 	FreeLists.LightIndex.Free(start, count);
 }
 
-inline void LevelMesh::FreeSurface(unsigned int surfaceIndex)
+inline void LevelMesh::FreeSurface(unsigned int surfaceIndex, int count)
 {
-	FreeLists.Surface.Free(surfaceIndex, 1);
+	FreeLists.Surface.Free(surfaceIndex, count);
 }
 
 inline void LevelMesh::FreeTile(int index)
