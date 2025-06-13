@@ -1000,4 +1000,10 @@ struct Lightmap
     native static void SetSunIntensity(double intensity);
 };
 
-class StaticMapModel : Actor {}
+enum FShadowCastingTypes
+{
+	SHADOWCASTING_None = 0,
+	SHADOWCASTING_Static,
+	// Not yet implemented.
+	//SHADOWCASTING_Dynamic
+}
