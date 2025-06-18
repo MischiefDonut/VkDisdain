@@ -269,12 +269,58 @@ inline double GetWallBounceFactor(AActor* actor)
 	return actor->wallbouncefactor;
 }
 
-inline void ClampWaterHeight(AActor* actor, double z, const FWaterResults& res)
+inline double GetWaterCheckSpeed(AActor* mo, bool z)
 {
-	if (z + actor->Height >= actor->watertop)
-		actor->SetZ((res.level == 1 ? res.top : actor->watertop) - actor->Height);
+	if (mo->WaterCheckSpeed < EQUAL_EPSILON)
+		return z ? mo->FloatSpeed : mo->Speed * mo->Speed;
+
+	return z ? mo->WaterCheckSpeed : mo->WaterCheckSpeed * mo->WaterCheckSpeed;
+}
+
+inline bool IsValidWaterLevel(AActor* actor, int lvl)
+{
+	return (actor->MinWaterLevel < 0 && lvl < abs(actor->MinWaterLevel))
+			|| (actor->MinWaterLevel > 0 && lvl >= actor->MinWaterLevel);
+}
+
+inline void ClampWaterHeight(AActor* actor, double prevZ, const FWaterResults& res)
+{
+	if (actor->MinWaterLevel < 0)
+	{
+		const int lvl = abs(actor->MinWaterLevel);
+		double zOfs = 0.0;
+		if (lvl == 3)
+			zOfs = actor->Height;
+		else if (lvl == 2)
+			zOfs = actor->Height * 0.5;
+
+		const double topDiff = fabs((res.top - zOfs) - prevZ);
+		const double botDiff = fabs((res.bottom - actor->Height + zOfs) - prevZ);
+		if (topDiff < botDiff)
+			actor->SetZ(res.top - zOfs);
+		else
+			actor->SetZ(res.bottom - actor->Height + zOfs);
+	}
 	else
-		actor->SetZ(actor->waterbottom - actor->Height * 0.5);
+	{
+		double zOfs = actor->Height;
+		if (actor->MinWaterLevel == 3)
+			zOfs = 0.0;
+		else if (actor->MinWaterLevel == 2)
+			zOfs = actor->Height * 0.5;
+
+		const double topDiff = fabs((res.top - actor->Height + zOfs) - prevZ);
+		const double botDiff = fabs((res.bottom - zOfs) - prevZ);
+		if (topDiff < botDiff)
+			actor->SetZ(res.top - actor->Height + zOfs);
+		else
+			actor->SetZ(res.bottom - zOfs);
+	}
+
+	if (actor->Z() < actor->floorz)
+		actor->SetZ(actor->floorz);
+	else if (actor->Top() > actor->ceilingz)
+		actor->SetZ(actor->ceilingz - actor->Height);
 }
 
 // Yet another hack for MBF...
@@ -284,13 +330,15 @@ inline bool CanJump(AActor* actor)
 		(actor->BounceFlags & BOUNCE_MBF) && (actor->flags & MF_FLOAT) && actor->IsSentient());
 }
 
-inline bool ShouldFloat(AActor* actor)
+inline bool CanFloat(AActor* actor)
 {
-	return !(actor->flags2 & MF2_DORMANT) && actor->target && (!(actor->DisdainFlags & DF_SWIM) || actor->waterlevel > 2)
+	return (actor->flags & MF_FLOAT) && !(actor->flags2 & MF2_DORMANT) && actor->target != nullptr
 			&& !(actor->flags & (MF_SKULLFLY | MF_INFLOAT));
 }
 
-inline bool CanSwim(AActor* actor)
+inline bool ShouldCheckLiquid(AActor* actor)
 {
-	return (actor->flags3 & MF3_ISMONSTER) && !(actor->flags6 & MF6_KILLED);
+	// Don't bother checking if already outside of the liquid. Let modders handle that behavior.
+	return actor->MinWaterLevel && (actor->flags3 & MF3_ISMONSTER) && !(actor->flags6 & MF6_KILLED) && !(actor->flags2 & MF2_DORMANT)
+			&& IsValidWaterLevel(actor, actor->waterlevel);
 }

@@ -167,8 +167,10 @@ class Actor : Thinker native
 	native readonly int TID;
 	native readonly int TIDtoHate;
 	native readonly int WaterLevel;
+	native int MinWaterLevel;
 	native readonly double WaterDepth;
 	native readonly double WaterTop, WaterBottom;
+	native double WaterCheckSpeed;
 	native int Score;
 	native int Accuracy;
 	native int Stamina;
@@ -382,6 +384,8 @@ class Actor : Thinker native
 	property AutomapOffsets : AutomapOffsets;
 	property LandingSpeed: LandingSpeed;
 	property ShadowCastingType: ShadowCastingType;
+	property MinWaterLevel: MinWaterLevel;
+	property WaterCheckSpeed: WaterCheckSpeed;
 
     // need some definition work first
     //FRenderStyle RenderStyle;
