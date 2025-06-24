@@ -507,15 +507,48 @@ void DoomLevelMesh::BuildSideVisibilityLists(FLevelLocals& doomMap)
 
 void DoomLevelMesh::BuildSubsectorVisibilityLists(FLevelLocals& doomMap)
 {
+	TArray<subsector_t*> stack;
 	VisibleSubsectors.resize(doomMap.subsectors.size());
 	for (size_t i = 0, count = VisibleSubsectors.size(); i < count; i++)
 	{
 		subsector_t* sub = &doomMap.subsectors[i];
+		FBoundingBox bbox = sub->bbox;
+		bbox.extend(32.0);
+
+		validcount++;
 
 		// Always bake the subsector
 		VisibleSubsectors[i].Push(i);
 
-		// To do: use sub->firstline to find neighbouring subsectors we want included in a tile bake
+		sub->validcount = validcount;
+		stack.Push(sub);
+
+		// Add neighbouring subsectors that touches the bounding box
+		while (stack.size() != 0)
+		{
+			sub = stack.Last();
+			stack.Pop();
+
+			auto lines = sub->firstline;
+			uint32_t count = sub->numlines;
+			for (uint32_t j = 0; j < count; j++)
+			{
+				seg_t* partner = lines[j].PartnerSeg;
+				if (partner && partner->Subsector)
+				{
+					subsector_t* partnersub = partner->Subsector;
+					if (partnersub->validcount != validcount)
+					{
+						partnersub->validcount = validcount;
+						if (partnersub->bbox.CheckOverlap(bbox))
+						{
+							stack.Push(partnersub);
+							VisibleSubsectors[i].Push(partnersub->Index());
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -602,7 +635,35 @@ void DoomLevelMesh::BeginFrame(FLevelLocals& doomMap)
 
 	for (side_t* side : PolySides)
 	{
-		UpdateSide(side->Index(), SurfaceUpdateType::Full);
+		int sideIndex = side->Index();
+		Sides[sideIndex].PolySegs.Clear();
+		UpdateSide(sideIndex, SurfaceUpdateType::Full);
+	}
+
+	for (auto& poly : doomMap.Polyobjects)
+	{
+		FPolyNode* pnode = poly.subsectorlinks;
+		while (pnode != nullptr)
+		{
+			subsector_t* sub = pnode->subsector;
+			if (sub->BSP == nullptr || sub->BSP->bDirty)
+				sub->BuildPolyBSP();
+
+			for (subsector_t& polysub : sub->BSP->Subsectors)
+			{
+				int count = polysub.numlines;
+				seg_t* line = polysub.firstline;
+				while (count--)
+				{
+					if (line->sidedef)
+					{
+						Sides[line->sidedef->Index()].PolySegs.Push(line);
+					}
+					line++;
+				}
+			}
+			pnode = pnode->snext;
+		}
 	}
 
 	for (int sideIndex : SideUpdateList)
@@ -854,7 +915,7 @@ void DoomLevelMesh::ReleaseTiles(int surf)
 
 void DoomLevelMesh::FreeSide(FLevelLocals& doomMap, unsigned int sideIndex)
 {
-	if (sideIndex < 0 || sideIndex >= Sides.Size())
+	if (sideIndex >= Sides.Size())
 		return;
 
 	ReleaseTiles(Sides[sideIndex].FirstSurface);
@@ -891,7 +952,7 @@ void DoomLevelMesh::FreeSide(FLevelLocals& doomMap, unsigned int sideIndex)
 
 void DoomLevelMesh::FreeFlat(FLevelLocals& doomMap, unsigned int sectorIndex)
 {
-	if (sectorIndex < 0 || sectorIndex >= Flats.Size())
+	if (sectorIndex >= Flats.Size())
 		return;
 
 	for (FSection& section : level.sections.SectionsForSector(&doomMap.sectors[sectorIndex]))
@@ -1236,38 +1297,54 @@ void DoomLevelMesh::CreateSide(FLevelLocals& doomMap, unsigned int sideIndex)
 	FreeSide(doomMap, sideIndex);
 
 	side_t* side = &doomMap.sides[sideIndex];
-
 	seg_t* seg = side->segs[0];
-	if (!seg)
+	if (!seg) // When can this happen?
 		return;
 
 	auto& sideBlock = Sides[sideIndex];
 
-	sector_t* front;
-	sector_t* back;
-	subsector_t* sub;
-	if (side->Flags & WALLF_POLYOBJ)
-	{
-		sub = level.PointInRenderSubsector((side->V1()->fPos() + side->V2()->fPos()) * 0.5);
-		if (!sub)
-			return;
-		front = sub->sector;
-		back = nullptr;
-		sideBlock.Lights = CreateLightList(sub->section->lighthead, sub->sector->PortalGroup);
-	}
-	else
-	{
-		sub = seg->Subsector;
-		front = side->sector;
-		back = (side->linedef->frontsector == front) ? side->linedef->backsector : side->linedef->frontsector;
-		sideBlock.Lights = CreateLightList(side->lighthead, side->sector->PortalGroup);
-	}
+	if ((side->Flags & WALLF_POLYOBJ) == WALLF_POLYOBJ && sideBlock.PolySegs.size() == 0)
+		return;
 
 	HWMeshHelper result;
 	HWWallDispatcher disp(&doomMap, &result, getRealLightmode(&doomMap, true));
-	HWWall wall;
-	wall.sub = sub;
-	wall.Process(&disp, state, seg, front, back);
+
+	if (side->Flags & WALLF_POLYOBJ)
+	{
+		bool lightlistCreated = false;
+		for (seg_t* polyseg : sideBlock.PolySegs)
+		{
+			// Is there really not a better way of finding the subsector a polyseg resides in?
+			subsector_t* sub = level.PointInRenderSubsector((polyseg->v1->fPos() + polyseg->v2->fPos()) * 0.5);
+			if (sub)
+			{
+				if (!lightlistCreated)
+				{
+					sideBlock.Lights = CreateLightList(sub->section->lighthead, sub->sector->PortalGroup);
+					lightlistCreated = true;
+				}
+
+				sector_t* front = sub->sector;
+				sector_t* back = polyseg->backsector;
+
+				HWWall wall;
+				wall.sub = sub;
+				wall.Process(&disp, state, polyseg, front, back);
+			}
+		}
+	}
+	else
+	{
+		sideBlock.Lights = CreateLightList(side->lighthead, side->sector->PortalGroup);
+
+		subsector_t* sub = seg->Subsector;
+		sector_t* front = side->sector;
+		sector_t* back = (side->linedef->frontsector == front) ? side->linedef->backsector : side->linedef->frontsector;
+
+		HWWall wall;
+		wall.sub = sub;
+		wall.Process(&disp, state, seg, front, back);
+	}
 
 	// Grab the decals generated
 	sideBlock.Decals = result.decals;
@@ -1392,6 +1469,10 @@ void DoomLevelMesh::CreateFlat(FLevelLocals& doomMap, unsigned int sectorIndex)
 			int subsectorIndex = sinfo.Subsector->Index();
 			sinfo.NextSubsectorSurface = SubsectorSurfaces[subsectorIndex];
 			SubsectorSurfaces[subsectorIndex] = surf;
+		}
+		else
+		{
+			sinfo.NextSubsectorSurface = -1;
 		}
 		surf = sinfo.NextSurface;
 	}
@@ -1677,6 +1758,7 @@ int DoomLevelMesh::AddSurfaceToTile(const DoomSurfaceInfo& info, const LevelMesh
 		tile.Plane = surf.Plane;
 		tile.SampleDimension = GetSampleDimension(sampleDimension);
 		tile.UseCount = 1;
+		tile.UseXYAxis = (info.Type == ST_CEILING || info.Type == ST_FLOOR);
 
 		int index = AllocTile(tile);
 		Lightmap.AddedTiles.Push(index);
@@ -2027,8 +2109,8 @@ void DoomLevelMesh::GetVisibleSurfaces(LightmapTile* tile, TArray<int>& outSurfa
 			while (surf != -1)
 			{
 				const auto& sinfo = DoomSurfaceInfos[surf];
-				int controlSector = sinfo.ControlSector ? sinfo.ControlSector->Index() : (int)0xffffffffUL;
-				if (sinfo.Type == tile->Binding.Type && controlSector == tile->Binding.ControlSector)
+				uint32_t controlSector = sinfo.ControlSector ? (uint32_t)sinfo.ControlSector->Index() : (uint32_t)0xffffffffUL;
+				if (sinfo.Type == (DoomLevelMeshSurfaceType)tile->Binding.Type && controlSector == tile->Binding.ControlSector)
 				{
 					outSurfaces.Push(surf);
 				}
@@ -2088,7 +2170,7 @@ void DoomLevelMesh::DumpMesh(const FString& objFilename, const FString& mtlFilen
 
 	for (unsigned i = 0, count = Mesh.IndexCount; i + 2 < count; i += 3)
 	{
-		auto index = Mesh.SurfaceIndexes[i / 3];
+		uint32_t index = Mesh.SurfaceIndexes[i / 3];
 
 		if (index != lastSurfaceIndex)
 		{
@@ -2433,7 +2515,7 @@ TArray<MapLump> LoadMapLumps(FileReader* reader, const char* wadType)
 	for (uint32_t i = 0; i < numlumps; i++)
 	{
 		if (reader->Seek(offsets[i], FileReader::SeekSet) == -1) return {};
-		if (reader->Read(lumps[i].Data.data(), lumps[i].Data.size()) != lumps[i].Data.size()) return {};
+		if (reader->Read(lumps[i].Data.data(), lumps[i].Data.size()) != (FileReader::Size)lumps[i].Data.size()) return {};
 	}
 
 	return lumps;

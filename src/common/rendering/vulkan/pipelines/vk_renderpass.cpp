@@ -417,6 +417,7 @@ VkRenderPassSetup::VkRenderPassSetup(VulkanRenderDevice* fb, const VkRenderPassK
 				fkey.DepthTest = (j & 2) != 0;
 				fkey.ShaderKey.Layout.AlphaTest = (j & 4) != 0;
 				fkey.ShaderKey.Layout.ShadeVertex = (j & 8) != 0;
+				fkey.ShaderKey.Layout.UseRaytracePrecise = gl_light_shadows >= 3;
 				PrecompileFragmentShaderLibrary(fkey, true);
 			}
 		}
@@ -908,6 +909,8 @@ void VkRenderPassSetup::AddFragmentShader(GraphicsPipelineBuilder& builder, cons
 	builder.DepthStencilEnable(key.DepthTest, key.DepthWrite, key.StencilTest);
 	builder.DepthFunc(depthfunc2vk[key.DepthFunc]);
 	builder.Stencil(VK_STENCIL_OP_KEEP, op2vk[key.StencilPassOp], VK_STENCIL_OP_KEEP, VK_COMPARE_OP_EQUAL, 0xffffffff, 0xffffffff, 0);
+
+	builder.RasterizationSamples((VkSampleCountFlagBits)PassKey.Samples);
 }
 
 void VkRenderPassSetup::AddFragmentOutputInterface(GraphicsPipelineBuilder& builder, FRenderStyle renderStyle, VkColorComponentFlags colorMask)
