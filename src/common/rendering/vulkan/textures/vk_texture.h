@@ -26,12 +26,15 @@ public:
 
 	void Deinit();
 
-	void BeginFrame();
+	void BeginFrame(int lightmapTextureSize, int lightmapCount);
 
-	void CreateLightmap(int size, int count, TArray<uint16_t>&& data);
-	void CreateIrradiancemap(int size, int count, const TArray<uint16_t>& data);
-	void CreatePrefiltermap(int size, int count, const TArray<uint16_t>& data);
+	void SetLightmapCount(int size, int count);
+
+	void CreateLightmap(int size, int count, const TArray<uint16_t>& data);
 	void DownloadLightmap(int arrayIndex, uint16_t* buffer);
+
+	void UploadIrradiancemap(int cubeCount, const TArray<uint16_t>& data);
+	void UploadPrefiltermap(int cubeCount, const TArray<uint16_t>& data);
 
 	void SetGamePalette();
 
@@ -58,13 +61,9 @@ public:
 	int GetHWTextureCount() { return (int)Textures.size(); }
 
 	VkTextureImage Shadowmap;
-
-	struct
-	{
-		VkTextureImage Image;
-		int Size = 0;
-		int Count = 0;
-	} Lightmap, Irradiancemap, Prefiltermap;
+	std::vector<VkTextureImage> Lightmaps;
+	std::vector<VkTextureImage> Irradiancemaps;
+	std::vector<VkTextureImage> Prefiltermaps;
 
 	static const int MAX_REFLECTION_LOD = 4; // Note: must match what lightmodel_pbr.glsl expects
 
@@ -75,6 +74,9 @@ public:
 	int CreateUploadID(VkHardwareTexture* tex);
 	bool CheckUploadID(int id);
 
+	static const int PrefiltermapSize = 128;
+	static const int IrradiancemapSize = 32;
+
 private:
 	void CreateNullTexture();
 	void CreateBrdfLutTexture();
@@ -83,6 +85,7 @@ private:
 	void CreateLightmap();
 	void CreateIrradiancemap();
 	void CreatePrefiltermap();
+	void DownloadTexture(VkTextureImage* texture, uint16_t* buffer);
 
 	void StartWorkerThread();
 	void StopWorkerThread();
