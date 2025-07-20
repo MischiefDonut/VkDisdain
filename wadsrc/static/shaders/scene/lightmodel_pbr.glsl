@@ -1,4 +1,5 @@
 const float PI = 3.14159265359;
+const float PBRBrightnessScale = 2.5; // For making non-PBR and PBR lights roughly the same intensity
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
@@ -48,7 +49,7 @@ vec3 ProcessLight(const DynLightInfo light, vec3 albedo, float metallic, float r
 {
 	vec3 L = normalize(light.pos.xyz - pixelpos.xyz);
 	vec3 H = normalize(V + L);
-	
+
 	float attenuation = distanceAttenuation(distance(light.pos.xyz, pixelpos.xyz), light.radius, light.strength, light.linearity);
 	if ((light.flags & LIGHTINFO_SPOT) != 0)
 	{
@@ -69,7 +70,7 @@ vec3 ProcessLight(const DynLightInfo light, vec3 albedo, float metallic, float r
 			attenuation *= shadowAttenuation(light.pos.xyz, light.shadowIndex, light.softShadowRadius, light.flags);
 		}
 		
-		vec3 radiance = light.color.rgb * attenuation;
+		vec3 radiance = light.color.rgb * attenuation * PBRBrightnessScale;
 		
 		// cook-torrance brdf
 		float NDF = DistributionGGX(N, H, roughness);
@@ -89,7 +90,7 @@ vec3 ProcessLight(const DynLightInfo light, vec3 albedo, float metallic, float r
 	return vec3(0.0);
 }
 
-vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
+vec3 ProcessMaterialLight(Material material, vec3 ambientLight, float sunlightAttenuation)
 {
 	vec3 albedo = material.Base.rgb;
 
@@ -103,6 +104,27 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 	vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
 	vec3 Lo = uDynLightColor.rgb;
+
+	if (sunlightAttenuation > 0.0)
+	{
+		vec3 L = SunDir;
+		vec3 H = normalize(V + L);
+
+		sunlightAttenuation *= clamp(dot(N, L), 0.0, 1.0);
+
+		vec3 radiance = SunColor * SunIntensity * PBRBrightnessScale * sunlightAttenuation;
+		
+		// cook-torrance brdf
+		float NDF = DistributionGGX(N, H, roughness);
+		float G = GeometrySmith(N, V, L, roughness);
+		vec3 F = fresnelSchlick(clamp(dot(H, V), 0.0, 1.0), F0);
+		vec3 kS = F;
+		vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+		vec3 nominator = NDF * G * F;
+		float denominator = 4.0 * clamp(dot(N, V), 0.0, 1.0) * clamp(dot(N, L), 0.0, 1.0);
+		vec3 specular = nominator / max(denominator, 0.001);
+		Lo += (kD * albedo / PI + specular) * radiance;
+	}
 
 #ifndef UBERSHADER
 	if (uLightIndex >= 0)
@@ -149,17 +171,52 @@ vec3 ProcessMaterialLight(Material material, vec3 ambientLight)
 	vec3 kS = F;
 	vec3 kD = 1.0 - kS;
 
-	const float environmentScaleFactor = 1.0;
-
-	vec3 irradiance = texture(cubeTextures[uLightProbeIndex], N).rgb * environmentScaleFactor;
-	vec3 diffuse = irradiance * albedo;
-
-	kD *= 1.0 - metallic;
 	const float MAX_REFLECTION_LOD = 4.0;
 	vec3 R = reflect(-V, N); 
-	vec3 prefilteredColor = textureLod(cubeTextures[uLightProbeIndex + 1], R, roughness * MAX_REFLECTION_LOD).rgb * environmentScaleFactor;
+
+	vec3 irradiance, prefilteredColor;
+
+	if (vLightmapIndex != -1 && uLightProbeIndex == 0)
+	{
+		uvec4 probeIndexes = textureGather(uintTextures[nonuniformEXT(vLightmapIndex + 1)], vLightmap.xy);
+
+		vec2 t = fract(vLightmap.xy);
+		vec2 invt = 1.0 - t;
+		float t00 = invt.x * invt.y;
+		float t10 = t.x * invt.y;
+		float t01 = invt.x * t.y;
+		float t11 = t.x * t.y;
+
+		vec3 irradiance0 = texture(cubeTextures[probeIndexes.x], N).rgb;
+		vec3 irradiance1 = texture(cubeTextures[probeIndexes.y], N).rgb;
+		vec3 irradiance2 = texture(cubeTextures[probeIndexes.z], N).rgb;
+		vec3 irradiance3 = texture(cubeTextures[probeIndexes.w], N).rgb;
+		
+		vec3 prefilteredColor0 = textureLod(cubeTextures[probeIndexes.x + 1], R, roughness * MAX_REFLECTION_LOD).rgb;
+		vec3 prefilteredColor1 = textureLod(cubeTextures[probeIndexes.y + 1], R, roughness * MAX_REFLECTION_LOD).rgb;
+		vec3 prefilteredColor2 = textureLod(cubeTextures[probeIndexes.z + 1], R, roughness * MAX_REFLECTION_LOD).rgb;
+		vec3 prefilteredColor3 = textureLod(cubeTextures[probeIndexes.w + 1], R, roughness * MAX_REFLECTION_LOD).rgb;
+
+		irradiance = irradiance0 * t00 + irradiance1 * t10 + irradiance2 * t01 + irradiance3 * t11;
+		prefilteredColor = prefilteredColor0 * t00 + prefilteredColor1 * t10 + prefilteredColor2 * t01 + prefilteredColor3 * t11;
+	}
+	else
+	{
+		irradiance = texture(cubeTextures[uLightProbeIndex], N).rgb;
+		prefilteredColor = textureLod(cubeTextures[uLightProbeIndex + 1], R, roughness * MAX_REFLECTION_LOD).rgb;
+	}
+
+	/*
+	const float environmentScaleFactor = 1.0;
+	prefilteredColor *= environmentScaleFactor;
+	irradiance *= environmentScaleFactor;
+	*/
+
 	vec2 envBRDF = texture(textures[BrdfLUT], vec2(clamp(dot(N, V), 0.0, 1.0), roughness)).rg;
 	vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+	vec3 diffuse = irradiance * albedo;
+	kD *= 1.0 - metallic;
 
 	vec3 ambient = (kD * diffuse + specular) * ao;
 

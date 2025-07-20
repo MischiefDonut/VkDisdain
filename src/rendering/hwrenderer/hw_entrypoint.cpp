@@ -56,7 +56,7 @@ EXTERN_CVAR(Bool, gl_bandedswlight)
 EXTERN_CVAR(Bool, lm_dynlights);
 
 CVAR(Bool, gl_raytrace, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
-CVAR(Bool, gl_lightprobe, false, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
+CVAR(Bool, gl_lightprobe, true, 0/*CVAR_ARCHIVE | CVAR_GLOBALCONFIG*/)
 
 extern bool NoInterpolateView;
 
@@ -158,6 +158,8 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 
 		auto di = HWDrawInfo::StartDrawInfo(&mainthread_drawctx, mainvp.ViewLevel, nullptr, mainvp, nullptr);
 		auto& vp = di->Viewpoint;
+
+		di->IsEnvironmentMapRendering = side != -1;
 
 		di->Set3DViewport(RenderState);
 		di->SetViewArea();
@@ -334,7 +336,7 @@ static void CheckTimer(FRenderState &state, uint64_t ShaderStartTime)
 		state.firstFrame = screen->FrameTime - 1;
 }
 
-LightProbeIncrementalBuilder lightProbeBuilder(DFrameBuffer::irrandiaceMapTexelCount, DFrameBuffer::prefilterMapTexelCount, DFrameBuffer::irradianceMapChannelCount, DFrameBuffer::prefilterMapChannelCount);
+LightProbeIncrementalBuilder lightProbeBuilder;
 
 sector_t* RenderView(player_t* player)
 {
@@ -403,42 +405,32 @@ sector_t* RenderView(player_t* player)
 				});
 		}
 
-		if (gl_lightprobe)
+		if (gl_lightprobe && level.lightProbes.size() > 0)
 		{
 			// Render the light probes if not found in a lump
-			// To do: we need light probe actors
 
 			AActor* lightprobe = level.GetThinkerIterator<AActor>(NAME_LightProbe, STAT_INFO).Next();
 			if (lightprobe)
 			{
-				auto renderEnvMap = [&](const LightProbe& probe, TArrayView<uint16_t>& irradianceMap, TArrayView<uint16_t>& prefilteredMap) {
+				auto renderEnvMap = [&](int probeIndex, const LightProbe& probe) {
 					lightprobe->SetOrigin(DVector3(probe.position), false); // crime against nature
 
 					// The renderer interpolates camera in its own mechanism that has to be disabled when moving around the single probe
 					bool noInterpolate = r_NoInterpolate;
 					r_NoInterpolate = true;
 
-					screen->RenderEnvironmentMap([&](IntRect& bounds, int side) {
+					screen->RenderLightProbe(probeIndex, [&](IntRect& bounds, int side) {
 						FRenderViewpoint probevp;
 						RenderViewpoint(probevp, lightprobe, &bounds, 90.0, 1.0f, 1.0f, false, false, side);
-					}, irradianceMap, prefilteredMap);
+					});
 
 					r_NoInterpolate = noInterpolate;
 				};
 
-				auto renderEnvScreen = [&](const TArray<uint16_t>& irradianceMaps, const TArray<uint16_t>& prefilteredMaps) {
-					screen->UploadEnvironmentMaps(level.lightProbes.size(), irradianceMaps, prefilteredMaps);
-				};
-
-				lightProbeBuilder.Step(
-					level.lightProbes,
-					renderEnvMap,
-					renderEnvScreen
-				);
+				lightProbeBuilder.Step(level.lightProbes, renderEnvMap);
 			}
 			else
 			{
-				Printf("Warning: spawning LightProbe\n");
 				auto probe = Spawn(&level, NAME_LightProbe);
 				probe->ChangeStatNum(STAT_INFO);
 			}

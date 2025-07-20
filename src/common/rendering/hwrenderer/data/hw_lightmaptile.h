@@ -48,6 +48,14 @@ struct LightmapTile
 		FVector3 ProjLocalToV = { 0.0f, 0.0f, 0.0f };
 	} Transform;
 
+	// Calculate world coordinates from UV coordinates
+	struct
+	{
+		FVector3 WorldOrigin;
+		FVector3 WorldU;
+		FVector3 WorldV;
+	} InverseTransform;
+
 	int UseCount = 0;
 	bool AddedThisFrame = false;
 
@@ -82,10 +90,14 @@ struct LightmapTile
 
 	FVector2 ToUV(const FVector3& vert, float textureSize) const
 	{
-		// Clamp in case the wall moved outside the tile (happens if a lift moves with a static lightmap on it)
 		FVector3 localPos = vert - Transform.TranslateWorldToLocal;
-		float u = std::max(std::min(localPos | Transform.ProjLocalToU, (float)AtlasLocation.Width - 2.0f), 1.0f);
-		float v = std::max(std::min(localPos | Transform.ProjLocalToV, (float)AtlasLocation.Height - 2.0f), 1.0f);
+		float u = localPos | Transform.ProjLocalToU;
+		float v = localPos | Transform.ProjLocalToV;
+
+		// Clamp in case the wall moved outside the tile (happens if a lift moves with a static lightmap on it)
+		u = std::max(std::min(u, (float)AtlasLocation.Width - 1.0f), 1.0f);
+		v = std::max(std::min(v, (float)AtlasLocation.Height - 1.0f), 1.0f);
+
 		u = (AtlasLocation.X + u) / textureSize;
 		v = (AtlasLocation.Y + v) / textureSize;
 		return FVector2(u, v);
@@ -141,22 +153,22 @@ struct LightmapTile
 		{
 		default:
 		case AXIS_YZ:
-			width = (int)(uvMax.Y - uvMin.Y);
-			height = (int)(uvMax.Z - uvMin.Z);
+			width = (int)std::round(uvMax.Y - uvMin.Y);
+			height = (int)std::round(uvMax.Z - uvMin.Z);
 			tCoords[0].Y = 1.0f / SampleDimension;
 			tCoords[1].Z = 1.0f / SampleDimension;
 			break;
 
 		case AXIS_XZ:
-			width = (int)(uvMax.X - uvMin.X);
-			height = (int)(uvMax.Z - uvMin.Z);
+			width = (int)std::round(uvMax.X - uvMin.X);
+			height = (int)std::round(uvMax.Z - uvMin.Z);
 			tCoords[0].X = 1.0f / SampleDimension;
 			tCoords[1].Z = 1.0f / SampleDimension;
 			break;
 
 		case AXIS_XY:
-			width = (int)(uvMax.X - uvMin.X);
-			height = (int)(uvMax.Y - uvMin.Y);
+			width = (int)std::round(uvMax.X - uvMin.X);
+			height = (int)std::round(uvMax.Y - uvMin.Y);
 			tCoords[0].X = 1.0f / SampleDimension;
 			tCoords[1].Y = 1.0f / SampleDimension;
 			break;
@@ -176,14 +188,43 @@ struct LightmapTile
 			height = textureSize;
 		}
 
-		Transform.TranslateWorldToLocal.X = uvMin.X * SampleDimension + 0.1f;
-		Transform.TranslateWorldToLocal.Y = uvMin.Y * SampleDimension + 0.1f;
-		Transform.TranslateWorldToLocal.Z = uvMin.Z * SampleDimension + 0.1f;
+		uvMin *= (float)SampleDimension;
+		uvMax *= (float)SampleDimension;
+
+		Transform.TranslateWorldToLocal.X = uvMin.X + 0.1f;
+		Transform.TranslateWorldToLocal.Y = uvMin.Y + 0.1f;
+		Transform.TranslateWorldToLocal.Z = uvMin.Z + 0.1f;
 
 		Transform.ProjLocalToU = tCoords[0];
 		Transform.ProjLocalToV = tCoords[1];
 
+		switch (planeAxis)
+		{
+		default:
+		case AXIS_YZ:
+			InverseTransform.WorldOrigin = PointAtYZ(uvMin.Y, uvMin.Z);
+			InverseTransform.WorldU = PointAtYZ(uvMax.Y, uvMin.Z);
+			InverseTransform.WorldV = PointAtYZ(uvMin.Y, uvMax.Z);
+			break;
+
+		case AXIS_XZ:
+			InverseTransform.WorldOrigin = PointAtXZ(uvMin.X, uvMin.Z);
+			InverseTransform.WorldU = PointAtXZ(uvMax.X, uvMin.Z);
+			InverseTransform.WorldV = PointAtXZ(uvMin.X, uvMax.Z);
+			break;
+
+		case AXIS_XY:
+			InverseTransform.WorldOrigin = PointAtXY(uvMin.X, uvMin.Y);
+			InverseTransform.WorldU = PointAtXY(uvMax.X, uvMin.Y);
+			InverseTransform.WorldV = PointAtXY(uvMin.X, uvMax.Y);
+			break;
+		}
+
 		AtlasLocation.Width = width;
 		AtlasLocation.Height = height;
 	}
+
+	FVector3 PointAtYZ(float y, float z) const { return FVector3(-(Plane.Y * y + Plane.Z * z + Plane.W) / Plane.X, y, z); }
+	FVector3 PointAtXZ(float x, float z) const { return FVector3(x, -(Plane.X * x + Plane.Z * z + Plane.W) / Plane.Y, z); }
+	FVector3 PointAtXY(float x, float y) const { return FVector3(x, y, -(Plane.X * x + Plane.Y * y + Plane.W) / Plane.Z); }
 };

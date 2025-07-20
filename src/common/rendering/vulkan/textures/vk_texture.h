@@ -33,8 +33,16 @@ public:
 	void CreateLightmap(int size, int count, const TArray<uint16_t>& data);
 	void DownloadLightmap(int arrayIndex, uint16_t* buffer);
 
+	void ResetLightProbes();
 	void UploadIrradiancemap(int cubeCount, const TArray<uint16_t>& data);
 	void UploadPrefiltermap(int cubeCount, const TArray<uint16_t>& data);
+	void CopyIrradiancemap(const std::vector<std::unique_ptr<VulkanImage>>& probes);
+	void CopyPrefiltermap(const std::vector<std::unique_ptr<VulkanImage>>& probes);
+	void DownloadIrradiancemap(int probeCount, TArrayView<uint16_t> irradianceMaps);
+	void DownloadPrefiltermap(int probeCount, TArrayView<uint16_t> prefilterMaps);
+
+	void CheckIrradiancemapSize(int cubeCount);
+	void CheckPrefiltermapSize(int cubeCount);
 
 	void SetGamePalette();
 
@@ -60,8 +68,14 @@ public:
 
 	int GetHWTextureCount() { return (int)Textures.size(); }
 
+	struct Lightmap
+	{
+		VkTextureImage Light;
+		VkTextureImage Probe;
+	};
+
 	VkTextureImage Shadowmap;
-	std::vector<VkTextureImage> Lightmaps;
+	std::vector<Lightmap> Lightmaps;
 	std::vector<VkTextureImage> Irradiancemaps;
 	std::vector<VkTextureImage> Prefiltermaps;
 
