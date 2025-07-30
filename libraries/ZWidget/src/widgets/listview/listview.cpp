@@ -8,25 +8,91 @@ ListView::ListView(Widget* parent) : Widget(parent)
 
 	scrollbar = new Scrollbar(this);
 	scrollbar->FuncScroll = [=]() { OnScrollbarScroll(); };
+
+	SetColumnWidths({ 0.0 });
 }
 
-void ListView::AddItem(const std::string& text)
+void ListView::SetColumnWidths(const std::vector<double>& widths)
 {
-	items.push_back(text);
+	columnwidths = widths;
+
+	bool updated = false;
+	const size_t newWidth = columnwidths.size();
+	for (std::vector<std::string>& column : items)
+	{
+		while (column.size() < newWidth)
+		{
+			updated = true;
+			column.push_back("");
+		}
+		while (column.size() > newWidth)
+		{
+			updated = true;
+			column.pop_back();
+		}
+	}
+
+	if (updated)
+		Update();
+}
+
+void ListView::AddItem(const std::string& text, int index, int column)
+{
+	if (column < 0 || column >= columnwidths.size())
+		return;
+
+	std::vector<std::string> newEntry;
+	for (size_t i = 0u; i < columnwidths.size(); ++i)
+		newEntry.push_back("");
+
+	newEntry[column] = text;
+	if (index >= 0)
+	{
+		if (index >= items.size())
+		{
+			newEntry[column] = "";
+			while (items.size() < index)
+				items.push_back(newEntry);
+
+			newEntry[column] = text;
+			items.push_back(newEntry);
+		}
+		else
+		{
+			items.insert(items.begin() + index, newEntry);
+		}
+	}
+	else
+	{
+		items.push_back(newEntry);
+	}
+	scrollbar->SetRanges(GetHeight(), items.size() * getItemHeight());
+	Update();
+}
+
+void ListView::UpdateItem(const std::string& text, int index, int column)
+{
+	if (index < 0 || index >= items.size() || column < 0 || column >= columnwidths.size())
+		return;
+
+	items[index][column] = text;
 	Update();
 }
 
 void ListView::RemoveItem(int index)
 {
-	if (index >= 0 && index < items.size())
-	{
-		items.erase(items.begin() + index);
-	}
+	if (!items.size() || index >= items.size())
+		return;
 
-	if (selectedItem == items.size())
-	{
-		selectedItem = !items.empty() ? (int)items.size() - 1 : 0;
-	}
+	if (index < 0)
+		index = items.size() - 1;
+
+	if (selectedItem == index)
+		SetSelectedItem(0);
+
+	items.erase(items.begin() + index);
+	scrollbar->SetRanges(GetHeight(), items.size() * getItemHeight());
+	Update();
 }
 
 void ListView::Activate()
@@ -45,9 +111,14 @@ void ListView::SetSelectedItem(int index)
 	}
 }
 
+double ListView::getItemHeight()
+{
+	return 20.0;
+}
+
 void ListView::ScrollToItem(int index)
 {
-	double itemHeight = 20.0;
+	double itemHeight = getItemHeight();
 	double y = itemHeight * index;
 	if (y < scrollbar->GetPosition())
 	{
@@ -70,7 +141,7 @@ void ListView::OnGeometryChanged()
 	double h = GetHeight();
 	double sw = scrollbar->GetPreferredWidth();
 	scrollbar->SetFrameGeometry(Rect::xywh(w - sw, 0.0, sw, h));
-	scrollbar->SetRanges(h, items.size() * 20.0);
+	scrollbar->SetRanges(h, items.size() * getItemHeight());
 }
 
 void ListView::OnPaint(Canvas* canvas)
@@ -78,13 +149,16 @@ void ListView::OnPaint(Canvas* canvas)
 	double y = -scrollbar->GetPosition();
 	double x = 2.0;
 	double w = GetWidth() - scrollbar->GetPreferredWidth() - 2.0;
-	double h = 20.0;
+	double h = getItemHeight();
 
 	Colorf textColor = GetStyleColor("color");
 	Colorf selectionColor = GetStyleColor("selection-color");
 
+	// Make sure the text doesn't enter the scrollbar's area.
+	canvas->pushClip({ 0.0, 0.0, w, GetHeight() });
+
 	int index = 0;
-	for (const std::string& item : items)
+	for (const std::vector<std::string>& item : items)
 	{
 		double itemY = y;
 		if (itemY + h >= 0.0 && itemY < GetHeight())
@@ -93,11 +167,18 @@ void ListView::OnPaint(Canvas* canvas)
 			{
 				canvas->fillRect(Rect::xywh(x - 2.0, itemY, w, h), selectionColor);
 			}
-			canvas->drawText(Point(x, y + 15.0), textColor, item);
+			double cx = x;
+			for (size_t entry = 0u; entry < item.size(); ++entry)
+			{
+				canvas->drawText(Point(cx, y + 15.0), textColor, item[entry]);
+				cx += columnwidths[entry];
+			}
 		}
 		y += h;
 		index++;
 	}
+
+	canvas->popClip();
 }
 
 bool ListView::OnMouseDown(const Point& pos, InputKey key)
@@ -106,7 +187,7 @@ bool ListView::OnMouseDown(const Point& pos, InputKey key)
 
 	if (key == InputKey::LeftMouse)
 	{
-		int index = (int)((pos.y - 5.0 + scrollbar->GetPosition()) / 20.0);
+		int index = (int)((pos.y - 5.0 + scrollbar->GetPosition()) / getItemHeight());
 		if (index >= 0 && (size_t)index < items.size())
 		{
 			SetSelectedItem(index);
@@ -129,11 +210,11 @@ bool ListView::OnMouseWheel(const Point& pos, InputKey key)
 {
 	if (key == InputKey::MouseWheelUp)
 	{
-		scrollbar->SetPosition(std::max(scrollbar->GetPosition() - 20.0, 0.0));
+		scrollbar->SetPosition(std::max(scrollbar->GetPosition() - getItemHeight(), 0.0));
 	}
 	else if (key == InputKey::MouseWheelDown)
 	{
-		scrollbar->SetPosition(std::min(scrollbar->GetPosition() + 20.0, scrollbar->GetMax()));
+		scrollbar->SetPosition(std::min(scrollbar->GetPosition() + getItemHeight(), scrollbar->GetMax()));
 	}
 	return true;
 }
@@ -159,5 +240,47 @@ void ListView::OnKeyDown(InputKey key)
 	else if (key == InputKey::Enter)
 	{
 		Activate();
+	}
+	else if (key == InputKey::Home)
+	{
+		if (selectedItem > 0)
+		{
+			SetSelectedItem(0);
+		}
+		ScrollToItem(selectedItem);
+	}
+	else if (key == InputKey::End)
+	{
+		if (selectedItem + 1 < (int)items.size())
+		{
+			SetSelectedItem((int)items.size() - 1);
+		}
+		ScrollToItem(selectedItem);
+	}
+	else if (key == InputKey::PageUp)
+	{
+		double h = GetHeight();
+		if (h <= 0.0 || items.empty())
+			return;
+		int itemsPerPage = (int)std::max(std::round(h / getItemHeight()), 1.0);
+		int nextItem = std::max(selectedItem - itemsPerPage, 0);
+		if (nextItem != selectedItem)
+		{
+			SetSelectedItem(nextItem);
+			ScrollToItem(selectedItem);
+		}
+	}
+	else if (key == InputKey::PageDown)
+	{
+		double h = GetHeight();
+		if (h <= 0.0 || items.empty())
+			return;
+		int itemsPerPage = (int)std::max(std::round(h / getItemHeight()), 1.0);
+		int prevItem = std::min(selectedItem + itemsPerPage, (int)items.size() - 1);
+		if (prevItem != selectedItem)
+		{
+			SetSelectedItem(prevItem);
+			ScrollToItem(selectedItem);
+		}
 	}
 }
