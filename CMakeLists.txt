@@ -138,6 +138,7 @@ if( MSVC )
 	option( ZDOOM_OUTPUT_OLDSTYLE "Don't use Release/Debug directories." OFF )
 else()
 	set( ZDOOM_OUTPUT_OLDSTYLE OFF )
+	add_compile_options(-msse3)
 endif()
 
 # Replacement variables for a possible long list of C/C++ compilers compatible with GCC

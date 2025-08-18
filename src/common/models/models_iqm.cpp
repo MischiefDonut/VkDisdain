@@ -715,7 +715,7 @@ const TArray<VSMatrix>* IQMModel::CalculateBonesIQM(int frame1, int frame2, floa
 		float invt1 = 1.0f - inter1_prev;
 		float invt2 = 1.0f - inter2_prev;
 
-		constexpr const float swapYZ[16]
+		alignas(16) constexpr const float swapYZ[16]
 		{
 			1.0f, 0.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f,
@@ -779,7 +779,7 @@ const TArray<VSMatrix>* IQMModel::CalculateBonesIQM(int frame1, int frame2, floa
 			if (Joints[i].Parent >= 0)
 			{
 				result = (*outMatrix)[Joints[i].Parent];
-				result.multMatrix(swapYZ);
+				result.multMatrixSIMD(swapYZ);
 				result.multMatrix(baseframe[Joints[i].Parent]);
 				result.multMatrix(m);
 				result.multMatrix(inversebaseframe[i]);
@@ -790,7 +790,7 @@ const TArray<VSMatrix>* IQMModel::CalculateBonesIQM(int frame1, int frame2, floa
 				result.multMatrix(m);
 				result.multMatrix(inversebaseframe[i]);
 			}
-			result.multMatrix(swapYZ);
+			result.multMatrixSIMD(swapYZ);
 
 			if(out)
 			{
@@ -804,7 +804,7 @@ const TArray<VSMatrix>* IQMModel::CalculateBonesIQM(int frame1, int frame2, floa
 				if (Joints[i].Parent >= 0)
 				{
 					result = out->positions[Joints[i].Parent];
-					result.multMatrix(swapYZ);
+					result.multMatrixSIMD(swapYZ);
 					result.multMatrix(baseframe[Joints[i].Parent]);
 					result.multMatrix(m);
 					result.multMatrix(inversebaseframe[i]);
@@ -815,7 +815,7 @@ const TArray<VSMatrix>* IQMModel::CalculateBonesIQM(int frame1, int frame2, floa
 					result.multMatrix(m);
 					result.multMatrix(inversebaseframe[i]);
 				}
-				result.multMatrix(swapYZ);
+				result.multMatrixSIMD(swapYZ);
 			}
 		}
 

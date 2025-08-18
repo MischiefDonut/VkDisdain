@@ -24,17 +24,14 @@
 #include "vectors.h"
 #include "quaternion.h"
 
-#ifdef USE_DOUBLE
-typedef double FLOATTYPE;
-#else
 typedef float FLOATTYPE;
-#endif
 
 #ifndef NO_SSE
 #include <emmintrin.h>
 #endif
 
-class VSMatrix {
+class alignas(16) VSMatrix
+{
 
 	public:
 
@@ -56,21 +53,17 @@ class VSMatrix {
 		void scale(FLOATTYPE x, FLOATTYPE y, FLOATTYPE z);
 		void rotate(FLOATTYPE angle, FLOATTYPE x, FLOATTYPE y, FLOATTYPE z);
 		void loadIdentity();
-#ifdef USE_DOUBLE
-		void multMatrix(const float *aMatrix);
-#endif
 		void multVector(FLOATTYPE *aVector);
-		void multMatrix(const FLOATTYPE *aMatrix);
+		
+		void multMatrixSIMD(const float *aMatrix); // aMatrix **MUST** be 16-byte aligned
+
 		void multMatrix(const VSMatrix &aMatrix)
 		{
-			multMatrix(aMatrix.mMatrix);
+			multMatrixSIMD(aMatrix.mMatrix);
 		}
 		void multQuaternion(const TVector4<FLOATTYPE>& q);
 		void multQuaternion(const TQuaternion<FLOATTYPE>& q);
 		void loadMatrix(const FLOATTYPE *aMatrix);
-#ifdef USE_DOUBLE
-		void loadMatrix(const float *aMatrix);
-#endif
 		void lookAt(FLOATTYPE xPos, FLOATTYPE yPos, FLOATTYPE zPos, FLOATTYPE xLook, FLOATTYPE yLook, FLOATTYPE zLook, FLOATTYPE xUp, FLOATTYPE yUp, FLOATTYPE zUp);
 		void perspective(FLOATTYPE fov, FLOATTYPE ratio, FLOATTYPE nearp, FLOATTYPE farp);
 		void ortho(FLOATTYPE left, FLOATTYPE right, FLOATTYPE bottom, FLOATTYPE top, FLOATTYPE nearp=-1.0f, FLOATTYPE farp=1.0f);
@@ -79,16 +72,6 @@ class VSMatrix {
 		{
 			memcpy(pDest, mMatrix, 16 * sizeof(FLOATTYPE));
 		}
-
-#ifdef USE_DOUBLE
-		void copy(float * pDest)
-		{
-			for (int i = 0; i < 16; i++)
-			{
-				pDest[i] = (float)mMatrix[i];
-			}
-		}
-#endif
 
 		const FLOATTYPE *get() const
 		{

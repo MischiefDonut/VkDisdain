@@ -75,7 +75,7 @@ namespace swrenderer
 
 	VSMatrix RenderViewport::SoftwareWorldToView(const FRenderViewpoint &viewpoint)
 	{
-		float m[16] = { 0.0f };
+		alignas(16) float m[16] = { 0.0f };
 		m[0 + 0 * 4] = (float)viewpoint.Sin;
 		m[0 + 1 * 4] = (float)-viewpoint.Cos;
 		m[1 + 2 * 4] = 1.0f;
@@ -86,7 +86,7 @@ namespace swrenderer
 		VSMatrix matrix;
 		matrix.loadIdentity();
 		matrix.translate((float)-viewpoint.Pos.X, (float)-viewpoint.Pos.Y, (float)-viewpoint.Pos.Z);
-		matrix.multMatrix(m);
+		matrix.multMatrixSIMD(m);
 		return matrix;
 	}
 
