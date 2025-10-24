@@ -3870,6 +3870,9 @@ int D_DoomMain_Game()
 			iwad_man = new FIWadManager(basewad.GetChars(), optionalwad.GetChars());
 		}
 
+		// [Disdain]
+		Args->RemoveArgs("-iwad");
+
 		// Load zdoom.pk3 alone so that we can get access to the internal gameinfos before 
 		// the IWAD is known.
 

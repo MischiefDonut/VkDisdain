@@ -30,8 +30,8 @@ bool			pauseext;
 
 FStartupInfo GameStartupInfo;
 
-CVAR(Bool, queryiwad, QUERYIWADDEFAULT, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
-CVAR(String, defaultiwad, "", CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+CVAR(Bool, queryiwad, QUERYIWADDEFAULT, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOSET);
+CVAR(String, defaultiwad, "DISDAIN", CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOSET);
 CVAR(Bool, vid_fps, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 EXTERN_CVAR(Bool, ui_generic)

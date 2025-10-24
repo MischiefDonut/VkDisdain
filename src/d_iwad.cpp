@@ -812,7 +812,7 @@ int FIWadManager::IdentifyVersion (std::vector<std::string>&wadfiles, const char
 	// If we still haven't found a suitable IWAD let's error out.
 	if (picks.Size() == 0)
 	{
-		I_FatalError ("Cannot find a game IWAD (doom.wad, doom2.wad, heretic.wad, etc.).\n"
+		I_FatalError ("Cannot find a game IWAD.\n"
 					  "Did you install " GAMENAME " properly? You can do either of the following:\n"
 					  "\n"
 #if defined(_WIN32)
