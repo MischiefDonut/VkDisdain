@@ -3870,9 +3870,6 @@ int D_DoomMain_Game()
 			iwad_man = new FIWadManager(basewad.GetChars(), optionalwad.GetChars());
 		}
 
-		// [Disdain]
-		Args->RemoveArgs("-iwad");
-
 		// Load zdoom.pk3 alone so that we can get access to the internal gameinfos before 
 		// the IWAD is known.
 
@@ -3928,6 +3925,9 @@ int D_DoomMain_Game()
 
 int GameMain()
 {
+	// [Disdain]
+	Args->RemoveArgs("-iwad");
+
 	// On Windows, prefer the native win32 backend.
 	// On other platforms, use SDL until the other backends are more mature.
 	auto zwidget = DisplayBackend::TryCreateWin32();
